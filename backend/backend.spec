@@ -54,6 +54,7 @@ a = Analysis(
         "nltk.tokenize",
         "sklearn",
         "networkx",
+        "sqlalchemy",
     ],
     hookspath=["hooks"],
     runtime_hooks=[],

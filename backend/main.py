@@ -1,7 +1,7 @@
 import os
 import re
 import random
-from fastapi import FastAPI, HTTPException, Header, UploadFile, File
+from fastapi import FastAPI, HTTPException, Header, UploadFile, File, Depends
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -12,6 +12,12 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 import sys
 from pathlib import Path
+from sqlalchemy.orm import Session
+from db import models, crud
+from db.database import engine, get_db
+
+# Create DB tables
+models.Base.metadata.create_all(bind=engine)
 
 # --- PyInstaller Runtime Bootstrap ---
 def setup_runtime_paths():
@@ -50,8 +56,13 @@ class FlashcardRequest(BaseModel):
     topic_or_text: str
 
 class Flashcard(BaseModel):
+    id: int | None = None
     front: str
     back: str
+    interval: int | None = 1
+    ease: float | None = 2.5
+    repetitions: int | None = 0
+    due_date: str | None = None
 
 class FlashcardList(BaseModel):
     flashcards: list[Flashcard]
@@ -100,6 +111,7 @@ class TopicRequest(BaseModel):
     topic_or_text: str
     
 class ReviewRequest(BaseModel):
+    id: int | None = None
     interval: int
     ease: float
     repetitions: int
@@ -135,12 +147,26 @@ async def chat_endpoint(request: ChatRequest, x_api_key: str | None = Header(def
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/generate_flashcards")
-async def generate_flashcards(request: FlashcardRequest, x_api_key: str | None = Header(default=None)):
+async def generate_flashcards(request: FlashcardRequest, x_api_key: str | None = Header(default=None), db: Session = Depends(get_db)):
     current_key = get_api_key(x_api_key)
     if not current_key or current_key.startswith("AQ"):
         from nlp.flashcards import extract_flashcards
         cards = extract_flashcards(request.topic_or_text, max_cards=10)
-        return {"flashcards": cards}
+        
+        # Save to SQLite
+        saved_cards = []
+        for c in cards:
+            db_card = crud.create_flashcard(db, front=c["front"], back=c["back"])
+            saved_cards.append({
+                "id": db_card.id,
+                "front": db_card.front,
+                "back": db_card.back,
+                "interval": db_card.interval,
+                "ease": db_card.ease,
+                "repetitions": db_card.repetitions,
+                "due_date": db_card.due_date.isoformat()
+            })
+        return {"flashcards": saved_cards}
 
     try:
         config = LocalAgentConfig(
@@ -262,8 +288,19 @@ Text: {request.topic_or_text}"""
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/flashcards/due")
+async def get_due_flashcards(db: Session = Depends(get_db)):
+    cards = crud.get_due_flashcards(db)
+    return {"flashcards": [
+        {
+            "id": c.id, "front": c.front, "back": c.back,
+            "interval": c.interval, "ease": c.ease, 
+            "repetitions": c.repetitions, "due_date": c.due_date.isoformat()
+        } for c in cards
+    ]}
+
 @app.post("/api/flashcards/review")
-async def review_flashcard(request: ReviewRequest):
+async def review_flashcard(request: ReviewRequest, db: Session = Depends(get_db)):
     from nlp.spaced_repetition import CardState, sm2_update
     state = CardState(
         interval=request.interval,
@@ -272,6 +309,14 @@ async def review_flashcard(request: ReviewRequest):
         due=request.due
     )
     new_state = sm2_update(state, request.quality)
+    
+    # If request has an ID, we update the DB
+    # We need to add card_id to ReviewRequest
+    if hasattr(request, "id") and getattr(request, "id") is not None:
+        crud.update_flashcard_sm2(
+            db, request.id, new_state.interval, new_state.ease, 
+            new_state.repetitions, new_state.due
+        )
     return new_state.model_dump()
 
 @app.post("/api/score_difficulty")
