@@ -1,95 +1,148 @@
 import React, { useState, useEffect } from 'react';
-import { Key, ExternalLink, Save, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Key, Save, CheckCircle2, ShieldAlert, Cpu, Settings as SettingsIcon } from 'lucide-react';
 
 const Settings = () => {
   const [apiKey, setApiKey] = useState('');
   const [isSaved, setIsSaved] = useState(false);
+  const [engineMode, setEngineMode] = useState('algorithm'); // 'ai' or 'algorithm'
 
   useEffect(() => {
-    const savedKey = localStorage.getItem('gemini_api_key');
+    const savedKey = localStorage.getItem('workflow_api_key');
+    const savedMode = localStorage.getItem('workflow_engine_mode');
+    
     if (savedKey) setApiKey(savedKey);
+    if (savedMode) setEngineMode(savedMode);
   }, []);
 
   const handleSave = () => {
-    localStorage.setItem('gemini_api_key', apiKey.trim());
+    localStorage.setItem('workflow_api_key', apiKey.trim());
+    localStorage.setItem('workflow_engine_mode', engineMode);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
   };
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: '800px', margin: '0 auto', padding: '24px' }}>
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Key size={32} color="var(--brand-primary)" />
-          Application Settings
+    <div className="animate-fade-in" style={{ 
+      maxWidth: '800px', margin: '0 auto', padding: '48px 24px',
+      display: 'flex', flexDirection: 'column', gap: '32px'
+    }}>
+      <div>
+        <h1 style={{ fontSize: '2rem', fontWeight: 900, color: '#1B2A4E', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+          <SettingsIcon size={32} color="#8A334B" />
+          Cài đặt hệ thống
         </h1>
-        <p style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>
-          Configure your Omilearn AI Study Assistant.
+        <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>
+          Cấu hình Workflow AI Study Assistant.
         </p>
       </div>
 
-      <div className="glass-panel" style={{ padding: '32px', borderRadius: '16px' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ backgroundColor: 'white', borderRadius: '24px', padding: '32px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)' }}>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1B2A4E', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Cpu size={24} color="#3B6B59" />
+          Chế độ hoạt động (Engine Mode)
+        </h2>
+        
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: '1.6', fontSize: '0.95rem' }}>
+          Chọn cách thức tạo nội dung học tập. Bạn có thể sử dụng sức mạnh của AI (yêu cầu API Key) hoặc chạy dựa trên thuật toán tích hợp sẵn (Mock data) cho mục đích thử nghiệm.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '32px' }}>
+          <div 
+            onClick={() => setEngineMode('ai')}
+            style={{ 
+              border: `2px solid ${engineMode === 'ai' ? '#8A334B' : 'var(--border-light)'}`,
+              backgroundColor: engineMode === 'ai' ? '#F8EFEA' : 'white',
+              padding: '24px', borderRadius: '16px', cursor: 'pointer',
+              transition: 'all 0.2s', textAlign: 'center'
+            }}
+          >
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1B2A4E', marginBottom: '8px' }}>Google Gemini AI</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Tạo câu hỏi & nội dung thông minh dựa trên tài liệu.</div>
+          </div>
+          
+          <div 
+            onClick={() => setEngineMode('algorithm')}
+            style={{ 
+              border: `2px solid ${engineMode === 'algorithm' ? '#3B6B59' : 'var(--border-light)'}`,
+              backgroundColor: engineMode === 'algorithm' ? '#E8F5E9' : 'white',
+              padding: '24px', borderRadius: '16px', cursor: 'pointer',
+              transition: 'all 0.2s', textAlign: 'center'
+            }}
+          >
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1B2A4E', marginBottom: '8px' }}>Local Algorithm</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Chạy giả lập offline không cần kết nối mạng.</div>
+          </div>
+        </div>
+
+        <div style={{ height: '1px', backgroundColor: 'var(--border-light)', margin: '0 -32px 32px' }}></div>
+
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1B2A4E', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Key size={24} color="#8A334B" />
           Google Gemini API Key
         </h2>
         
-        <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: '1.6' }}>
-          Omilearn uses Google's powerful Gemini AI to generate flashcards, quizzes, learning paths, and smart notes. 
-          Because this is a standalone desktop application, you need to provide your own API key to power the AI engine.
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: '1.6', fontSize: '0.95rem' }}>
+          Vì đây là ứng dụng máy tính độc lập, bạn cần cung cấp API key cá nhân để sử dụng chế độ AI.
         </p>
 
-        <div style={{ backgroundColor: 'rgba(234, 179, 8, 0.1)', borderLeft: '4px solid #eab308', padding: '16px', borderRadius: '0 8px 8px 0', marginBottom: '24px' }}>
-          <h3 style={{ fontWeight: 600, color: '#ca8a04', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ShieldAlert size={18} /> How to get a free API Key:
+        <div style={{ backgroundColor: '#FFFBEB', borderLeft: '4px solid #F59E0B', padding: '20px', borderRadius: '0 12px 12px 0', marginBottom: '24px' }}>
+          <h3 style={{ fontWeight: 700, color: '#B45309', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem' }}>
+            <ShieldAlert size={18} /> Cách lấy API Key miễn phí:
           </h3>
-          <ol style={{ paddingLeft: '24px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <li>Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" style={{ color: 'var(--brand-primary)', textDecoration: 'underline' }}>Google AI Studio</a>.</li>
-            <li>Sign in with your Google account.</li>
-            <li>Click <strong>"Create API Key"</strong> in a new or existing project.</li>
-            <li>Copy the key (it should start with <code style={{ backgroundColor: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: '4px' }}>AIzaSy...</code>).</li>
-            <li>Paste it below and click Save.</li>
+          <ol style={{ paddingLeft: '24px', color: '#92400E', display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.9rem', lineHeight: '1.6', margin: 0 }}>
+            <li>Truy cập <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" style={{ color: '#8A334B', textDecoration: 'underline', fontWeight: 600 }}>Google AI Studio</a>.</li>
+            <li>Đăng nhập bằng tài khoản Google của bạn.</li>
+            <li>Nhấn nút <strong>"Create API Key"</strong>.</li>
+            <li>Copy đoạn mã (bắt đầu bằng <code style={{ backgroundColor: 'white', padding: '2px 8px', borderRadius: '6px', border: '1px solid #FCD34D', color: '#1B2A4E', fontWeight: 'bold' }}>AIzaSy...</code>).</li>
+            <li>Dán vào ô bên dưới và nhấn Lưu.</li>
           </ol>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <label style={{ fontWeight: 600, fontSize: '0.875rem' }}>Your API Key</label>
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <label style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1B2A4E' }}>Mã API Key của bạn</label>
+          <div style={{ display: 'flex', gap: '16px' }}>
             <input 
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="AIzaSy..........................."
+              disabled={engineMode === 'algorithm'}
               style={{
                 flex: 1,
-                padding: '12px 16px',
-                borderRadius: '8px',
-                border: '1px solid var(--border-light)',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
+                padding: '16px',
+                borderRadius: '16px',
+                border: '2px solid var(--border-light)',
+                backgroundColor: engineMode === 'algorithm' ? 'var(--bg-tertiary)' : 'white',
+                color: '#1B2A4E',
                 fontFamily: 'monospace',
-                fontSize: '1rem'
+                fontSize: '1rem',
+                outline: 'none',
+                opacity: engineMode === 'algorithm' ? 0.6 : 1
               }}
             />
             <button 
               onClick={handleSave}
-              className="glass-panel"
               style={{
-                padding: '0 24px',
-                borderRadius: '8px',
-                backgroundColor: isSaved ? '#10b981' : 'var(--brand-primary)',
+                padding: '0 32px',
+                borderRadius: '16px',
+                backgroundColor: isSaved ? '#3B6B59' : '#8A334B',
                 color: 'white',
-                fontWeight: 600,
+                fontWeight: 700,
+                fontSize: '1rem',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                transition: 'all 0.3s ease'
+                gap: '12px',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                boxShadow: isSaved ? '0 4px 12px rgba(59, 107, 89, 0.3)' : '0 4px 12px rgba(138, 51, 75, 0.3)'
               }}
             >
-              {isSaved ? <><CheckCircle2 size={18} /> Saved</> : <><Save size={18} /> Save Key</>}
+              {isSaved ? <><CheckCircle2 size={20} /> Đã lưu</> : <><Save size={20} /> Lưu Cài Đặt</>}
             </button>
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            Your key is stored securely on your local device and is only used to communicate directly with Google's API.
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+            Key của bạn được lưu trữ an toàn trên thiết bị và chỉ gửi trực tiếp tới máy chủ Google.
           </p>
         </div>
       </div>
