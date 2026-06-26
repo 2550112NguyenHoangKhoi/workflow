@@ -187,42 +187,8 @@ async def generate_path(request: LearningPathRequest, x_api_key: str | None = He
 async def generate_quiz(request: TopicRequest, x_api_key: str | None = Header(default=None)):
     current_key = get_api_key(x_api_key)
     if not current_key or current_key.startswith("AQ"):
-        sentences = [s.strip() for s in re.split(r'(?<=[.!?]) +', request.topic_or_text) if len(s.split()) > 5]
-        all_long_words = list(set([re.sub(r'[^a-zA-Z]', '', w) for w in request.topic_or_text.split() if len(re.sub(r'[^a-zA-Z]', '', w)) >= 5]))
-        
-        questions = []
-        for i, s in enumerate(sentences[:5]):
-            words = [w for w in s.split() if len(re.sub(r'[^a-zA-Z]', '', w)) >= 5]
-            if words and len(all_long_words) >= 4:
-                target = random.choice(words)
-                target_clean = re.sub(r'[^a-zA-Z]', '', target)
-                
-                distractors = random.sample([w for w in all_long_words if w.lower() != target_clean.lower()], min(3, len(all_long_words)-1))
-                options_text = [target_clean] + distractors
-                random.shuffle(options_text)
-                
-                options = [{"id": chr(97+j), "text": opt} for j, opt in enumerate(options_text)]
-                correct_id = [opt["id"] for opt in options if opt["text"] == target_clean][0]
-                
-                questions.append({
-                    "question": s.replace(target, "_______"),
-                    "options": options,
-                    "correct_option_id": correct_id,
-                    "explanation": f"The missing word is '{target_clean}' from the original text."
-                })
-        
-        if not questions:
-            questions = [{
-                "question": "What is 2+2?",
-                "options": [{"id": "a", "text": "3"}, {"id": "b", "text": "4"}, {"id": "c", "text": "5"}, {"id": "d", "text": "6"}],
-                "correct_option_id": "b",
-                "explanation": "2+2 equals 4."
-            }]
-
-        return {
-            "title": "Algorithmic Reading Comprehension Quiz",
-            "questions": questions
-        }
+        from nlp.quizzes import extract_quiz
+        return extract_quiz(request.topic_or_text, num_questions=5)
 
     try:
         config = LocalAgentConfig(api_key=current_key, response_schema=QuizSchema)
@@ -239,31 +205,8 @@ async def generate_quiz(request: TopicRequest, x_api_key: str | None = Header(de
 async def generate_notes(request: TopicRequest, x_api_key: str | None = Header(default=None)):
     current_key = get_api_key(x_api_key)
     if not current_key or current_key.startswith("AQ"):
-        sentences = [s.strip() for s in re.split(r'(?<=[.!?]) +', request.topic_or_text) if s.strip()]
-        
-        summary = " ".join(sentences[:2]) if sentences else "No text provided."
-        
-        key_points = []
-        for s in sentences[2:10]:
-            if any(keyword in s.lower() for keyword in [" is ", " are ", " important", " must", " key ", " defined"]):
-                key_points.append(s)
-        
-        if not key_points:
-            key_points = sentences[2:7]
-            
-        sections = []
-        if key_points:
-            sections.append({"heading": "Key Information", "bullet_points": key_points})
-            
-        other_points = sentences[10:15]
-        if other_points:
-            sections.append({"heading": "Additional Details", "bullet_points": other_points})
-
-        return {
-            "title": "Algorithmically Extracted Notes",
-            "summary": summary,
-            "sections": sections
-        }
+        from nlp.notes import extract_notes
+        return extract_notes(request.topic_or_text)
 
     try:
         config = LocalAgentConfig(api_key=current_key, response_schema=NoteSchema)
