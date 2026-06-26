@@ -186,22 +186,38 @@ async def generate_flashcards(request: FlashcardRequest, x_api_key: str | None =
         print(f"Error generating flashcards: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/pdf/learning-path")
-async def extract_pdf_learning_path(file: UploadFile = File(...)):
+@app.post("/api/documents/upload")
+async def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
     import tempfile, os, shutil
-    from nlp.pdf_toc import parse_pdf_toc
+    import pdfplumber
     
     suffix = os.path.splitext(file.filename)[1].lower()
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         shutil.copyfileobj(file.file, tmp)
         path = tmp.name
+    
     try:
-        toc = parse_pdf_toc(path)
-        return {"learning_path": toc}
+        text = ""
+        if suffix == ".pdf":
+            with pdfplumber.open(path) as pdf:
+                for page in pdf.pages:
+                    text += page.extract_text() + "\n"
+        else:
+            with open(path, "r", encoding="utf-8") as f:
+                text = f.read()
+                
+        # Save to SQLite
+        doc = crud.create_document(db, filename=file.filename, content=text)
+        return {"id": doc.id, "filename": doc.filename, "upload_date": doc.upload_date.isoformat()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         os.unlink(path)
+
+@app.get("/api/documents")
+async def list_documents(db: Session = Depends(get_db)):
+    docs = crud.get_documents(db)
+    return {"documents": [{"id": d.id, "filename": d.filename, "upload_date": d.upload_date.isoformat(), "content": d.content} for d in docs]}
 
 @app.post("/api/generate_path")
 async def generate_path(request: LearningPathRequest, x_api_key: str | None = Header(default=None)):

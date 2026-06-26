@@ -12,9 +12,23 @@ const UploadModal = ({ isOpen, onClose, onUpload }) => {
     }
   };
 
-  const handleSubmit = () => {
-    if (file) {
-      onUpload(file);
+  const handleSubmit = async () => {
+    if (!file) return;
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('http://127.0.0.1:8000/api/documents/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        onUpload();
+      } else {
+        alert("Upload failed.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error uploading file.");
     }
   };
 
@@ -130,7 +144,7 @@ const UploadModal = ({ isOpen, onClose, onUpload }) => {
             Hủy
           </button>
           <button onClick={handleSubmit} style={{ padding: '12px 24px', backgroundColor: 'var(--brand-primary)', border: 'none', borderRadius: '12px', fontWeight: 600, color: 'white', display: 'flex', alignItems: 'center', gap: '8px', cursor: file ? 'pointer' : 'not-allowed', opacity: file ? 1 : 0.6 }}>
-            <Upload size={18} /> Gửi admin duyệt
+            <Upload size={18} /> Xử lý Offline
           </button>
         </div>
       </div>

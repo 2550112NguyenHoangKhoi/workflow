@@ -27,3 +27,13 @@ def update_flashcard_sm2(db: Session, card_id: int, interval: int, ease: float, 
         db.commit()
         db.refresh(db_card)
     return db_card
+
+def get_documents(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Document).offset(skip).limit(limit).all()
+
+def create_document(db: Session, filename: str, content: str):
+    db_doc = models.Document(filename=filename, content=content)
+    db.add(db_doc)
+    db.commit()
+    db.refresh(db_doc)
+    return db_doc
