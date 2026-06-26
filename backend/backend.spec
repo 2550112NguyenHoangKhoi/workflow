@@ -52,6 +52,8 @@ a = Analysis(
         "nltk.corpus",
         "nltk.stem",
         "nltk.tokenize",
+        "sklearn",
+        "networkx",
     ],
     hookspath=["hooks"],
     runtime_hooks=[],

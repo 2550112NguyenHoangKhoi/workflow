@@ -8,3 +8,5 @@ pdfplumber
 nltk
 python-multipart
 pyinstaller
+scikit-learn
+networkx

@@ -98,6 +98,13 @@ class NoteSchema(BaseModel):
 
 class TopicRequest(BaseModel):
     topic_or_text: str
+    
+class ReviewRequest(BaseModel):
+    interval: int
+    ease: float
+    repetitions: int
+    due: str
+    quality: int
 
 
 class SuggestionSchema(BaseModel):
@@ -247,14 +254,35 @@ async def generate_notes(request: TopicRequest, x_api_key: str | None = Header(d
 
     try:
         config = LocalAgentConfig(api_key=current_key, response_schema=NoteSchema)
-        prompt = f"Generate structured study notes summarizing this topic or text: '{request.topic_or_text}'. Include a main title, a brief summary, and multiple sections with bullet points."
-        async with Agent(config) as agent:
-            response = await agent.chat(prompt)
-            data = await response.structured_output()
-            if not data: raise Exception("Failed to generate notes")
-            return data
+        agent = Agent(config)
+        prompt = f"""Generate extremely high-quality, structured study notes based on the following text.
+Text: {request.topic_or_text}"""
+        response = agent.run(prompt)
+        return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/flashcards/review")
+async def review_flashcard(request: ReviewRequest):
+    from nlp.spaced_repetition import CardState, sm2_update
+    state = CardState(
+        interval=request.interval,
+        ease=request.ease,
+        repetitions=request.repetitions,
+        due=request.due
+    )
+    new_state = sm2_update(state, request.quality)
+    return new_state.model_dump()
+
+@app.post("/api/score_difficulty")
+async def score_text_difficulty(request: TopicRequest):
+    from nlp.readability import score_difficulty
+    return score_difficulty(request.topic_or_text)
+
+@app.post("/api/generate_map")
+async def generate_concept_map_endpoint(request: TopicRequest):
+    from nlp.concept_map import generate_concept_map
+    return generate_concept_map(request.topic_or_text)
 
 if __name__ == "__main__":
     import uvicorn
