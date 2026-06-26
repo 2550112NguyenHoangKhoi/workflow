@@ -5,6 +5,7 @@ import TakeQuizModal from '../modals/TakeQuizModal';
 import StudyDocProgressModal from '../modals/StudyDocProgressModal';
 import ConceptMapModal from '../modals/ConceptMapModal';
 import FlashcardReviewModal from '../modals/FlashcardReviewModal';
+import SmartNotesModal from '../modals/SmartNotesModal';
 
 // Node.js APIs available because nodeIntegration is true
 const fs = window.require ? window.require('fs') : null;
@@ -18,6 +19,7 @@ const StudioSidebar = () => {
   const [isProgressOpen, setIsProgressOpen] = useState(false);
   const [isConceptMapOpen, setIsConceptMapOpen] = useState(false);
   const [isFlashcardOpen, setIsFlashcardOpen] = useState(false);
+  const [isSmartNotesOpen, setIsSmartNotesOpen] = useState(false);
 
   const handleSelectWorkspace = async () => {
     if (!ipcRenderer) return alert("Electron IPC not available in browser mode.");
@@ -66,6 +68,10 @@ const StudioSidebar = () => {
         <button onClick={() => setIsProgressOpen(true)} style={{ backgroundColor: 'white', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
           <FileText size={20} color="var(--text-muted)" />
           Study Doc
+        </button>
+        <button onClick={() => setIsSmartNotesOpen(true)} style={{ backgroundColor: 'white', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
+          <FileText size={20} color="#1B2A4E" />
+          Smart Notes
         </button>
         <button onClick={() => setIsConceptMapOpen(true)} style={{ backgroundColor: 'white', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
           <Network size={20} color="var(--brand-primary)" />
@@ -130,6 +136,7 @@ const StudioSidebar = () => {
     <UploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} onUpload={() => setIsUploadOpen(false)} />
     <TakeQuizModal isOpen={isExamOpen} onClose={() => setIsExamOpen(false)} />
     <StudyDocProgressModal isOpen={isProgressOpen} onClose={() => setIsProgressOpen(false)} />
+    <SmartNotesModal isOpen={isSmartNotesOpen} onClose={() => setIsSmartNotesOpen(false)} />
     <ConceptMapModal isOpen={isConceptMapOpen} onClose={() => setIsConceptMapOpen(false)} />
     <FlashcardReviewModal isOpen={isFlashcardOpen} onClose={() => setIsFlashcardOpen(false)} />
     </>
