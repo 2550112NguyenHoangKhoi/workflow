@@ -130,8 +130,8 @@ const StudioSidebar = () => {
     <UploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} onUpload={() => setIsUploadOpen(false)} />
     <TakeQuizModal isOpen={isExamOpen} onClose={() => setIsExamOpen(false)} />
     <StudyDocProgressModal isOpen={isProgressOpen} onClose={() => setIsProgressOpen(false)} />
-    <ConceptMapModal isOpen={isConceptMapOpen} onClose={() => setIsConceptMapOpen(false)} topic="Sample biology text about mitochondria and cells for testing the algorithm." />
-    <FlashcardReviewModal isOpen={isFlashcardOpen} onClose={() => setIsFlashcardOpen(false)} topic="Sample biology text about mitochondria and cells for testing the algorithm." />
+    <ConceptMapModal isOpen={isConceptMapOpen} onClose={() => setIsConceptMapOpen(false)} />
+    <FlashcardReviewModal isOpen={isFlashcardOpen} onClose={() => setIsFlashcardOpen(false)} />
     </>
   );
 };

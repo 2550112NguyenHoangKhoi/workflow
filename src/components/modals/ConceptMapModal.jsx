@@ -3,27 +3,41 @@ import { X, Network, Loader2 } from 'lucide-react';
 import { ReactFlow, Controls, Background, applyNodeChanges, applyEdgeChanges } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-const ConceptMapModal = ({ isOpen, onClose, topic }) => {
+const ConceptMapModal = ({ isOpen, onClose }) => {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [activeDoc, setActiveDoc] = useState(null);
 
   useEffect(() => {
-    if (isOpen && topic) {
-      generateMap();
+    if (isOpen) {
+      fetch('http://127.0.0.1:8000/api/documents')
+        .then(res => res.json())
+        .then(data => {
+          if (data.documents && data.documents.length > 0) {
+            const doc = data.documents[data.documents.length - 1];
+            setActiveDoc(doc);
+            generateMap(doc.content);
+          } else {
+            setError("Chưa có tài liệu. Vui lòng Upload tài liệu trước!");
+          }
+        })
+        .catch(err => setError(err.message));
+    } else {
+      setNodes([]);
+      setEdges([]);
+      setError(null);
     }
-  }, [isOpen, topic]);
+  }, [isOpen]);
 
-  const generateMap = async () => {
+  const generateMap = async (textContent) => {
     setIsLoading(true);
     setError(null);
     try {
-      // Mocking some API delay
       const response = await fetch('http://127.0.0.1:8000/api/generate_map', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic_or_text: topic })
+        body: JSON.stringify({ topic_or_text: textContent })
       });
       
       if (!response.ok) throw new Error('Failed to generate map');

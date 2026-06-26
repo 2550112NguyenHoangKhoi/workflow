@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, ArrowRight, Check } from 'lucide-react';
 
-const FlashcardReviewModal = ({ isOpen, onClose, topic }) => {
+const FlashcardReviewModal = ({ isOpen, onClose }) => {
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -10,19 +10,39 @@ const FlashcardReviewModal = ({ isOpen, onClose, topic }) => {
   // State for the current card's spaced repetition metadata
   const [cardStates, setCardStates] = useState({});
 
-  useEffect(() => {
-    if (isOpen && topic) {
-      loadCards();
-    }
-  }, [isOpen, topic]);
+  const [activeDoc, setActiveDoc] = useState(null);
+  const [error, setError] = useState(null);
 
-  const loadCards = async () => {
+  useEffect(() => {
+    if (isOpen) {
+      fetch('http://127.0.0.1:8000/api/documents')
+        .then(res => res.json())
+        .then(data => {
+          if (data.documents && data.documents.length > 0) {
+            const doc = data.documents[data.documents.length - 1];
+            setActiveDoc(doc);
+            loadCards(doc.content);
+          } else {
+            setError("Chưa có tài liệu. Vui lòng Upload tài liệu trước!");
+          }
+        })
+        .catch(err => setError(err.message));
+    } else {
+      setCards([]);
+      setError(null);
+      setCurrentIndex(0);
+      setIsFlipped(false);
+    }
+  }, [isOpen]);
+
+  const loadCards = async (textContent) => {
     setIsLoading(true);
+    setError(null);
     try {
       const response = await fetch('http://127.0.0.1:8000/api/generate_flashcards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic_or_text: topic })
+        body: JSON.stringify({ topic_or_text: textContent })
       });
       const data = await response.json();
       setCards(data.flashcards || []);
@@ -103,6 +123,8 @@ const FlashcardReviewModal = ({ isOpen, onClose, topic }) => {
         <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '300px' }}>
           {isLoading ? (
             <div style={{ margin: 'auto', color: 'var(--brand-primary)', fontWeight: 600 }}>Loading flashcards...</div>
+          ) : error ? (
+            <div style={{ margin: 'auto', color: 'red', fontWeight: 600 }}>{error}</div>
           ) : cards.length > 0 ? (
             <>
               <div style={{ width: '100%', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '0.875rem', fontWeight: 600 }}>
