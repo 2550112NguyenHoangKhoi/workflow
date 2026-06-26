@@ -24,7 +24,7 @@ function createWindow() {
 app.whenReady().then(() => {
   const backendPath = app.isPackaged 
     ? path.join(process.resourcesPath, 'backend', 'workflow-backend')
-    : path.join(__dirname, '../../backend/dist/workflow-backend/workflow-backend');
+    : path.join(__dirname, '../backend/dist/workflow-backend/workflow-backend');
     
   console.log("Starting backend at:", backendPath);
   
