@@ -1,7 +1,7 @@
 import os
 import re
 import random
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, UploadFile, File
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -9,6 +9,26 @@ from google.antigravity import Agent, LocalAgentConfig
 
 # Load env vars from parent directory .env if it exists
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+
+import sys
+from pathlib import Path
+
+# --- PyInstaller Runtime Bootstrap ---
+def setup_runtime_paths():
+    if getattr(sys, "frozen", False):
+        base = Path(sys._MEIPASS)
+        # NLTK bundle path
+        nltk_dir = base / "nltk_data"
+        os.environ["NLTK_DATA"] = str(nltk_dir)
+        try:
+            import nltk
+            nltk.data.path.insert(0, str(nltk_dir))
+        except ImportError:
+            pass
+        return base
+    return Path(__file__).resolve().parent.parent
+
+BASE_DIR = setup_runtime_paths()
 
 app = FastAPI()
 
@@ -132,6 +152,23 @@ async def generate_flashcards(request: FlashcardRequest, x_api_key: str | None =
     except Exception as e:
         print(f"Error generating flashcards: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/pdf/learning-path")
+async def extract_pdf_learning_path(file: UploadFile = File(...)):
+    import tempfile, os, shutil
+    from nlp.pdf_toc import parse_pdf_toc
+    
+    suffix = os.path.splitext(file.filename)[1].lower()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        path = tmp.name
+    try:
+        toc = parse_pdf_toc(path)
+        return {"learning_path": toc}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        os.unlink(path)
 
 @app.post("/api/generate_path")
 async def generate_path(request: LearningPathRequest, x_api_key: str | None = Header(default=None)):
