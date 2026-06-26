@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { X, Network, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Network, Loader2, Download } from 'lucide-react';
 import { ReactFlow, Controls, Background, applyNodeChanges, applyEdgeChanges } from '@xyflow/react';
+import { toPng } from 'html-to-image';
 import '@xyflow/react/dist/style.css';
 
 const ConceptMapModal = ({ isOpen, onClose }) => {
@@ -77,6 +78,23 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
     }
   };
 
+  const reactFlowWrapper = useRef(null);
+
+  const exportToPNG = () => {
+    if (reactFlowWrapper.current === null) return;
+
+    toPng(reactFlowWrapper.current, { backgroundColor: '#FAFAFA' })
+      .then((dataUrl) => {
+        const link = document.createElement('a');
+        link.download = `ConceptMap_${activeDoc?.filename || 'Export'}.png`;
+        link.href = dataUrl;
+        link.click();
+      })
+      .catch((err) => {
+        console.error('Failed to export map as PNG', err);
+      });
+  };
+
   const onNodesChange = (changes) => setNodes((nds) => applyNodeChanges(changes, nds));
   const onEdgesChange = (changes) => setEdges((eds) => applyEdgeChanges(changes, eds));
 
@@ -108,15 +126,22 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
               <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Generated locally via TF-IDF clustering</p>
             </div>
           </div>
-          <button onClick={onClose} style={{
-            background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--text-secondary)'
-          }}>
-            <X size={24} />
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {nodes.length > 0 && (
+              <button onClick={exportToPNG} title="Export to PNG" style={{ background: '#E8F5E9', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
+                <Download size={16} /> Export Map
+              </button>
+            )}
+            <button onClick={onClose} style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--text-secondary)'
+            }}>
+              <X size={24} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, position: 'relative', backgroundColor: '#FAFAFA' }}>
+        <div ref={reactFlowWrapper} style={{ flex: 1, position: 'relative', backgroundColor: '#FAFAFA' }}>
           {isLoading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--brand-primary)' }}>
               <Loader2 size={48} className="animate-spin" style={{ marginBottom: '16px' }} />

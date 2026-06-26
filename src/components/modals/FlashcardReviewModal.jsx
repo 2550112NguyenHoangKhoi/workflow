@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, ArrowRight, Check } from 'lucide-react';
+import { X, Calendar, ArrowRight, Check, Download } from 'lucide-react';
 
 const FlashcardReviewModal = ({ isOpen, onClose }) => {
   const [cards, setCards] = useState([]);
@@ -90,6 +90,27 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
     }
   };
 
+  const exportToCSV = () => {
+    if (!cards || cards.length === 0) return;
+    
+    // Create CSV content (escaping quotes and wrapping in quotes)
+    const csvContent = "front,back\n" + cards.map(c => {
+      const front = c.front.replace(/"/g, '""');
+      const back = c.back.replace(/"/g, '""');
+      return `"${front}","${back}"`;
+    }).join("\n");
+    
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Flashcards_${activeDoc?.filename || 'Export'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (!isOpen) return null;
 
   const currentCard = cards[currentIndex];
@@ -114,9 +135,16 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
             <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#1B2A4E', fontWeight: 800 }}>Spaced Repetition</h2>
             <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>SM-2 Algorithm Review</p>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
-            <X size={24} />
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {cards.length > 0 && (
+              <button onClick={exportToCSV} title="Export to CSV (Anki)" style={{ background: '#E8F5E9', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
+                <Download size={16} /> Export CSV
+              </button>
+            )}
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+              <X size={24} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
