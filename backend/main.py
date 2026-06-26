@@ -124,6 +124,11 @@ class SuggestionSchema(BaseModel):
     quiz_topic: str
     flashcard_topic: str
 
+class QuizSubmitRequest(BaseModel):
+    document_id: int
+    score: int
+    total_questions: int
+
 # --- Endpoints ---
 
 
@@ -284,6 +289,19 @@ async def generate_quiz(request: TopicRequest, x_api_key: str | None = Header(de
             data = await response.structured_output()
             if not data: raise Exception("Failed to generate quiz")
             return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/quizzes/submit")
+async def submit_quiz(request: QuizSubmitRequest, db: Session = Depends(get_db)):
+    try:
+        score_record = crud.create_quiz_score(
+            db, 
+            document_id=request.document_id, 
+            score=request.score, 
+            total_questions=request.total_questions
+        )
+        return {"success": True, "score_id": score_record.id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

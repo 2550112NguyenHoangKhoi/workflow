@@ -22,3 +22,12 @@ class Document(Base):
     filename = Column(String, index=True)
     content = Column(String)
     upload_date = Column(Date, default=datetime.date.today)
+
+class QuizScore(Base):
+    __tablename__ = "quiz_scores"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"))
+    score = Column(Integer)
+    total_questions = Column(Integer)
+    date_taken = Column(Date, default=datetime.date.today)

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Upload, FileText, AlertCircle, Network, BrainCircuit, Cloud } from 'lucide-react';
 import UploadModal from '../modals/UploadModal';
-import CreateExamModal from '../modals/CreateExamModal';
+import TakeQuizModal from '../modals/TakeQuizModal';
 import StudyDocProgressModal from '../modals/StudyDocProgressModal';
 import ConceptMapModal from '../modals/ConceptMapModal';
 import FlashcardReviewModal from '../modals/FlashcardReviewModal';
@@ -128,7 +128,7 @@ const StudioSidebar = () => {
     </aside>
     
     <UploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} onUpload={() => setIsUploadOpen(false)} />
-    <CreateExamModal isOpen={isExamOpen} onClose={() => setIsExamOpen(false)} />
+    <TakeQuizModal isOpen={isExamOpen} onClose={() => setIsExamOpen(false)} />
     <StudyDocProgressModal isOpen={isProgressOpen} onClose={() => setIsProgressOpen(false)} />
     <ConceptMapModal isOpen={isConceptMapOpen} onClose={() => setIsConceptMapOpen(false)} topic="Sample biology text about mitochondria and cells for testing the algorithm." />
     <FlashcardReviewModal isOpen={isFlashcardOpen} onClose={() => setIsFlashcardOpen(false)} topic="Sample biology text about mitochondria and cells for testing the algorithm." />

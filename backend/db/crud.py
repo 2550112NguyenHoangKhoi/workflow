@@ -37,3 +37,13 @@ def create_document(db: Session, filename: str, content: str):
     db.commit()
     db.refresh(db_doc)
     return db_doc
+
+def create_quiz_score(db: Session, document_id: int, score: int, total_questions: int):
+    db_score = models.QuizScore(document_id=document_id, score=score, total_questions=total_questions)
+    db.add(db_score)
+    db.commit()
+    db.refresh(db_score)
+    return db_score
+
+def get_quiz_scores(db: Session, document_id: int):
+    return db.query(models.QuizScore).filter(models.QuizScore.document_id == document_id).all()
