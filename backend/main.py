@@ -305,6 +305,41 @@ async def submit_quiz(request: QuizSubmitRequest, db: Session = Depends(get_db))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/documents/{document_id}/progress")
+async def get_document_progress(document_id: int, db: Session = Depends(get_db)):
+    try:
+        from nlp.readability import score_difficulty
+        
+        doc = db.query(models.Document).filter(models.Document.id == document_id).first()
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+            
+        readability = score_difficulty(doc.content)
+        scores = crud.get_quiz_scores(db, document_id)
+        
+        total_quizzes = len(scores)
+        average_score = 0
+        latest_score = None
+        
+        if total_quizzes > 0:
+            total_points = sum([s.score for s in scores])
+            total_max = sum([s.total_questions for s in scores])
+            if total_max > 0:
+                average_score = (total_points / total_max) * 100
+            
+            latest = scores[-1]
+            if latest.total_questions > 0:
+                latest_score = (latest.score / latest.total_questions) * 100
+                
+        return {
+            "readability": readability,
+            "average_quiz_score": round(average_score, 1),
+            "latest_score": round(latest_score, 1) if latest_score is not None else None,
+            "total_quizzes_taken": total_quizzes
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/generate_notes")
 async def generate_notes(request: TopicRequest, x_api_key: str | None = Header(default=None)):
     current_key = get_api_key(x_api_key)
