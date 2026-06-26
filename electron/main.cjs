@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 
@@ -34,6 +34,14 @@ app.whenReady().then(() => {
   
   backendProcess.stdout.on('data', (data) => console.log(`Backend stdout: ${data}`));
   backendProcess.stderr.on('data', (data) => console.error(`Backend stderr: ${data}`));
+
+  // IPC Dialog Handler
+  ipcMain.handle('dialog:openDirectory', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory']
+    });
+    return result.canceled ? null : result.filePaths[0];
+  });
 
   // Open window immediately
   createWindow();

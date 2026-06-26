@@ -1,10 +1,16 @@
 import React, { useState } from 'react';
-import { Upload, FileText, AlertCircle, Network, BrainCircuit } from 'lucide-react';
+import { Upload, FileText, AlertCircle, Network, BrainCircuit, Cloud } from 'lucide-react';
 import UploadModal from '../modals/UploadModal';
 import CreateExamModal from '../modals/CreateExamModal';
 import StudyDocProgressModal from '../modals/StudyDocProgressModal';
 import ConceptMapModal from '../modals/ConceptMapModal';
 import FlashcardReviewModal from '../modals/FlashcardReviewModal';
+
+// Node.js APIs available because nodeIntegration is true
+const fs = window.require ? window.require('fs') : null;
+const path = window.require ? window.require('path') : null;
+const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
+const os = window.require ? window.require('os') : null;
 
 const StudioSidebar = () => {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -12,6 +18,21 @@ const StudioSidebar = () => {
   const [isProgressOpen, setIsProgressOpen] = useState(false);
   const [isConceptMapOpen, setIsConceptMapOpen] = useState(false);
   const [isFlashcardOpen, setIsFlashcardOpen] = useState(false);
+
+  const handleSelectWorkspace = async () => {
+    if (!ipcRenderer) return alert("Electron IPC not available in browser mode.");
+    try {
+      const selectedPath = await ipcRenderer.invoke('dialog:openDirectory');
+      if (selectedPath) {
+        const configPath = path.join(os.homedir(), '.omilearn_config.json');
+        fs.writeFileSync(configPath, JSON.stringify({ workspace_path: selectedPath }, null, 2));
+        alert(`Workspace updated to:\n${selectedPath}\n\nPlease restart the application for the database to move.`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to set workspace.");
+    }
+  };
 
   return (
     <>
@@ -53,6 +74,10 @@ const StudioSidebar = () => {
         <button onClick={() => setIsFlashcardOpen(true)} style={{ gridColumn: 'span 2', backgroundColor: 'white', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
           <BrainCircuit size={20} color="#92400E" />
           Review Flashcards (SM-2)
+        </button>
+        <button onClick={handleSelectWorkspace} style={{ gridColumn: 'span 2', backgroundColor: '#F8EFEA', border: '1px solid #8A334B', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#8A334B', fontWeight: 700, fontSize: '0.875rem' }}>
+          <Cloud size={20} color="#8A334B" />
+          Cloud Sync Workspace (G-Drive / OneDrive)
         </button>
       </div>
 
