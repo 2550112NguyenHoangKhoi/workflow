@@ -1,7 +1,25 @@
-import React from 'react';
-import { Users, Upload, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Users, Upload, ArrowRight, BrainCircuit } from 'lucide-react';
 
 const DocumentViewer = () => {
+  const [difficulty, setDifficulty] = useState(null);
+
+  useEffect(() => {
+    const fetchDifficulty = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/score_difficulty', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic_or_text: "Sample biology text about mitochondria and cells for testing the algorithm." })
+        });
+        const data = await response.json();
+        setDifficulty(data);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchDifficulty();
+  }, []);
 
   const actionPills = [
     "Tạo quiz nhanh",
@@ -22,7 +40,20 @@ const DocumentViewer = () => {
           <h2 style={{ fontSize: '2rem', fontWeight: 900, color: '#1B2A4E', marginBottom: '4px' }}>
             CK_HK233 (1)
           </h2>
-          <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>1 source attached</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>1 source attached</div>
+            {difficulty && (
+              <div style={{ 
+                display: 'flex', alignItems: 'center', gap: '6px', 
+                backgroundColor: difficulty.level === 'Advanced' ? '#FEE2E2' : difficulty.level === 'Intermediate' ? '#FEF3C7' : '#D1FAE5',
+                color: difficulty.level === 'Advanced' ? '#991B1B' : difficulty.level === 'Intermediate' ? '#92400E' : '#065F46',
+                padding: '4px 12px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, border: '1px solid rgba(0,0,0,0.05)'
+              }}>
+                <BrainCircuit size={14} />
+                {difficulty.level} ({difficulty.score}/10)
+              </div>
+            )}
+          </div>
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

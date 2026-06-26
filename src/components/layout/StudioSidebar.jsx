@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { Upload, FileText, AlertCircle } from 'lucide-react';
+import { Upload, FileText, AlertCircle, Network, BrainCircuit } from 'lucide-react';
 import UploadModal from '../modals/UploadModal';
 import CreateExamModal from '../modals/CreateExamModal';
 import StudyDocProgressModal from '../modals/StudyDocProgressModal';
+import ConceptMapModal from '../modals/ConceptMapModal';
+import FlashcardReviewModal from '../modals/FlashcardReviewModal';
 
 const StudioSidebar = () => {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isExamOpen, setIsExamOpen] = useState(false);
   const [isProgressOpen, setIsProgressOpen] = useState(false);
+  const [isConceptMapOpen, setIsConceptMapOpen] = useState(false);
+  const [isFlashcardOpen, setIsFlashcardOpen] = useState(false);
 
   return (
     <>
@@ -41,6 +45,14 @@ const StudioSidebar = () => {
         <button onClick={() => setIsProgressOpen(true)} style={{ backgroundColor: 'white', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
           <FileText size={20} color="var(--text-muted)" />
           Study Doc
+        </button>
+        <button onClick={() => setIsConceptMapOpen(true)} style={{ backgroundColor: 'white', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
+          <Network size={20} color="var(--brand-primary)" />
+          Concept Map
+        </button>
+        <button onClick={() => setIsFlashcardOpen(true)} style={{ gridColumn: 'span 2', backgroundColor: 'white', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
+          <BrainCircuit size={20} color="#92400E" />
+          Review Flashcards (SM-2)
         </button>
       </div>
 
@@ -93,6 +105,8 @@ const StudioSidebar = () => {
     <UploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} onUpload={() => setIsUploadOpen(false)} />
     <CreateExamModal isOpen={isExamOpen} onClose={() => setIsExamOpen(false)} />
     <StudyDocProgressModal isOpen={isProgressOpen} onClose={() => setIsProgressOpen(false)} />
+    <ConceptMapModal isOpen={isConceptMapOpen} onClose={() => setIsConceptMapOpen(false)} topic="Sample biology text about mitochondria and cells for testing the algorithm." />
+    <FlashcardReviewModal isOpen={isFlashcardOpen} onClose={() => setIsFlashcardOpen(false)} topic="Sample biology text about mitochondria and cells for testing the algorithm." />
     </>
   );
 };
