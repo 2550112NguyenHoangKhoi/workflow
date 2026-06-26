@@ -111,21 +111,9 @@ async def chat_endpoint(request: ChatRequest, x_api_key: str | None = Header(def
 async def generate_flashcards(request: FlashcardRequest, x_api_key: str | None = Header(default=None)):
     current_key = get_api_key(x_api_key)
     if not current_key or current_key.startswith("AQ"):
-        sentences = [s.strip() for s in re.split(r'(?<=[.!?]) +', request.topic_or_text) if len(s.split()) > 5]
-        if not sentences:
-            sentences = ["The provided text is too short to generate flashcards."]
-        
-        flashcards = []
-        for s in sentences[:10]:
-            words = [w for w in s.split() if len(re.sub(r'[^a-zA-Z]', '', w)) >= 5]
-            if words:
-                target = random.choice(words)
-                front = s.replace(target, "_______")
-                target_clean = re.sub(r'[^a-zA-Z]', '', target)
-                flashcards.append({"front": front, "back": target_clean})
-        if not flashcards:
-            flashcards = [{"front": "What is AI?", "back": "Artificial Intelligence is the simulation of human intelligence processes by machines."}]
-        return {"flashcards": flashcards}
+        from nlp.flashcards import extract_flashcards
+        cards = extract_flashcards(request.topic_or_text, max_cards=10)
+        return {"flashcards": cards}
 
     try:
         config = LocalAgentConfig(

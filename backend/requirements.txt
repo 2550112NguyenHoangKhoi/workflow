@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic
+python-dotenv
+spacy
+pytextrank
+pdfplumber
+nltk
