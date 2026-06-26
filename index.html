@@ -7,6 +7,12 @@
     <title>hopeful-galileo</title>
   </head>
   <body>
+    <div id="error-log" style="color: red; padding: 20px; font-family: monospace; z-index: 9999; position: absolute;"></div>
+    <script>
+      window.onerror = function(message, source, lineno, colno, error) {
+        document.getElementById('error-log').innerHTML += '<p>' + message + ' at ' + source + ':' + lineno + '</p>';
+      };
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

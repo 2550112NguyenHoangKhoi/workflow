@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Download, X, Clock, Trophy, Check } from 'lucide-react';
+import { ArrowLeft, Download, X, Clock, Trophy, Check, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const ExamViewer = () => {

@@ -11,3 +11,4 @@ pyinstaller
 scikit-learn
 networkx
 sqlalchemy
+pyvi

@@ -8,6 +8,7 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [activeDoc, setActiveDoc] = useState(null);
 
   useEffect(() => {

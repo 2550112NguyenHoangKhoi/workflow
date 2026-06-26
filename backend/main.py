@@ -38,6 +38,18 @@ BASE_DIR = setup_runtime_paths()
 
 app = FastAPI()
 
+# Allow the local frontend (Vite dev server on :5173 / Electron) to call the
+# backend cross-origin at http://127.0.0.1:8000. Wildcard origin with
+# allow_credentials=False (browsers reject "*" + credentials).
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Check for API key
 api_key = os.getenv("GEMINI_API_KEY") or os.getenv("VITE_GEMINI_API_KEY")
 
@@ -131,12 +143,44 @@ class QuizSubmitRequest(BaseModel):
 
 # --- Endpoints ---
 
+def offline_doc_answer(message: str, db: Session, context: str = "") -> str:
+    """Offline chat: answer from the active (context) or latest document via TF-IDF sentence retrieval."""
+    try:
+        source_text = context.strip() if context and len(context.strip()) > 30 else ""
+        label = "tài liệu đang chọn"
+        if not source_text:
+            doc = db.query(models.Document).order_by(models.Document.id.desc()).first()
+            if not doc or not doc.content or not doc.content.strip():
+                return "📂 [Offline] Chưa có tài liệu nào trong thư viện. Hãy Upload một tài liệu để mình trả lời dựa trên nội dung của nó."
+            source_text = doc.content
+            label = doc.filename
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', source_text) if len(s.strip()) > 1]
+        if not sentences:
+            return "📄 [Offline] Tài liệu hiện chưa có nội dung văn bản để trích xuất."
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+        matrix = TfidfVectorizer(stop_words="english").fit_transform(sentences + [message])
+        sims = cosine_similarity(matrix[-1], matrix[:-1]).flatten()
+        ranked = [int(i) for i in sims.argsort()[::-1] if sims[int(i)] > 0.05][:3]
+        if ranked:
+            answer = " ".join(sentences[i] for i in ranked)
+            return f"📚 [Offline · trích từ {label}]\n\n{answer}"
+        # No direct keyword match (e.g. a "summarize" / "key points" request):
+        # fall back to an extractive summary using TF-IDF sentence centrality.
+        doc_matrix = TfidfVectorizer(stop_words="english").fit_transform(sentences)
+        centrality = (doc_matrix * doc_matrix.T).toarray().sum(axis=1)
+        top = sorted(sorted(range(len(sentences)), key=lambda i: centrality[i], reverse=True)[:3])
+        summary = " ".join(sentences[i] for i in top)
+        return f"📝 [Offline · tóm tắt {label}]\n\n{summary}"
+    except Exception as e:
+        return f"⚠️ [Offline] Lỗi khi truy xuất tài liệu: {e}"
+
 
 @app.post("/api/chat")
-async def chat_endpoint(request: ChatRequest, x_api_key: str | None = Header(default=None)):
+async def chat_endpoint(request: ChatRequest, x_api_key: str | None = Header(default=None), db: Session = Depends(get_db)):
     current_key = get_api_key(x_api_key)
     if not current_key or current_key.startswith("AQ"):
-        return {"response": "[Algorithm] The server is missing a valid GEMINI_API_KEY. I cannot chat with you algorithmically. Please add a key in Settings!"}
+        return {"response": offline_doc_answer(request.message, db, request.context)}
 
     try:
         config = LocalAgentConfig(api_key=current_key)
@@ -206,7 +250,7 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
         if suffix == ".pdf":
             with pdfplumber.open(path) as pdf:
                 for page in pdf.pages:
-                    text += page.extract_text() + "\n"
+                    text += (page.extract_text() or "") + "\n"
         else:
             with open(path, "r", encoding="utf-8") as f:
                 text = f.read()

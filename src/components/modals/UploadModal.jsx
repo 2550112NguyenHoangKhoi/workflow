@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Upload } from 'lucide-react';
 
 const UploadModal = ({ isOpen, onClose, onUpload }) => {
   const [file, setFile] = useState(null);
@@ -69,7 +69,7 @@ const UploadModal = ({ isOpen, onClose, onUpload }) => {
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{(file.size / 1024).toFixed(1)} KB</span>
               </div>
             ) : (
-              <input type="file" accept=".txt,.md" onChange={handleFileChange} style={{ width: '100%', padding: '12px' }} />
+              <input type="file" accept=".txt,.md,.pdf" onChange={handleFileChange} style={{ width: '100%', padding: '12px' }} />
             )}
           </div>
 

@@ -38,11 +38,16 @@ def extract_quiz(text: str, num_questions: int = 5) -> Dict:
     Algorithmically generates a multiple-choice quiz using NER and WordNet.
     """
     from .preprocessor import clean_text
-    
+    from .vietnamese import is_vietnamese
+
+    text = clean_text(text)
+
+    if is_vietnamese(text):
+        return _vietnamese_quiz(text, num_questions)
+
     if not nlp:
         return _fallback_quiz(text)
-        
-    text = clean_text(text)
+
     doc = nlp(text)
     
     questions = []
@@ -124,6 +129,43 @@ def extract_quiz(text: str, num_questions: int = 5) -> Dict:
         "title": "Algorithmically Generated MCQ Quiz",
         "questions": questions
     }
+
+
+def _vietnamese_quiz(text: str, num_questions: int = 5) -> Dict:
+    """Vietnamese MCQ quiz: blank a pyvi noun, distractors from other document nouns."""
+    from .vietnamese import vi_split_sentences, vi_nouns
+    sentences = [s for s in vi_split_sentences(text) if len(s.split()) > 6]
+    doc_nouns = list({n for s in sentences for n in vi_nouns(s) if len(n) > 2})
+
+    questions = []
+    used = set()
+    random.shuffle(sentences)
+    for s in sentences:
+        if len(questions) >= num_questions:
+            break
+        nouns = [n for n in vi_nouns(s) if n.lower() not in used and len(n) > 2]
+        if not nouns:
+            continue
+        target = max(nouns, key=len)
+        pool = [d for d in doc_nouns if d.lower() != target.lower()]
+        if len(pool) < 3:
+            continue
+        distractors = random.sample(pool, 3)
+        options_text = [target] + distractors
+        random.shuffle(options_text)
+        options = [{"id": chr(97 + j), "text": opt} for j, opt in enumerate(options_text)]
+        correct_id = [o["id"] for o in options if o["text"] == target][0]
+        questions.append({
+            "question": s.replace(target, "_______", 1),
+            "options": options,
+            "correct_option_id": correct_id,
+            "explanation": f"Cụm từ đúng bị khuyết trong câu là '{target}'.",
+        })
+        used.add(target.lower())
+
+    if not questions:
+        return _fallback_quiz(text)
+    return {"title": "Trắc nghiệm tự động (Tiếng Việt)", "questions": questions}
 
 
 def _fallback_quiz(text: str) -> Dict:

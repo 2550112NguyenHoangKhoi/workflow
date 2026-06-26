@@ -14,11 +14,16 @@ def extract_flashcards(text: str, max_cards: int = 10) -> List[Dict[str, str]]:
     Extracts candidate terms and their definitions to generate flashcards.
     Uses dependency parsing and regex patterns.
     """
+    from .preprocessor import clean_text, split_into_sentences_spacy
+    from .vietnamese import is_vietnamese
+    text = clean_text(text)
+
+    if is_vietnamese(text):
+        return _vietnamese_flashcards(text, max_cards)
+
     if not nlp:
         return _fallback_random_flashcards(text)
 
-    from .preprocessor import clean_text, split_into_sentences_spacy
-    text = clean_text(text)
     doc = nlp(text)
     
     flashcards = []
@@ -103,6 +108,50 @@ def extract_flashcards(text: str, max_cards: int = 10) -> List[Dict[str, str]]:
         return _fallback_random_flashcards(text)
         
     return flashcards[:max_cards]
+
+def _vietnamese_flashcards(text: str, max_cards: int = 10) -> List[Dict[str, str]]:
+    """Vietnamese flashcards: definitional 'X là Y' patterns + pyvi noun blanks."""
+    from .vietnamese import vi_split_sentences, vi_nouns
+    cards = []
+    seen = set()
+    sentences = vi_split_sentences(text)
+
+    # 1. Definitional patterns: "X là Y", "X được gọi là Y", "X được định nghĩa là Y".
+    definition_re = re.compile(
+        r'^(.{2,45}?)\s+(?:được\s+gọi\s+là|được\s+định\s+nghĩa\s+là|là\s+một|là)\s+(.+)'
+    )
+    for s in sentences:
+        if len(cards) >= max_cards:
+            break
+        m = definition_re.search(s)
+        if m:
+            term = m.group(1).strip(' ,.:;')
+            definition = m.group(2).strip(' ,.:;')
+            if 1 <= len(term.split()) <= 6 and term.lower() not in seen and len(definition) > 3:
+                cards.append({
+                    "front": f"Định nghĩa của **{term}** là gì?",
+                    "back": definition[0].upper() + definition[1:],
+                })
+                seen.add(term.lower())
+
+    # 2. Fallback: blank the most salient Vietnamese noun phrase in each sentence.
+    if len(cards) < 3:
+        for s in sentences:
+            if len(cards) >= max_cards:
+                break
+            nouns = sorted(
+                {n for n in vi_nouns(s) if n.lower() not in seen},
+                key=len, reverse=True,
+            )
+            if nouns:
+                target = nouns[0]
+                front = s.replace(target, "_______", 1)
+                if "_______" in front:
+                    cards.append({"front": front, "back": target})
+                    seen.add(target.lower())
+
+    return cards[:max_cards] if cards else _fallback_random_flashcards(text)
+
 
 def _fallback_random_flashcards(text: str) -> List[Dict[str, str]]:
     import random

@@ -26,3 +26,11 @@ dist-ssr
 # Electron build output
 release/
 release
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+backend/build/
+backend/dist/
+backend/*.spec

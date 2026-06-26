@@ -49,12 +49,13 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
       
       // Initialize SM-2 states for each card
       const initialStates = {};
-      (data.flashcards || []).forEach((_, idx) => {
+      (data.flashcards || []).forEach((card, idx) => {
         initialStates[idx] = {
-          interval: 1,
-          ease: 2.5,
-          repetitions: 0,
-          due: new Date().toISOString().split('T')[0]
+          id: card.id,
+          interval: card.interval ?? 1,
+          ease: card.ease ?? 2.5,
+          repetitions: card.repetitions ?? 0,
+          due: card.due_date ?? new Date().toISOString().split('T')[0]
         };
       });
       setCardStates(initialStates);

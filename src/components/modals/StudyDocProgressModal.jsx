@@ -46,10 +46,10 @@ const StudyDocProgressModal = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
-  const getDifficultyLabel = (score) => {
-    if (score > 60) return { label: 'Advanced', color: '#991B1B', bg: '#FEE2E2' };
-    if (score > 30) return { label: 'Intermediate', color: '#92400E', bg: '#FEF3C7' };
-    return { label: 'Beginner', color: '#065F46', bg: '#D1FAE5' };
+  const getDifficultyLabel = (level) => {
+    if (level === 'Advanced') return { label: 'Advanced', color: '#991B1B', bg: '#FEE2E2' };
+    if (level === 'Intermediate') return { label: 'Intermediate', color: '#92400E', bg: '#FEF3C7' };
+    return { label: level || 'Beginner', color: '#065F46', bg: '#D1FAE5' };
   };
 
   return (
@@ -97,10 +97,10 @@ const StudyDocProgressModal = ({ isOpen, onClose }) => {
                 <BookOpen size={32} color="var(--brand-primary)" style={{ marginBottom: '16px' }} />
                 <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Readability Score</div>
                 <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#1B2A4E', margin: '8px 0' }}>
-                  {data.readability}
+                  {data.readability.score}
                 </div>
                 {(() => {
-                  const diff = getDifficultyLabel(data.readability);
+                  const diff = getDifficultyLabel(data.readability.level);
                   return (
                     <div style={{ padding: '4px 12px', backgroundColor: diff.bg, color: diff.color, borderRadius: '16px', fontSize: '0.75rem', fontWeight: 700 }}>
                       {diff.label} Level
