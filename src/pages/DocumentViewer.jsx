@@ -32,7 +32,7 @@ const DocumentViewer = () => {
   const [isStudyDocOpen, setIsStudyDocOpen] = useState(false);
   const [isLessonPlanOpen, setIsLessonPlanOpen] = useState(false);
   const [isSmartNotesOpen, setIsSmartNotesOpen] = useState(false);
-  const [activeRightTab, setActiveRightTab] = useState('chat'); // 'chat' | 'studio'
+
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -291,24 +291,8 @@ const DocumentViewer = () => {
         {/* Right Pane / Full Chat */}
         <div style={{ width: (isProjectRoute && !activeDoc) ? '100%' : '450px', display: 'flex', flexDirection: 'column', backgroundColor: '#FAFAF9', position: 'relative' }}>
           
-          {/* Tabs */}
-          <div style={{ display: 'flex', borderBottom: '1px solid #E5E7EB', backgroundColor: '#FAFAF9' }}>
-            <button 
-              onClick={() => setActiveRightTab('chat')}
-              style={{ flex: 1, padding: '16px', backgroundColor: 'transparent', border: 'none', borderBottom: activeRightTab === 'chat' ? '2px solid #8A334C' : '2px solid transparent', color: activeRightTab === 'chat' ? '#8A334C' : '#6B7280', fontWeight: activeRightTab === 'chat' ? 700 : 600, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', transition: 'all 0.2s' }}
-            >
-              <MessageCircle size={18} /> Chat
-            </button>
-            <button 
-              onClick={() => setActiveRightTab('studio')}
-              style={{ flex: 1, padding: '16px', backgroundColor: 'transparent', border: 'none', borderBottom: activeRightTab === 'studio' ? '2px solid #8A334C' : '2px solid transparent', color: activeRightTab === 'studio' ? '#8A334C' : '#6B7280', fontWeight: activeRightTab === 'studio' ? 700 : 600, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', transition: 'all 0.2s' }}
-            >
-              <Settings size={18} /> Studio
-            </button>
-          </div>
-
-          {activeRightTab === 'chat' ? (
-            <>
+          {/* Chat Panel */}
+          <>
               {/* Chat Messages */}
               <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {(isProjectRoute && !activeDoc && messages.length === 0) && (
@@ -360,6 +344,24 @@ const DocumentViewer = () => {
                           </div>
                         )}
                       </div>
+                      {/* Inline Action Pills for AI messages */}
+                      {msg.role === 'assistant' && (
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+                          {[
+                            { label: 'Bắt đầu hỏi mình', action: () => sendMessage('Bắt đầu hỏi mình về nội dung này') },
+                            { label: 'Tạo quiz nhanh', action: () => setIsExamModalOpen(true) },
+                            { label: 'Tạo flashcard', action: () => setIsFlashcardOpen(true) }
+                          ].map(pill => (
+                            <button key={pill.label} onClick={pill.action} style={{
+                              backgroundColor: 'white', border: '1px solid #D6C5B3', borderRadius: '20px',
+                              padding: '5px 14px', fontSize: '0.8rem', fontWeight: 600, color: '#1B2A4E',
+                              cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.2s'
+                            }}>
+                              {pill.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -374,8 +376,27 @@ const DocumentViewer = () => {
               </div>
               {/* Chat Input */}
               <div style={{ padding: '16px 24px', borderTop: '1px solid #E5E7EB', backgroundColor: '#FAFAF9' }}>
-                {/* Action Pills */}
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', overflowX: 'auto', paddingBottom: '4px' }}>
+                {/* Tool Pills */}
+                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-start', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  {[
+                    { label: 'Trắc nghiệm', icon: '📝', onClick: () => setIsExamModalOpen(true) },
+                    { label: 'Flashcard', icon: '🧠', onClick: () => setIsFlashcardOpen(true) },
+                    { label: 'Sơ đồ tư duy', icon: '🔗', onClick: () => setIsConceptMapOpen(true) },
+                    { label: 'Tài liệu học', icon: '📄', onClick: () => setIsStudyDocOpen(true) },
+                    { label: 'Giáo án', icon: '📋', onClick: () => setIsLessonPlanOpen(true) },
+                    { label: 'Smart Notes', icon: '✨', onClick: () => setIsSmartNotesOpen(true) }
+                  ].map(tool => (
+                    <button key={tool.label} onClick={tool.onClick} style={{
+                      backgroundColor: '#FDF8F5', border: '1px solid #D6C5B3', borderRadius: '20px', padding: '5px 12px',
+                      fontSize: '0.75rem', fontWeight: 600, color: '#8A334C', cursor: 'pointer',
+                      whiteSpace: 'nowrap', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '4px'
+                    }}>
+                      <span>{tool.icon}</span> {tool.label}
+                    </button>
+                  ))}
+                </div>
+                {/* Chat Action Pills */}
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-start', marginBottom: '12px', flexWrap: 'wrap' }}>
                   {actionPills.map(pill => (
                     <button key={pill} onClick={() => sendMessage(pill)} disabled={!activeDoc || isTyping} style={{
                       backgroundColor: 'white', border: '1px solid #D6C5B3', borderRadius: '20px', padding: '6px 14px',
@@ -405,51 +426,13 @@ const DocumentViewer = () => {
                 </div>
               </div>
             </>
-          ) : (
-            <div style={{ flex: 1, padding: '24px', overflowY: 'auto', backgroundColor: '#FAFAF9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', color: '#6B7280' }}>
-              <Settings size={48} opacity={0.3} />
-              <p style={{ margin: 0, fontWeight: 600 }}>Workflow Studio đang được nâng cấp.</p>
-              <p style={{ margin: 0, fontSize: '0.85rem' }}>Các công cụ học tập đã được chuyển sang thanh bên phải.</p>
-            </div>
-          )}
-
-          {/* Right-edge Vertical Toolbar (Always visible) */}
-          <div style={{ position: 'absolute', right: '0', top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 10, alignItems: 'flex-end' }}>
-            {[
-              { icon: PenTool, color: '#0369A1', bg: '#E0F2FE', onClick: () => setIsExamModalOpen(true), tooltip: 'Trắc nghiệm', outline: '#BAE6FD' },
-              { icon: BrainCircuit, color: '#C2410C', bg: '#FFEDD5', onClick: () => setIsFlashcardOpen(true), tooltip: 'Flashcard', outline: '#FED7AA' },
-              { icon: Network, color: '#0F766E', bg: '#CCFBF1', onClick: () => setIsConceptMapOpen(true), tooltip: 'Sơ đồ tư duy', outline: '#99F6E4' },
-              { icon: FileText, color: '#7E22CE', bg: '#F3E8FF', onClick: () => setIsStudyDocOpen(true), tooltip: 'Tài liệu học', outline: '#E9D5FF' },
-              { icon: Briefcase, color: '#047857', bg: '#D1FAE5', onClick: () => setIsLessonPlanOpen(true), tooltip: 'Giáo án', outline: '#A7F3D0' },
-              { icon: FileText, color: '#BE185D', bg: '#FCE7F3', onClick: () => setIsSmartNotesOpen(true), tooltip: 'Smart Notes', outline: '#FBCFE8' }
-            ].map((tool, idx) => (
-              <button 
-                key={idx}
-                onClick={tool.onClick}
-                title={tool.tooltip}
-                style={{ 
-                  backgroundColor: 'white', border: `1px solid ${tool.outline}`, borderRight: 'none', 
-                  borderRadius: '16px 0 0 16px', padding: '12px 14px', 
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '-2px 2px 8px rgba(0,0,0,0.05)', transition: 'transform 0.2s',
-                  position: 'relative'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateX(-4px)'}
-                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateX(0)'}
-              >
-                <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: tool.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <tool.icon size={14} color={tool.color} />
-                </div>
-              </button>
-            ))}
-          </div>
         </div>
       </div>
-      <CreateExamModal isOpen={isExamModalOpen} onClose={() => setIsExamModalOpen(false)} projectId={currentProjectId} documentId={!isProjectRoute && activeDoc ? activeDoc.id : null} onSuccess={() => {}} />
+      <CreateExamModal isOpen={isExamModalOpen} onClose={() => setIsExamModalOpen(false)} projectId={currentProjectId} documentId={!isProjectRoute && activeDoc ? activeDoc.id : null} onSuccess={() => window.dispatchEvent(new Event('artifacts-updated'))} />
       <ConceptMapModal isOpen={isConceptMapOpen} onClose={() => setIsConceptMapOpen(false)} />
       <FlashcardReviewModal isOpen={isFlashcardOpen} onClose={() => setIsFlashcardOpen(false)} projectId={currentProjectId} documentId={!isProjectRoute && activeDoc ? activeDoc.id : null} />
-      <CreateStudyDocModal isOpen={isStudyDocOpen} onClose={() => setIsStudyDocOpen(false)} projectId={currentProjectId} documentId={!isProjectRoute && activeDoc ? activeDoc.id : null} onSuccess={() => {}} />
-      <CreateLessonPlanModal isOpen={isLessonPlanOpen} onClose={() => setIsLessonPlanOpen(false)} projectId={currentProjectId} documentId={!isProjectRoute && activeDoc ? activeDoc.id : null} onSuccess={() => {}} />
+      <CreateStudyDocModal isOpen={isStudyDocOpen} onClose={() => setIsStudyDocOpen(false)} projectId={currentProjectId} documentId={!isProjectRoute && activeDoc ? activeDoc.id : null} onSuccess={() => window.dispatchEvent(new Event('artifacts-updated'))} />
+      <CreateLessonPlanModal isOpen={isLessonPlanOpen} onClose={() => setIsLessonPlanOpen(false)} projectId={currentProjectId} documentId={!isProjectRoute && activeDoc ? activeDoc.id : null} onSuccess={() => window.dispatchEvent(new Event('artifacts-updated'))} />
       <SmartNotesModal isOpen={isSmartNotesOpen} onClose={() => setIsSmartNotesOpen(false)} />
     </div>
   );

@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
-import { X, UploadCloud, BookOpen } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, UploadCloud, BookOpen, Loader2, RotateCcw } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 
 const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) => {
   const activeDocId = documentId || (() => { const match = window.location.hash.match(/#\/document\/([^/]+)/); return match ? parseInt(match[1], 10) : null; })();
@@ -8,8 +11,53 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
   const [target, setTarget] = useState("");
   const [length, setLength] = useState("Chuẩn giáo án 45 phút");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const fileInputRef = useRef(null);
+
+  // Result view state
+  const [viewMode, setViewMode] = useState('form'); // 'form' | 'result'
+  const [resultData, setResultData] = useState(null);
 
   if (!isOpen) return null;
+
+  const handleUploadFile = async (files) => {
+    if (!files || files.length === 0) return;
+    setIsUploading(true);
+    try {
+      const newFiles = Array.from(files);
+      setUploadedFiles(prev => [...prev, ...newFiles]);
+      // Optional: upload to backend immediately
+      const formData = new FormData();
+      formData.append('file', files[0]);
+      if (projectId) formData.append('project_id', projectId);
+      if (documentId) formData.append('document_id', documentId);
+      
+      const res = await fetch('http://127.0.0.1:8000/api/documents/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        if (onSuccess) onSuccess();
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Lỗi upload file.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    if (e.target.files) {
+      handleUploadFile(e.target.files);
+    }
+  };
+
+  const getTotalSize = () => {
+    const totalBytes = uploadedFiles.reduce((acc, file) => acc + file.size, 0);
+    return (totalBytes / 1024).toFixed(2);
+  };
 
   const handleSubmit = async () => {
     try {
@@ -28,9 +76,10 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
       });
       
       if (res.ok) {
-        alert("Tạo Giáo án thành công!");
+        const data = await res.json();
+        setResultData(data);
+        setViewMode('result');
         if (onSuccess) onSuccess();
-        onClose();
       } else {
         alert("Tạo Giáo án thất bại.");
       }
@@ -42,6 +91,64 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
     }
   };
 
+  const handleRegenerate = () => {
+    setViewMode('form');
+    setResultData(null);
+  };
+
+  const handleClose = () => {
+    setViewMode('form');
+    setResultData(null);
+    onClose();
+  };
+
+  // ─── Result View ───
+  if (viewMode === 'result' && resultData) {
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000,
+        display: 'flex', justifyContent: 'center', alignItems: 'center'
+      }}>
+        <div className="animate-fade-in" style={{
+          backgroundColor: '#FCFAF8', borderRadius: '24px', width: '750px', maxWidth: '95vw',
+          maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 48px rgba(0,0,0,0.2)'
+        }}>
+          {/* Header */}
+          <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', backgroundColor: '#FCFAF8', borderRadius: '24px 24px 0 0', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BookOpen size={20} color="#8A334C" />
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1B2A4E', margin: 0 }}>{resultData.title || title}</h2>
+            </div>
+            <button onClick={handleClose} style={{ background: 'transparent', border: '1px solid var(--border-medium)', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Scrollable Markdown Body */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+            <div className="markdown-body" style={{ fontSize: '0.95rem', lineHeight: 1.7, color: '#1B2A4E' }}>
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                {resultData.markdown_content || ''}
+              </ReactMarkdown>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div style={{ padding: '20px 24px', backgroundColor: 'white', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'center', gap: '12px', borderRadius: '0 0 24px 24px', flexShrink: 0 }}>
+            <button onClick={handleRegenerate} style={{ padding: '12px 28px', backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '24px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <RotateCcw size={15} /> Tạo lại
+            </button>
+            <button onClick={handleClose} style={{ padding: '12px 28px', backgroundColor: '#8A334C', border: 'none', borderRadius: '24px', fontWeight: 600, color: 'white', cursor: 'pointer' }}>
+              Đóng
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Form View ───
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -114,15 +221,29 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
           <div style={{ border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', backgroundColor: '#FDF8F5', marginTop: '8px' }}>
             <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em', marginBottom: '16px' }}>TÀI LIỆU LÀM NGUỒN DỮ LIỆU</div>
             
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileChange} 
+              style={{ display: 'none' }} 
+              multiple 
+            />
+            
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <button style={{ backgroundColor: '#F3EAE3', color: 'var(--brand-primary)', border: 'none', padding: '10px 20px', borderRadius: '20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                <UploadCloud size={16} /> Tải lên file từ máy
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                style={{ backgroundColor: '#F3EAE3', color: 'var(--brand-primary)', border: 'none', padding: '10px 20px', borderRadius: '20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', cursor: isUploading ? 'not-allowed' : 'pointer', opacity: isUploading ? 0.7 : 1 }}
+              >
+                {isUploading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />} 
+                {isUploading ? 'Đang tải lên...' : 'Tải lên file từ máy'}
               </button>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Hỗ trợ PDF, DOCX, TXT, PNG/JPG/WebP/TIFF. Tổng nguồn tối đa 20 MB.</span>
             </div>
 
-            <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'white', border: '1px solid var(--border-light)', borderRadius: '12px', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-              Tổng dung lượng nguồn: 0 KB / 20 MB
+            <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'white', border: '1px solid var(--border-light)', borderRadius: '12px', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Đã chọn {uploadedFiles.length} file</span>
+              <span>Tổng dung lượng: {getTotalSize()} KB / 20 MB</span>
             </div>
           </div>
 

@@ -49,17 +49,22 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
   const [error, setError] = useState(null);
   const [activeDoc, setActiveDoc] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [projId, setProjId] = useState(null);
+  const [docId, setDocId] = useState(null);
 
   useEffect(() => {
     if (isOpen) {
       const matchDoc = window.location.hash.match(/#\/document\/([^/]+)/);
       const matchProj = window.location.hash.match(/#\/project\/([^/]+)/);
-      const docId = matchDoc ? parseInt(matchDoc[1], 10) : null;
-      const projId = matchProj ? parseInt(matchProj[1], 10) : null;
+      const parsedDocId = matchDoc ? parseInt(matchDoc[1], 10) : null;
+      const parsedProjId = matchProj ? parseInt(matchProj[1], 10) : null;
+
+      setProjId(parsedProjId);
+      setDocId(parsedDocId);
 
       let url = 'http://127.0.0.1:8000/api/documents';
-      if (projId) {
-        url += `?project_id=${projId}`;
+      if (parsedProjId) {
+        url += `?project_id=${parsedProjId}`;
       }
 
       fetch(url)
@@ -67,8 +72,8 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
         .then(data => {
           if (data.documents && data.documents.length > 0) {
             let doc = data.documents[data.documents.length - 1];
-            if (docId) {
-              const found = data.documents.find(d => d.id === docId);
+            if (parsedDocId) {
+              const found = data.documents.find(d => d.id === parsedDocId);
               if (found) doc = found;
             } else {
               const storedId = sessionStorage.getItem('active_document_id');
@@ -88,6 +93,8 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
       setNodes([]);
       setEdges([]);
       setError(null);
+      setProjId(null);
+      setDocId(null);
     }
   }, [isOpen]);
 
@@ -102,7 +109,9 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
         },
         body: JSON.stringify({ 
           topic_or_text: textContent,
-          api_key: localStorage.getItem('workflow_api_key') || ''
+          api_key: localStorage.getItem('workflow_api_key') || '',
+          project_id: projId,
+          document_id: docId
         })
       });
       

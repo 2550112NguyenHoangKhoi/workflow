@@ -49,19 +49,23 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
         }
       } else if (id) {
         // Standalone Document Mode
-        const [rRes, pRes] = await Promise.all([
+        const [rRes, aRes, pRes] = await Promise.all([
           fetch(`http://127.0.0.1:8000/api/documents/${id}/roadmap`),
+          fetch(`http://127.0.0.1:8000/api/documents/${id}/artifacts`),
           fetch(`http://127.0.0.1:8000/api/documents`)
         ]);
         if (rRes.ok) {
           const data = await rRes.json();
           setRoadmapItems(data.items || []);
         }
+        if (aRes.ok) {
+          const data = await aRes.json();
+          setArtifacts(data || []);
+        }
         if (pRes.ok) {
           const data = await pRes.json();
           setDocuments(data.documents || []);
         }
-        setArtifacts([]);
       }
     } catch (err) {
       console.error(err);
@@ -70,6 +74,12 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
 
   React.useEffect(() => {
     fetchData();
+  }, [id, isProject]);
+
+  React.useEffect(() => {
+    const handler = () => fetchData();
+    window.addEventListener('artifacts-updated', handler);
+    return () => window.removeEventListener('artifacts-updated', handler);
   }, [id, isProject]);
 
   const generateRoadmap = async () => {
@@ -159,14 +169,12 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
         <div style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>UPLOADED</h3>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--brand-primary)', backgroundColor: '#FDF8F5', padding: '2px 8px', borderRadius: '12px' }}>
-              {documents.length}
-            </span>
+            <button style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', padding: '0 4px' }} onClick={() => {}}>⋮</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {documents.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                Chưa có tài liệu.
+              <div style={{ backgroundColor: 'white', border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                Uploaded files and links will appear here while AI processes them.
               </div>
             ) : (
               documents.map(doc => (
@@ -229,18 +237,37 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>GIÁO ÁN</h3>
             <button 
-              onClick={generateRoadmap} 
-              disabled={isGeneratingRoadmap}
-              style={{ background: 'transparent', border: 'none', color: 'var(--brand-primary)', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', opacity: isGeneratingRoadmap ? 0.5 : 1 }}
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', padding: '0 4px' }}
+              onClick={() => {}}
             >
-              {isGeneratingRoadmap ? 'Đang tạo...' : 'Tạo AI'}
+              ⋮
             </button>
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
             {roadmapItems.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                Chưa có giáo án. Hãy tải tài liệu lên và bấm "Tạo AI".
+              <div style={{ backgroundColor: 'white', border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px' }}>
+                <div style={{ marginBottom: '12px' }}>
+                  <span style={{ backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '16px', padding: '4px 12px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Chưa tạo</span>
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 16px' }}>
+                  Bấm tạo giáo án để Workflow kiểm tra tài liệu, tạo roadmap mặc định và bắt đầu theo dõi mục tiêu học.
+                </p>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button 
+                    onClick={() => setIsCreateLessonPlanOpen(true)}
+                    style={{ flex: 1, backgroundColor: '#8A334C', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '12px', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+                  >
+                    Tạo giáo án
+                  </button>
+                  <button 
+                    onClick={generateRoadmap}
+                    disabled={isGeneratingRoadmap}
+                    style={{ flex: 1, backgroundColor: 'white', color: '#8A334C', border: '1px solid var(--border-medium)', padding: '10px 16px', borderRadius: '12px', fontWeight: 700, fontSize: '0.8rem', cursor: isGeneratingRoadmap ? 'not-allowed' : 'pointer', opacity: isGeneratingRoadmap ? 0.7 : 1 }}
+                  >
+                    {isGeneratingRoadmap ? 'Đang tạo...' : 'Dùng LLM'}
+                  </button>
+                </div>
               </div>
             ) : (
               roadmapItems.map((item, idx) => {
@@ -378,15 +405,16 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
           </div>
         </div>
 
-        {/* Tóm tắt Artifact */}
+        {/* Recent Artifacts */}
         <div style={{ marginTop: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>TÓM TẮT ARTIFACT</h3>
+            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>RECENT ARTIFACTS</h3>
+            <button style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', padding: '0 4px' }} onClick={() => {}}>⋮</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {artifacts.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                Chưa có artifact nào được tạo.
+              <div style={{ backgroundColor: 'white', border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                Create a roadmap or plan to see it here.
               </div>
             ) : (
               artifacts.map(artifact => (
