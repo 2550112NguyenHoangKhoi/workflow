@@ -1,8 +1,46 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { X, UploadCloud, BookOpen } from 'lucide-react';
 
-const CreateStudyDocModal = ({ isOpen, onClose }) => {
+const CreateStudyDocModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) => {
+  const activeDocId = documentId || (() => { const match = window.location.hash.match(/#\/document\/([^/]+)/); return match ? parseInt(match[1], 10) : null; })();
+  const [title, setTitle] = useState("Tài liệu phòng thi 26/6/2026");
+  const [description, setDescription] = useState("");
+  const [target, setTarget] = useState("");
+  const [length, setLength] = useState("Độ dài vừa phải (Tổng hợp lý thuyết & So sánh)");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   if (!isOpen) return null;
+
+  const handleSubmit = async () => {
+    try {
+      setIsSubmitting(true);
+      const payload = {
+        topic_or_text: target || `Tiêu đề: ${title}. Mô tả: ${description}. Độ dài: ${length}.`,
+        api_key: localStorage.getItem('workflow_gemini_key') || localStorage.getItem('workflow_api_key') || '',
+        project_id: projectId ? parseInt(projectId) : null,
+        document_id: activeDocId ? parseInt(activeDocId) : null,
+      };
+      
+      const res = await fetch('http://127.0.0.1:8000/api/generate_exam_prep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (res.ok) {
+        alert("Tạo tài liệu phòng thi thành công!");
+        if (onSuccess) onSuccess();
+        onClose();
+      } else {
+        alert("Tạo tài liệu phòng thi thất bại.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Lỗi kết nối.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div style={{
@@ -30,23 +68,43 @@ const CreateStudyDocModal = ({ isOpen, onClose }) => {
           
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>TIÊU ĐỀ TÀI LIỆU</label>
-            <input type="text" defaultValue="Tài liệu phòng thi 26/6/2026" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem', fontWeight: 600 }} />
+            <input 
+              type="text" 
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem', fontWeight: 600 }} 
+            />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>MÔ TẢ</label>
-            <textarea rows={3} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem', resize: 'none' }}></textarea>
+            <textarea 
+              rows={3} 
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem', resize: 'none' }}
+            ></textarea>
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>MỤC TIÊU ÔN TẬP / PHÒNG THI</label>
-            <input type="text" placeholder="Ví dụ: Ôn thi giữa kỳ, Tổng hợp công thức cốt lõi..." style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem' }} />
+            <input 
+              type="text" 
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              placeholder="Ví dụ: Ôn thi giữa kỳ, Tổng hợp công thức cốt lõi..." 
+              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem' }} 
+            />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>ĐỘ DÀI TÀI LIỆU</label>
-            <select style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem' }}>
-              <option selected>Độ dài vừa phải (Tổng hợp lý thuyết & So sánh)</option>
+            <select 
+              value={length}
+              onChange={(e) => setLength(e.target.value)}
+              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem' }}
+            >
+              <option>Độ dài vừa phải (Tổng hợp lý thuyết & So sánh)</option>
               <option>Ngắn gọn (Chỉ gồm các bullet point chính)</option>
               <option>Rất chi tiết (Toàn bộ lý thuyết, ví dụ)</option>
             </select>
@@ -75,8 +133,20 @@ const CreateStudyDocModal = ({ isOpen, onClose }) => {
           <button onClick={onClose} style={{ padding: '12px 32px', backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '24px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
             Hủy bỏ
           </button>
-          <button style={{ padding: '12px 32px', backgroundColor: '#B890A3', border: 'none', borderRadius: '24px', fontWeight: 600, color: 'white', cursor: 'not-allowed' }}>
-            Tạo tài liệu
+          <button 
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            style={{ 
+              padding: '12px 32px', 
+              backgroundColor: isSubmitting ? '#9CA3AF' : '#8B4B6E', 
+              border: 'none', 
+              borderRadius: '24px', 
+              fontWeight: 600, 
+              color: 'white', 
+              cursor: isSubmitting ? 'not-allowed' : 'pointer' 
+            }}
+          >
+            {isSubmitting ? "Đang tạo..." : "Tạo tài liệu"}
           </button>
         </div>
       </div>

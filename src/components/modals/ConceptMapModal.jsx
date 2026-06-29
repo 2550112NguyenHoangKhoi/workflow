@@ -2,7 +2,45 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Network, Loader2, Download } from 'lucide-react';
 import { ReactFlow, Controls, Background, applyNodeChanges, applyEdgeChanges } from '@xyflow/react';
 import { toPng } from 'html-to-image';
+import dagre from 'dagre';
 import '@xyflow/react/dist/style.css';
+
+const dagreGraph = new dagre.graphlib.Graph();
+dagreGraph.setDefaultEdgeLabel(() => ({}));
+
+const nodeWidth = 220;
+const nodeHeight = 80;
+
+const getLayoutedElements = (nodes, edges, direction = 'TB') => {
+  const isHorizontal = direction === 'LR';
+  dagreGraph.setGraph({ rankdir: direction, nodesep: 60, ranksep: 100 });
+
+  nodes.forEach((node) => {
+    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+  });
+
+  edges.forEach((edge) => {
+    dagreGraph.setEdge(edge.source, edge.target);
+  });
+
+  dagre.layout(dagreGraph);
+
+  const newNodes = nodes.map((node) => {
+    const nodeWithPosition = dagreGraph.node(node.id);
+    const newNode = {
+      ...node,
+      targetPosition: isHorizontal ? 'left' : 'top',
+      sourcePosition: isHorizontal ? 'right' : 'bottom',
+      position: {
+        x: nodeWithPosition.x - nodeWidth / 2,
+        y: nodeWithPosition.y - nodeHeight / 2,
+      },
+    };
+    return newNode;
+  });
+
+  return { nodes: newNodes, edges };
+};
 
 const ConceptMapModal = ({ isOpen, onClose }) => {
   const [nodes, setNodes] = useState([]);
@@ -10,14 +48,35 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeDoc, setActiveDoc] = useState(null);
+  const [selectedNode, setSelectedNode] = useState(null);
 
   useEffect(() => {
     if (isOpen) {
-      fetch('http://127.0.0.1:8000/api/documents')
+      const matchDoc = window.location.hash.match(/#\/document\/([^/]+)/);
+      const matchProj = window.location.hash.match(/#\/project\/([^/]+)/);
+      const docId = matchDoc ? parseInt(matchDoc[1], 10) : null;
+      const projId = matchProj ? parseInt(matchProj[1], 10) : null;
+
+      let url = 'http://127.0.0.1:8000/api/documents';
+      if (projId) {
+        url += `?project_id=${projId}`;
+      }
+
+      fetch(url)
         .then(res => res.json())
         .then(data => {
           if (data.documents && data.documents.length > 0) {
-            const doc = data.documents[data.documents.length - 1];
+            let doc = data.documents[data.documents.length - 1];
+            if (docId) {
+              const found = data.documents.find(d => d.id === docId);
+              if (found) doc = found;
+            } else {
+              const storedId = sessionStorage.getItem('active_document_id');
+              if (storedId) {
+                const found = data.documents.find(d => String(d.id) === String(storedId));
+                if (found) doc = found;
+              }
+            }
             setActiveDoc(doc);
             generateMap(doc.content);
           } else {
@@ -38,8 +97,13 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
     try {
       const response = await fetch('http://127.0.0.1:8000/api/generate_map', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic_or_text: textContent })
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          topic_or_text: textContent,
+          api_key: localStorage.getItem('workflow_api_key') || ''
+        })
       });
       
       if (!response.ok) throw new Error('Failed to generate map');
@@ -49,8 +113,8 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
       // We need to format them for ReactFlow
       const flowNodes = data.nodes.map((n, i) => ({
         id: n.id,
-        position: { x: Math.random() * 400, y: Math.random() * 300 }, // Simple random layout for now
-        data: { label: n.label },
+        position: { x: 0, y: 0 },
+        data: { label: n.label, definition: n.definition, formula: n.formula },
         style: { 
           backgroundColor: '#F8EFEA', 
           border: '2px solid #8A334B', 
@@ -70,8 +134,10 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
         style: { stroke: '#3B6B59', strokeWidth: 2 }
       }));
 
-      setNodes(flowNodes);
-      setEdges(flowEdges);
+      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(flowNodes, flowEdges);
+
+      setNodes(layoutedNodes);
+      setEdges(layoutedEdges);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -98,6 +164,7 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
 
   const onNodesChange = (changes) => setNodes((nds) => applyNodeChanges(changes, nds));
   const onEdgesChange = (changes) => setEdges((eds) => applyEdgeChanges(changes, eds));
+  const onNodeClick = (_, node) => setSelectedNode(node);
 
   if (!isOpen) return null;
 
@@ -156,11 +223,41 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
               edges={edges} 
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
+              onNodeClick={onNodeClick}
+              onPaneClick={() => setSelectedNode(null)}
               fitView
             >
               <Background color="#ccc" gap={16} />
               <Controls />
             </ReactFlow>
+          )}
+
+          {/* Node Details Panel */}
+          {selectedNode && (
+            <div className="animate-fade-in" style={{
+              position: 'absolute', bottom: '24px', left: '24px', right: '24px',
+              backgroundColor: 'white', borderRadius: '16px', padding: '20px',
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.2), 0 8px 10px -6px rgba(0,0,0,0.1)',
+              border: '1px solid var(--border-medium)', zIndex: 10,
+              display: 'flex', flexDirection: 'column', gap: '8px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#1B2A4E' }}>
+                  {selectedNode.data.label}
+                </h3>
+                <button onClick={() => setSelectedNode(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                  <X size={20} />
+                </button>
+              </div>
+              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                {selectedNode.data.definition || 'Không có định nghĩa chi tiết.'}
+              </div>
+              {selectedNode.data.formula && (
+                <div style={{ marginTop: '8px', padding: '12px', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', color: '#166534', fontFamily: 'monospace', fontSize: '1rem', fontWeight: 600, overflowX: 'auto' }}>
+                  {selectedNode.data.formula}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

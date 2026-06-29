@@ -111,10 +111,10 @@ def extract_flashcards(text: str, max_cards: int = 10) -> List[Dict[str, str]]:
 
 def _vietnamese_flashcards(text: str, max_cards: int = 10) -> List[Dict[str, str]]:
     """Vietnamese flashcards: definitional 'X là Y' patterns + pyvi noun blanks."""
-    from .vietnamese import vi_split_sentences, vi_nouns
+    from .vietnamese import vi_clean_sentences, vi_nouns
     cards = []
     seen = set()
-    sentences = vi_split_sentences(text)
+    sentences = vi_clean_sentences(text)
 
     # 1. Definitional patterns: "X là Y", "X được gọi là Y", "X được định nghĩa là Y".
     definition_re = re.compile(

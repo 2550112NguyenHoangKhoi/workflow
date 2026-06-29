@@ -21,14 +21,34 @@ const StudyDocProgressModal = ({ isOpen, onClose }) => {
     setError(null);
     try {
       // 1. Get latest doc
-      const docsRes = await fetch('http://127.0.0.1:8000/api/documents');
+      const matchDoc = window.location.hash.match(/#\/document\/([^/]+)/);
+      const matchProj = window.location.hash.match(/#\/project\/([^/]+)/);
+      const docId = matchDoc ? parseInt(matchDoc[1], 10) : null;
+      const projId = matchProj ? parseInt(matchProj[1], 10) : null;
+
+      let url = 'http://127.0.0.1:8000/api/documents';
+      if (projId) {
+        url += `?project_id=${projId}`;
+      }
+
+      const docsRes = await fetch(url);
       const docsData = await docsRes.json();
       
       if (!docsData.documents || docsData.documents.length === 0) {
         throw new Error("Chưa có tài liệu nào được tải lên.");
       }
       
-      const latestDoc = docsData.documents[docsData.documents.length - 1];
+      let latestDoc = docsData.documents[docsData.documents.length - 1];
+      if (docId) {
+        const found = docsData.documents.find(d => d.id === docId);
+        if (found) latestDoc = found;
+      } else {
+        const storedId = sessionStorage.getItem('active_document_id');
+        if (storedId) {
+          const found = docsData.documents.find(d => String(d.id) === String(storedId));
+          if (found) latestDoc = found;
+        }
+      }
       setActiveDoc(latestDoc);
       
       // 2. Get progress stats

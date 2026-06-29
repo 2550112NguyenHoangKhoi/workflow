@@ -119,6 +119,7 @@ def extract_quiz(text: str, num_questions: int = 5) -> Dict:
             "question": question_text,
             "options": options,
             "correct_option_id": correct_id,
+            "answer": correct_id,
             "explanation": f"The correct missing entity or term from the source text is '{target_text}'."
         })
         
@@ -133,8 +134,8 @@ def extract_quiz(text: str, num_questions: int = 5) -> Dict:
 
 def _vietnamese_quiz(text: str, num_questions: int = 5) -> Dict:
     """Vietnamese MCQ quiz: blank a pyvi noun, distractors from other document nouns."""
-    from .vietnamese import vi_split_sentences, vi_nouns
-    sentences = [s for s in vi_split_sentences(text) if len(s.split()) > 6]
+    from .vietnamese import vi_clean_sentences, vi_nouns
+    sentences = [s for s in vi_clean_sentences(text) if len(s.split()) > 6]
     doc_nouns = list({n for s in sentences for n in vi_nouns(s) if len(n) > 2})
 
     questions = []
@@ -159,6 +160,7 @@ def _vietnamese_quiz(text: str, num_questions: int = 5) -> Dict:
             "question": s.replace(target, "_______", 1),
             "options": options,
             "correct_option_id": correct_id,
+            "answer": correct_id,
             "explanation": f"Cụm từ đúng bị khuyết trong câu là '{target}'.",
         })
         used.add(target.lower())
@@ -191,6 +193,7 @@ def _fallback_quiz(text: str) -> Dict:
                 "question": s.replace(target, "_______"),
                 "options": options,
                 "correct_option_id": correct_id,
+                "answer": correct_id,
                 "explanation": f"The missing word is '{target_clean}'."
             })
             
@@ -199,6 +202,7 @@ def _fallback_quiz(text: str) -> Dict:
             "question": "What is 2+2?",
             "options": [{"id": "a", "text": "3"}, {"id": "b", "text": "4"}, {"id": "c", "text": "5"}, {"id": "d", "text": "6"}],
             "correct_option_id": "b",
+            "answer": "b",
             "explanation": "2+2 equals 4."
         }]
 

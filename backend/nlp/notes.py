@@ -14,11 +14,15 @@ def extract_notes(text: str) -> Dict:
     Algorithmically extracts a smart summary and key bullet points using TextRank graph ranking.
     """
     from .preprocessor import clean_text
-    
+    from .vietnamese import is_vietnamese
+    text = clean_text(text)
+
+    if is_vietnamese(text):
+        return _vietnamese_notes(text)
+
     if not nlp:
         return _fallback_notes(text)
-        
-    text = clean_text(text)
+
     doc = nlp(text)
     
     # TextRank provides a summary method that yields the highest ranked sentences
@@ -44,6 +48,29 @@ def extract_notes(text: str) -> Dict:
         "summary": summary,
         "sections": sections
     }
+
+def _vietnamese_notes(text: str) -> Dict:
+    """Vietnamese extractive notes via TF-IDF sentence centrality (no spaCy / pytextrank)."""
+    from .vietnamese import vi_clean_sentences
+    sentences = vi_clean_sentences(text)
+    if len(sentences) < 2:
+        return _fallback_notes(text)
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    matrix = TfidfVectorizer().fit_transform(sentences)
+    centrality = cosine_similarity(matrix).sum(axis=1)
+    ranked = [int(i) for i in centrality.argsort()[::-1]]
+    summary = " ".join(sentences[i] for i in ranked[:2])
+    key_points = [sentences[i] for i in sorted(ranked[2:8])]  # keep document order
+    sections = []
+    if key_points:
+        sections.append({"heading": "Ý chính (độ trung tâm TextRank)", "bullet_points": key_points})
+    return {
+        "title": "Ghi chú trích xuất (Tiếng Việt)",
+        "summary": summary,
+        "sections": sections
+    }
+
 
 def _fallback_notes(text: str) -> Dict:
     import re

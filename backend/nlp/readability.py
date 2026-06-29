@@ -11,11 +11,15 @@ def score_difficulty(text: str) -> Dict:
     Scores the readability and difficulty of a text based on structural and semantic density.
     """
     from .preprocessor import clean_text
-    
+    from .vietnamese import is_vietnamese
+    text = clean_text(text)
+
+    if is_vietnamese(text):
+        return _vietnamese_difficulty(text)
+
     if not nlp:
         return {"score": 5.0, "level": "Medium", "metrics": {}}
 
-    text = clean_text(text)
     doc = nlp(text)
     
     sents = list(doc.sents)
@@ -48,5 +52,33 @@ def score_difficulty(text: str) -> Dict:
             "avg_sentence_length": round(avg_sent_len, 1),
             "entity_density": round(ent_density, 3),
             "rare_word_ratio": round(rare_ratio, 3)
+        }
+    }
+
+
+def _vietnamese_difficulty(text: str) -> Dict:
+    """Vietnamese readability without English NER: sentence length + lexical diversity + compound density."""
+    from .vietnamese import vi_split_sentences, vi_pos
+    from .vi_desegment import desegment
+    sentences = vi_split_sentences(text)
+    # De-glue PDF-extracted runs per sentence so glued syllables ("Côngthức") are
+    # counted as two words, matching how the other generators see the text.
+    # (desegment per sentence, not whole-text: it collapses newlines, which would
+    # merge sentences and inflate the word/sentence ratio.)
+    words = [w for s in sentences for (w, t) in vi_pos(desegment(s))]
+    if not sentences or not words:
+        return {"score": 0.0, "level": "Empty", "metrics": {}}
+    avg_sentence_length = len(words) / len(sentences)
+    lexical_diversity = len(set(w.lower() for w in words)) / len(words)
+    compound_ratio = sum(1 for w in words if " " in w) / len(words)  # multi-syllable compounds = denser vocab
+    score = round(min(10.0, max(1.0, avg_sentence_length * 0.25 + lexical_diversity * 6 + compound_ratio * 8)), 1)
+    level = "Beginner" if score < 4 else "Intermediate" if score < 7 else "Advanced"
+    return {
+        "score": score,
+        "level": level,
+        "metrics": {
+            "avg_sentence_length": round(avg_sentence_length, 1),
+            "lexical_diversity": round(lexical_diversity, 3),
+            "compound_ratio": round(compound_ratio, 3)
         }
     }

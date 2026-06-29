@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Upload, FileText, AlertCircle, Network, BrainCircuit, Cloud } from 'lucide-react';
 import UploadModal from '../modals/UploadModal';
-import TakeQuizModal from '../modals/TakeQuizModal';
-import StudyDocProgressModal from '../modals/StudyDocProgressModal';
+import CreateExamModal from '../modals/CreateExamModal';
+import CreateStudyDocModal from '../modals/CreateStudyDocModal';
 import ConceptMapModal from '../modals/ConceptMapModal';
 import FlashcardReviewModal from '../modals/FlashcardReviewModal';
 import SmartNotesModal from '../modals/SmartNotesModal';
+import GoogleDriveModal from '../modals/GoogleDriveModal';
 
 // Node.js APIs available because nodeIntegration is true
 const fs = window.require ? window.require('fs') : null;
@@ -20,13 +21,14 @@ const StudioSidebar = () => {
   const [isConceptMapOpen, setIsConceptMapOpen] = useState(false);
   const [isFlashcardOpen, setIsFlashcardOpen] = useState(false);
   const [isSmartNotesOpen, setIsSmartNotesOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const handleSelectWorkspace = async () => {
     if (!ipcRenderer) return alert("Electron IPC not available in browser mode.");
     try {
       const selectedPath = await ipcRenderer.invoke('dialog:openDirectory');
       if (selectedPath) {
-        const configPath = path.join(os.homedir(), '.omilearn_config.json');
+        const configPath = path.join(os.homedir(), '.workflow_config.json');
         fs.writeFileSync(configPath, JSON.stringify({ workspace_path: selectedPath }, null, 2));
         alert(`Workspace updated to:\n${selectedPath}\n\nPlease restart the application for the database to move.`);
       }
@@ -81,64 +83,23 @@ const StudioSidebar = () => {
           <BrainCircuit size={20} color="#92400E" />
           Review Flashcards (SM-2)
         </button>
-        <button onClick={handleSelectWorkspace} style={{ gridColumn: 'span 2', backgroundColor: '#F8EFEA', border: '1px solid #8A334B', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#8A334B', fontWeight: 700, fontSize: '0.875rem' }}>
+        <button onClick={() => setIsImportOpen(true)} style={{ gridColumn: 'span 2', backgroundColor: '#F8EFEA', border: '1px solid #8A334B', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#8A334B', fontWeight: 700, fontSize: '0.875rem' }}>
           <Cloud size={20} color="#8A334B" />
-          Cloud Sync Workspace (G-Drive / OneDrive)
+          Nhập từ thư mục / Google Drive
         </button>
       </div>
 
-      {/* Artifact Summary */}
-      <div style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>TÓM TẮT ARTIFACT</h3>
-          <span style={{ fontSize: '0.75rem', color: 'var(--brand-primary)', fontWeight: 600 }}>Tất cả</span>
-        </div>
-        
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ border: '1px solid var(--brand-secondary)', borderRadius: '12px', padding: '16px', backgroundColor: 'white' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
-                <FileText size={16} color="var(--brand-primary)" />
-                Tài liệu học tập tự động
-              </div>
-            </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', lineHeight: '1.5' }}>
-              Giải tích 1: Hàm số một biến số. Giới hạn và liên tục. Đạo hàm và vi phân...
-            </div>
-          </div>
-          
-          <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '16px', backgroundColor: 'white' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
-                <FileText size={16} color="var(--text-muted)" />
-                Đề thi tự động tạo
-              </div>
-            </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', lineHeight: '1.5' }}>
-              50 câu trắc nghiệm. 45 phút. Mức độ: Khó.
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Upgrade Banner */}
-      <div style={{ marginTop: 'auto', textAlign: 'right' }}>
-        <button style={{ 
-          backgroundColor: '#5A2E3D', color: 'white', border: 'none', 
-          padding: '10px 20px', borderRadius: '20px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer'
-        }}>
-          Nâng cấp Pro
-        </button>
-      </div>
 
     </aside>
     
     <UploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} onUpload={() => setIsUploadOpen(false)} />
-    <TakeQuizModal isOpen={isExamOpen} onClose={() => setIsExamOpen(false)} />
-    <StudyDocProgressModal isOpen={isProgressOpen} onClose={() => setIsProgressOpen(false)} />
+    <CreateExamModal isOpen={isExamOpen} onClose={() => setIsExamOpen(false)} onSuccess={() => {}} />
+    <CreateStudyDocModal isOpen={isProgressOpen} onClose={() => setIsProgressOpen(false)} onSuccess={() => {}} />
     <SmartNotesModal isOpen={isSmartNotesOpen} onClose={() => setIsSmartNotesOpen(false)} />
     <ConceptMapModal isOpen={isConceptMapOpen} onClose={() => setIsConceptMapOpen(false)} />
     <FlashcardReviewModal isOpen={isFlashcardOpen} onClose={() => setIsFlashcardOpen(false)} />
+    <GoogleDriveModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} onImport={() => {}} />
     </>
   );
 };

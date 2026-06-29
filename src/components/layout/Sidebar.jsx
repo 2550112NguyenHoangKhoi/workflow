@@ -1,28 +1,77 @@
-import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
-import { FolderOpen, MessageCircle, Folder, Settings, Zap, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { FolderOpen, MessageCircle, Folder, Settings, Zap, FileText, User, LogOut } from 'lucide-react';
+import UserProfileModal from '../modals/UserProfileModal';
 
 const Sidebar = () => {
   const location = useLocation();
-  const isDocumentView = location.pathname.startsWith('/document/');
+  const navigate = useNavigate();
+  const match = location.pathname.match(/^\/(project|document)\/([^/]+)/);
+  const routeProjectId = match && match[1] === 'project' ? match[2] : null;
+  const isChatView = location.pathname.startsWith('/project/') || location.pathname === '/chat';
+  const isDocumentView = !isChatView; // default to doc view for settings etc.
+  const [folders, setFolders] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [expandedFolders, setExpandedFolders] = useState({});
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  const folders = [
-    { name: 'GỐC / ĐẠI HỌC BÁCH KHOA HÀ NỘI (HUST) / GIẢI TÍCH 1', active: true },
-    { name: 'Thư mục gốc', icon: true },
-    { name: 'ĐẠI HỌC BÁCH KHOA ...', icon: true },
-    { name: 'ĐẠI SỐ TUYẾN TÍNH', icon: true },
-    { name: 'GIẢI TÍCH 1', icon: true, activeBg: true, children: [
-      'Đề cuối kỳ',
-      'Đề cương Giải tích 1',
-      'Giáo trình - Bài giảng',
-      'Lý thuyết và giải đề',
-      'Tóm tắt công thức'
-    ]},
-    { name: 'VẬT LÝ ĐẠI CƯƠNG 1', icon: true },
-    { name: 'VẬT LÝ ĐẠI CƯƠNG 2', icon: true },
-    { name: 'ĐẠI HỌC KINH TẾ QUỐC ...', icon: true },
-    { name: 'ĐẠI HỌC KINH TẾ TP.HCM', icon: true },
-  ];
+  const fetchData = async () => {
+    try {
+      const [fRes, pRes] = await Promise.all([
+        fetch('http://127.0.0.1:8000/api/folders'),
+        fetch('http://127.0.0.1:8000/api/projects')
+      ]);
+      if (fRes.ok) setFolders(await fRes.json());
+      if (pRes.ok) {
+        const data = await pRes.json();
+        setProjects(Array.isArray(data) ? data : data.projects || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch data', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleNewProject = async (folderId = null) => {
+    const name = window.prompt("Tên dự án mới:");
+    if (!name) return;
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description: "", folder_id: folderId })
+      });
+      if (res.ok) {
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Failed to create project', err);
+    }
+  };
+
+  const handleNewFolder = async () => {
+    const name = window.prompt("Tên thư mục mới:");
+    if (!name) return;
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (res.ok) fetchData();
+    } catch (err) {
+      console.error('Failed to create folder', err);
+    }
+  };
+
+  const toggleFolder = (folderId) => {
+    setExpandedFolders(prev => ({ ...prev, [folderId]: !prev[folderId] }));
+  };
+
+
 
   return (
     <aside style={{
@@ -36,26 +85,14 @@ const Sidebar = () => {
       zIndex: 10,
       overflowY: 'auto'
     }}>
-      {/* Logo */}
-      <div style={{ padding: '0 24px', marginBottom: '24px' }}>
-        <h1 style={{ 
-          fontFamily: 'Georgia, serif', 
-          fontSize: '1.5rem', 
-          fontWeight: 900, 
-          color: 'var(--brand-primary)',
-          letterSpacing: '-0.01em',
-          fontStyle: 'italic'
-        }}>
-          Workflow
-        </h1>
-      </div>
+
 
       {/* Main Nav */}
       <div style={{ padding: '0 12px', display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: isDocumentView ? '8px' : '24px' }}>
         <NavLink to="/chat" style={({ isActive }) => ({
           display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px',
-          color: isActive && !isDocumentView ? 'var(--bg-tertiary)' : 'var(--text-primary)',
-          backgroundColor: isActive && !isDocumentView ? 'var(--brand-primary)' : 'transparent',
+          color: isActive || isChatView ? 'var(--bg-tertiary)' : 'var(--text-primary)',
+          backgroundColor: isActive || isChatView ? 'var(--brand-primary)' : 'transparent',
           fontWeight: 600, textDecoration: 'none'
         })}>
           <MessageCircle size={20} />
@@ -64,8 +101,8 @@ const Sidebar = () => {
 
         <NavLink to="/documents" style={({ isActive }) => ({
           display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px',
-          color: (isActive && !isDocumentView) ? 'var(--bg-tertiary)' : 'var(--text-primary)',
-          backgroundColor: (isActive && !isDocumentView) ? 'var(--brand-primary)' : 'transparent',
+          color: (isActive || (!isChatView && location.pathname === '/documents')) ? 'var(--bg-tertiary)' : 'var(--text-primary)',
+          backgroundColor: (isActive || (!isChatView && location.pathname === '/documents')) ? 'var(--brand-primary)' : 'transparent',
           fontWeight: 600, textDecoration: 'none'
         })}>
           <FolderOpen size={20} />
@@ -75,54 +112,133 @@ const Sidebar = () => {
         </NavLink>
       </div>
 
-      {/* Active Project Context (Only in Document View) */}
-      {isDocumentView && (
-        <div style={{ padding: '12px 16px', backgroundColor: '#F3EAE3', margin: '0 12px 24px', borderRadius: '12px' }}>
-          <div style={{ fontWeight: 700, color: '#1B2A4E', fontSize: '0.9rem', marginBottom: '4px' }}>CK_HK233 (1)</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ngày 26 tháng 6, 2026</div>
-        </div>
-      )}
-
-      {/* Drive Folders */}
-      <div style={{ padding: '0 24px', marginBottom: '8px' }}>
+      {/* Contextual Sections */}
+      {isDocumentView ? (
+        <>
+          {/* Drive Folders */}
+      <div style={{ padding: '0 24px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>THƯ MỤC DRIVE</h3>
+        <button onClick={handleNewFolder} title="New Folder" style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+          <span style={{ fontSize: '1.2rem', fontWeight: 500 }}>+</span>
+        </button>
       </div>
       
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {folders.map((folder, idx) => (
-          <div key={idx} style={{ padding: '0 12px' }}>
-            {folder.active ? (
-              <div style={{ padding: '12px 16px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', backgroundColor: '#F3EAE3', borderLeft: '3px solid var(--border-medium)', marginBottom: '8px' }}>
-                {folder.name}
+      <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', marginBottom: '24px', padding: '0 12px' }}>
+        {folders.map(folder => {
+          const folderProjects = projects.filter(p => p.folder_id === folder.id);
+          const isExpanded = expandedFolders[folder.id];
+          return (
+            <div key={folder.id} style={{ marginBottom: '8px' }}>
+              <div 
+                onClick={() => toggleFolder(folder.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px',
+                  borderRadius: '8px', color: 'var(--text-secondary)',
+                  backgroundColor: isExpanded ? '#F3EAE3' : 'transparent',
+                  fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer',
+                  borderLeft: isExpanded ? '3px solid var(--brand-secondary)' : '3px solid transparent'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <FolderOpen size={16} />
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{folder.name}</span>
+                </div>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleNewProject(folder.id); }} 
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                  title="Thêm dự án vào thư mục"
+                >
+                  <span style={{ fontSize: '1.2rem', fontWeight: 500 }}>+</span>
+                </button>
               </div>
-            ) : (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', 
-                borderRadius: '8px', color: folder.activeBg ? 'var(--brand-secondary)' : 'var(--text-secondary)',
-                backgroundColor: folder.activeBg ? '#E6F0EC' : 'transparent',
-                fontWeight: folder.activeBg ? 600 : 500, fontSize: '0.875rem', cursor: 'pointer'
-              }}>
-                {folder.icon && <Folder size={16} />}
-                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{folder.name}</span>
-              </div>
-            )}
-            
-            {folder.children && (
-              <div style={{ display: 'flex', flexDirection: 'column', marginTop: '4px', marginBottom: '8px' }}>
-                {folder.children.map((child, cidx) => (
-                  <div key={cidx} style={{
-                    display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 16px 8px 44px',
-                    color: 'var(--text-secondary)', fontSize: '0.875rem', cursor: 'pointer'
-                  }}>
-                    <Folder size={16} color="var(--text-muted)" />
-                    <span>{child}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+              
+              {isExpanded && folderProjects.length > 0 && (
+                <div style={{ paddingLeft: '24px', display: 'flex', flexDirection: 'column', marginTop: '4px' }}>
+                  {folderProjects.map(project => {
+                    const isActive = isChatView && routeProjectId === String(project.id);
+                    return (
+                      <div 
+                        key={project.id} 
+                        onClick={() => navigate(`/project/${project.id}`)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 16px',
+                          borderRadius: '8px', color: isActive ? 'var(--brand-secondary)' : 'var(--text-secondary)', 
+                          backgroundColor: isActive ? '#E6F0EC' : 'transparent',
+                          fontWeight: isActive ? 600 : 500, fontSize: '0.875rem', cursor: 'pointer'
+                        }}
+                      >
+                        <FileText size={14} color="var(--text-muted)" />
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{project.name}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      <div style={{ padding: '0 24px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>PROJECTS KHÔNG PHÂN LOẠI</h3>
+        <button onClick={() => handleNewProject(null)} title="New Project" style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+          <span style={{ fontSize: '1.2rem', fontWeight: 500 }}>+</span>
+        </button>
+      </div>
+      <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', marginBottom: '24px' }}>
+        <div style={{ padding: '0 12px' }}>
+          {projects.filter(p => !p.folder_id).map(project => {
+            const isActive = isChatView && routeProjectId === String(project.id);
+            return (
+              <div 
+                key={project.id} 
+                onClick={() => navigate(`/project/${project.id}`)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px',
+                  borderRadius: '8px', color: isActive ? 'var(--brand-secondary)' : 'var(--text-secondary)', 
+                  backgroundColor: isActive ? '#E6F0EC' : 'transparent',
+                  fontWeight: isActive ? 600 : 500, fontSize: '0.875rem', cursor: 'pointer'
+                }}
+              >
+                <Folder size={16} />
+                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{project.name}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+        </>
+      ) : (
+        <>
+          {/* Project View List */}
+          <div style={{ padding: '0 24px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>PROJECTS CỦA BẠN</h3>
+            <button onClick={() => handleNewProject(null)} title="Tạo dự án mới" style={{ background: 'var(--brand-primary)', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '1.2rem', fontWeight: 500, lineHeight: 1 }}>+</span>
+            </button>
+          </div>
+          <div style={{ flex: '1 1 auto', overflowY: 'auto', display: 'flex', flexDirection: 'column', marginBottom: '24px', padding: '0 12px' }}>
+            {projects.map(project => {
+              const isActive = isChatView && routeProjectId === String(project.id);
+              return (
+                <div 
+                  key={project.id} 
+                  onClick={() => navigate(`/project/${project.id}`)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px',
+                    borderRadius: '8px', color: isActive ? 'var(--brand-secondary)' : 'var(--text-secondary)', 
+                    backgroundColor: isActive ? '#E6F0EC' : 'transparent',
+                    fontWeight: isActive ? 600 : 500, fontSize: '0.875rem', cursor: 'pointer'
+                  }}
+                >
+                  <MessageCircle size={16} />
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{project.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {/* Bottom section */}
       <div style={{ padding: '16px', borderTop: '1px solid var(--border-light)', marginTop: 'auto' }}>
@@ -133,19 +249,41 @@ const Sidebar = () => {
           <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px' }}>AI TOKENS</div>
           <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>500.0k còn lại</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Đã dùng 0 (0.00%)</div>
-          <div style={{ height: '4px', backgroundColor: 'var(--border-light)', borderRadius: '2px', marginTop: '8px' }}>
-            <div style={{ width: '0%', height: '100%', backgroundColor: 'var(--brand-primary)', borderRadius: '2px' }}></div>
-          </div>
         </div>
 
-        <NavLink to="/settings" style={{
+        <NavLink to="/settings" style={({ isActive }) => ({
           display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', marginTop: '16px', borderRadius: '12px',
-          color: 'var(--text-secondary)', fontWeight: 600, textDecoration: 'none'
-        }}>
+          color: isActive ? 'var(--bg-tertiary)' : 'var(--text-primary)', backgroundColor: isActive ? 'var(--brand-primary)' : 'transparent', border: 'none', cursor: 'pointer',
+          width: '100%', textAlign: 'left', fontWeight: 600, textDecoration: 'none', boxSizing: 'border-box'
+        })}>
           <Settings size={20} />
-          <span>Settings</span>
+          <span>Cài đặt local</span>
         </NavLink>
+
+        <button onClick={() => setIsProfileOpen(true)} style={{
+          display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', marginTop: '16px', borderRadius: '12px',
+          color: 'var(--text-primary)', backgroundColor: 'transparent', border: 'none', cursor: 'pointer',
+          width: '100%', textAlign: 'left', fontWeight: 600
+        }}>
+          <User size={20} />
+          <span>Hồ sơ của tôi</span>
+        </button>
+
+        <button onClick={() => {
+          import('../../utils/googleAuth').then(m => {
+            m.signOutGoogle();
+            window.location.reload();
+          });
+        }} style={{
+          display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px',
+          color: 'var(--brand-primary)', backgroundColor: 'transparent', border: 'none', cursor: 'pointer',
+          width: '100%', textAlign: 'left', fontWeight: 600
+        }}>
+          <LogOut size={20} />
+          <span>Đăng xuất</span>
+        </button>
       </div>
+      <UserProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
     </aside>
   );
 };

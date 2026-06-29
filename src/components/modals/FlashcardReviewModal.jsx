@@ -1,212 +1,269 @@
-import React, { useState, useEffect } from 'react';
-import { X, Calendar, ArrowRight, Check, Download } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, ArrowRight, ArrowLeft, Download, Shuffle, Star, RotateCcw, Sparkles, Check } from 'lucide-react';
 
 const FlashcardReviewModal = ({ isOpen, onClose }) => {
   const [cards, setCards] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [order, setOrder] = useState([]);        // indices into `cards`, for shuffle
+  const [pos, setPos] = useState(0);              // position within `order`
   const [isFlipped, setIsFlipped] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
-  // State for the current card's spaced repetition metadata
   const [cardStates, setCardStates] = useState({});
-
+  const [reviewed, setReviewed] = useState({});   // cardIndex -> 'hard'|'good'|'easy'
+  const [starred, setStarred] = useState({});      // cardIndex -> true
   const [activeDoc, setActiveDoc] = useState(null);
   const [error, setError] = useState(null);
+  const [done, setDone] = useState(false);
+
+  const currentIndex = order[pos];
 
   useEffect(() => {
     if (isOpen) {
-      fetch('http://127.0.0.1:8000/api/documents')
+      setDone(false); setPos(0); setIsFlipped(false); setReviewed({}); setStarred({});
+      const matchDoc = window.location.hash.match(/#\/document\/([^/]+)/);
+      const matchProj = window.location.hash.match(/#\/project\/([^/]+)/);
+      const docId = matchDoc ? parseInt(matchDoc[1], 10) : null;
+      const projId = matchProj ? parseInt(matchProj[1], 10) : null;
+
+      let url = 'http://127.0.0.1:8000/api/documents';
+      if (projId) {
+        url += `?project_id=${projId}`;
+      }
+
+      fetch(url)
         .then(res => res.json())
         .then(data => {
           if (data.documents && data.documents.length > 0) {
-            const doc = data.documents[data.documents.length - 1];
+            let doc = data.documents[data.documents.length - 1];
+            if (docId) {
+              const found = data.documents.find(d => d.id === docId);
+              if (found) doc = found;
+            } else {
+              const storedId = sessionStorage.getItem('active_document_id');
+              if (storedId) {
+                const found = data.documents.find(d => String(d.id) === String(storedId));
+                if (found) doc = found;
+              }
+            }
             setActiveDoc(doc);
-            loadCards(doc.content);
+            loadCards(doc.content, doc.id, projId || doc.project_id);
           } else {
             setError("Chưa có tài liệu. Vui lòng Upload tài liệu trước!");
           }
         })
         .catch(err => setError(err.message));
     } else {
-      setCards([]);
-      setError(null);
-      setCurrentIndex(0);
-      setIsFlipped(false);
+      setCards([]); setOrder([]); setError(null); setPos(0); setIsFlipped(false);
     }
   }, [isOpen]);
 
-  const loadCards = async (textContent) => {
-    setIsLoading(true);
-    setError(null);
+  const loadCards = async (textContent, documentId, projectId) => {
+    setIsLoading(true); setError(null);
     try {
       const response = await fetch('http://127.0.0.1:8000/api/generate_flashcards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic_or_text: textContent })
+        body: JSON.stringify({
+          topic_or_text: textContent,
+          project_id: projectId ? parseInt(projectId, 10) : null,
+          document_id: documentId ? parseInt(documentId, 10) : null,
+          api_key: localStorage.getItem('workflow_api_key') || ''
+        })
       });
       const data = await response.json();
-      setCards(data.flashcards || []);
-      
-      // Initialize SM-2 states for each card
-      const initialStates = {};
-      (data.flashcards || []).forEach((card, idx) => {
-        initialStates[idx] = {
-          id: card.id,
-          interval: card.interval ?? 1,
-          ease: card.ease ?? 2.5,
-          repetitions: card.repetitions ?? 0,
-          due: card.due_date ?? new Date().toISOString().split('T')[0]
+      const list = data.flashcards || [];
+      setCards(list);
+      setOrder(list.map((_, i) => i));
+      const initial = {};
+      list.forEach((card, idx) => {
+        initial[idx] = {
+          id: card.id, interval: card.interval ?? 1, ease: card.ease ?? 2.5,
+          repetitions: card.repetitions ?? 0, due: card.due_date ?? new Date().toISOString().split('T')[0]
         };
       });
-      setCardStates(initialStates);
+      setCardStates(initial);
     } catch (err) {
-      console.error(err);
+      console.error(err); setError("Không tạo được flashcards.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const submitReview = async (quality) => {
-    try {
-      const currentState = cardStates[currentIndex];
-      const response = await fetch('http://127.0.0.1:8000/api/flashcards/review', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...currentState, quality })
-      });
-      const newState = await response.json();
-      
-      setCardStates(prev => ({ ...prev, [currentIndex]: newState }));
-      
-      // Move to next card
-      setTimeout(() => {
-        setIsFlipped(false);
-        if (currentIndex < cards.length - 1) {
-          setCurrentIndex(curr => curr + 1);
-        }
-      }, 500);
-      
-    } catch (err) {
-      console.error(err);
+  const go = useCallback((delta) => {
+    setIsFlipped(false);
+    setPos(p => {
+      const next = p + delta;
+      if (next >= order.length) { setDone(true); return p; }
+      return Math.max(0, Math.min(order.length - 1, next));
+    });
+  }, [order.length]);
+
+  const submitReview = useCallback(async (quality, label) => {
+    const idx = order[pos];
+    setReviewed(r => ({ ...r, [idx]: label }));
+    const currentState = cardStates[idx];
+    if (currentState) {
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/flashcards/review', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...currentState, quality })
+        });
+        const newState = await res.json();
+        setCardStates(prev => ({ ...prev, [idx]: newState }));
+      } catch (err) { console.error(err); }
     }
-  };
+    setTimeout(() => go(1), 180);
+  }, [order, pos, cardStates, go]);
+
+  const shuffle = useCallback(() => {
+    setOrder(o => {
+      const a = [...o];
+      for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+      return a;
+    });
+    setPos(0); setIsFlipped(false); setDone(false); setReviewed({});
+  }, []);
+
+  const restart = () => { setPos(0); setIsFlipped(false); setDone(false); setReviewed({}); };
+
+  // Keyboard shortcuts (Anki/Quizlet-style)
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e) => {
+      if (done || isLoading || !cards.length) return;
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setIsFlipped(f => !f); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); go(1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
+      else if (e.key.toLowerCase() === 's') { shuffle(); }
+      else if (isFlipped && e.key === '1') submitReview(1, 'hard');
+      else if (isFlipped && e.key === '2') submitReview(3, 'good');
+      else if (isFlipped && e.key === '3') submitReview(5, 'easy');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, done, isLoading, cards.length, isFlipped, go, shuffle, submitReview]);
 
   const exportToCSV = () => {
-    if (!cards || cards.length === 0) return;
-    
-    // Create CSV content (escaping quotes and wrapping in quotes)
-    const csvContent = "front,back\n" + cards.map(c => {
-      const front = c.front.replace(/"/g, '""');
-      const back = c.back.replace(/"/g, '""');
-      return `"${front}","${back}"`;
-    }).join("\n");
-    
-    // Create blob and download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
+    if (!cards.length) return;
+    const csv = "front,back\n" + cards.map(c => `"${c.front.replace(/"/g, '""')}","${c.back.replace(/"/g, '""')}"`).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
     const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `Flashcards_${activeDoc?.filename || 'Export'}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    link.href = url; link.download = `Flashcards_${activeDoc?.filename || 'Export'}.csv`;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
   if (!isOpen) return null;
 
   const currentCard = cards[currentIndex];
-  const currentState = cardStates[currentIndex];
+  const reviewedCount = Object.keys(reviewed).length;
+  const progress = cards.length ? Math.round((reviewedCount / cards.length) * 100) : 0;
+  const counts = Object.values(reviewed).reduce((a, v) => { a[v] = (a[v] || 0) + 1; return a; }, {});
+
+  const ratingBtn = (label, q, key, bg, color, border) => (
+    <button onClick={() => submitReview(q, label === 'Khó' ? 'hard' : label === 'Tạm' ? 'good' : 'easy')}
+      style={{ flex: 1, padding: '12px', backgroundColor: bg, color, border: `1px solid ${border}`, borderRadius: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+      <span>{label}</span><span style={{ fontSize: '0.7rem', opacity: 0.7 }}>phím {key}</span>
+    </button>
+  );
 
   return (
-    <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(27, 42, 78, 0.8)', zIndex: 1000,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      backdropFilter: 'blur(4px)'
-    }}>
-      <div style={{
-        backgroundColor: '#FAFAFA', borderRadius: '24px', width: '90%', maxWidth: '600px',
-        display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)'
-      }}>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(27,42,78,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+      <div style={{ backgroundColor: '#FAFAFA', borderRadius: '24px', width: '92%', maxWidth: '640px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.25)' }}>
         {/* Header */}
-        <div style={{
-          padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)'
-        }}>
+        <div style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)' }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#1B2A4E', fontWeight: 800 }}>Spaced Repetition</h2>
-            <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>SM-2 Algorithm Review</p>
+            <h2 style={{ margin: 0, fontSize: '1.2rem', color: '#1B2A4E', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Sparkles size={18} color="var(--brand-primary)" /> Flashcards
+            </h2>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{activeDoc?.filename || 'Spaced Repetition (SM-2)'}</p>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {cards.length > 0 && (
-              <button onClick={exportToCSV} title="Export to CSV (Anki)" style={{ background: '#E8F5E9', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
-                <Download size={16} /> Export CSV
-              </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {cards.length > 0 && !done && (
+              <>
+                <button onClick={shuffle} title="Xáo trộn (S)" style={{ background: 'white', border: '1px solid var(--border-medium)', cursor: 'pointer', color: 'var(--text-secondary)', padding: '8px', borderRadius: '8px', display: 'flex' }}><Shuffle size={16} /></button>
+                <button onClick={exportToCSV} title="Xuất CSV (Anki/Quizlet)" style={{ background: '#E8F5E9', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.85rem' }}><Download size={16} /> CSV</button>
+              </>
             )}
-            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
-              <X size={24} />
-            </button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={24} /></button>
           </div>
         </div>
 
+        {/* Progress bar */}
+        {cards.length > 0 && (
+          <div style={{ height: '6px', backgroundColor: 'var(--border-light)' }}>
+            <div style={{ height: '100%', width: `${progress}%`, backgroundColor: 'var(--brand-secondary)', transition: 'width 0.3s ease' }} />
+          </div>
+        )}
+
         {/* Content */}
-        <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '300px' }}>
+        <div style={{ padding: '28px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '360px' }}>
           {isLoading ? (
-            <div style={{ margin: 'auto', color: 'var(--brand-primary)', fontWeight: 600 }}>Loading flashcards...</div>
+            <div style={{ margin: 'auto', color: 'var(--brand-primary)', fontWeight: 600 }}>Đang tạo flashcards…</div>
           ) : error ? (
-            <div style={{ margin: 'auto', color: 'red', fontWeight: 600 }}>{error}</div>
+            <div style={{ margin: 'auto', color: '#B91C1C', fontWeight: 600, textAlign: 'center' }}>{error}</div>
+          ) : done ? (
+            <div style={{ margin: 'auto', textAlign: 'center' }}>
+              <div style={{ width: '72px', height: '72px', borderRadius: '50%', backgroundColor: '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}><Check size={36} color="#059669" /></div>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1B2A4E', margin: '0 0 8px' }}>Hoàn thành bộ thẻ! 🎉</h3>
+              <p style={{ color: 'var(--text-secondary)', margin: '0 0 8px' }}>Đã ôn {reviewedCount}/{cards.length} thẻ</p>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginBottom: '24px', fontSize: '0.85rem', fontWeight: 700 }}>
+                <span style={{ color: '#991B1B' }}>Khó: {counts.hard || 0}</span>
+                <span style={{ color: '#92400E' }}>Tạm: {counts.good || 0}</span>
+                <span style={{ color: '#065F46' }}>Dễ: {counts.easy || 0}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <button onClick={restart} style={{ padding: '12px 24px', backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', color: '#1B2A4E', display: 'flex', alignItems: 'center', gap: '8px' }}><RotateCcw size={16} /> Ôn lại</button>
+                <button onClick={shuffle} style={{ padding: '12px 24px', backgroundColor: 'var(--brand-primary)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}><Shuffle size={16} /> Xáo trộn & ôn</button>
+              </div>
+            </div>
           ) : cards.length > 0 ? (
             <>
-              <div style={{ width: '100%', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '0.875rem', fontWeight: 600 }}>
-                <span>Card {currentIndex + 1} of {cards.length}</span>
-                {currentState && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Calendar size={14} /> Due: {currentState.due} (Interval: {currentState.interval}d)
-                  </span>
-                )}
+              {/* meta row */}
+              <div style={{ width: '100%', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600 }}>
+                <span>Thẻ {pos + 1} / {cards.length}</span>
+                <button onClick={() => setStarred(s => ({ ...s, [currentIndex]: !s[currentIndex] }))} title="Đánh dấu" style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', color: starred[currentIndex] ? '#F59E0B' : 'var(--text-muted)' }}>
+                  <Star size={16} fill={starred[currentIndex] ? '#F59E0B' : 'none'} /> {starred[currentIndex] ? 'Đã đánh dấu' : 'Đánh dấu'}
+                </button>
               </div>
-              
-              {/* Flashcard Body */}
-              <div 
-                onClick={() => setIsFlipped(true)}
-                style={{
-                  width: '100%', minHeight: '200px', backgroundColor: 'white', border: '2px solid var(--border-medium)',
-                  borderRadius: '16px', padding: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  cursor: isFlipped ? 'default' : 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', textAlign: 'center',
-                  transition: 'all 0.3s ease'
-                }}
-              >
+
+              {/* 3D flip card */}
+              <div style={{ perspective: '1600px', width: '100%', height: '230px' }}>
+                <div onClick={() => setIsFlipped(f => !f)} style={{ position: 'relative', width: '100%', height: '100%', transition: 'transform 0.5s', transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'none', cursor: 'pointer' }}>
+                  {/* Front */}
+                  <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', backgroundColor: 'white', border: '2px solid var(--border-medium)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    <span style={{ position: 'absolute', top: 12, left: 16, fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)' }}>CÂU HỎI</span>
+                    <h3 style={{ fontSize: '1.4rem', color: '#1B2A4E', fontWeight: 700, margin: 0 }}>{currentCard?.front}</h3>
+                  </div>
+                  {/* Back */}
+                  <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)', backgroundColor: '#1B2A4E', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                    <span style={{ position: 'absolute', top: 12, left: 16, fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.05em', color: 'rgba(255,255,255,0.5)' }}>ĐÁP ÁN</span>
+                    <p style={{ fontSize: '1.25rem', color: 'white', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{currentCard?.back}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Controls */}
+              <div style={{ marginTop: '20px', width: '100%' }}>
                 {!isFlipped ? (
-                  <h3 style={{ fontSize: '1.5rem', color: '#1B2A4E', fontWeight: 700, margin: 0 }}>{currentCard?.front}</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <button onClick={() => go(-1)} disabled={pos === 0} style={{ background: 'white', border: '1px solid var(--border-medium)', borderRadius: '12px', padding: '12px', cursor: pos === 0 ? 'not-allowed' : 'pointer', opacity: pos === 0 ? 0.4 : 1, color: '#1B2A4E', display: 'flex' }}><ArrowLeft size={18} /></button>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 500, textAlign: 'center' }}>Nhấn <b>Space</b> để lật thẻ</div>
+                    <button onClick={() => go(1)} style={{ background: 'white', border: '1px solid var(--border-medium)', borderRadius: '12px', padding: '12px', cursor: 'pointer', color: '#1B2A4E', display: 'flex' }}><ArrowRight size={18} /></button>
+                  </div>
                 ) : (
-                  <div>
-                    <h3 style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '16px', opacity: 0.7 }}>{currentCard?.front}</h3>
-                    <div style={{ height: '1px', width: '40px', backgroundColor: 'var(--border-medium)', margin: '0 auto 16px' }} />
-                    <p style={{ fontSize: '1.25rem', color: '#1B2A4E', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{currentCard?.back}</p>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    {ratingBtn('Khó', 1, '1', '#FEE2E2', '#991B1B', '#FCA5A5')}
+                    {ratingBtn('Tạm', 3, '2', '#FEF3C7', '#92400E', '#FCD34D')}
+                    {ratingBtn('Dễ', 5, '3', '#D1FAE5', '#065F46', '#6EE7B7')}
                   </div>
                 )}
               </div>
 
-              {/* Action Buttons */}
-              <div style={{ marginTop: '32px', width: '100%', display: 'flex', justifyContent: 'center', gap: '16px', opacity: isFlipped ? 1 : 0, transition: 'opacity 0.3s ease', pointerEvents: isFlipped ? 'auto' : 'none' }}>
-                <button onClick={() => submitReview(1)} style={{ flex: 1, padding: '12px', backgroundColor: '#FEE2E2', color: '#991B1B', border: '1px solid #FCA5A5', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>
-                  Hard (1)
-                </button>
-                <button onClick={() => submitReview(3)} style={{ flex: 1, padding: '12px', backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>
-                  Good (3)
-                </button>
-                <button onClick={() => submitReview(5)} style={{ flex: 1, padding: '12px', backgroundColor: '#D1FAE5', color: '#065F46', border: '1px solid #6EE7B7', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>
-                  Easy (5)
-                </button>
+              <div style={{ marginTop: '16px', color: 'var(--text-muted)', fontSize: '0.75rem', display: 'flex', gap: '14px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <span>⌨ Space: lật</span><span>← →: chuyển thẻ</span><span>1/2/3: chấm điểm</span><span>S: xáo trộn</span>
               </div>
-              
-              {!isFlipped && (
-                <div style={{ marginTop: '24px', color: 'var(--text-muted)', fontSize: '0.875rem', fontWeight: 500 }}>
-                  Click card to reveal answer
-                </div>
-              )}
             </>
           ) : (
-            <div style={{ margin: 'auto', color: 'var(--text-secondary)' }}>No cards available.</div>
+            <div style={{ margin: 'auto', color: 'var(--text-secondary)' }}>Không có thẻ nào.</div>
           )}
         </div>
       </div>

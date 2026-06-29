@@ -1,12 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Download, X, Clock, Trophy, Check, FileText } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const ExamViewer = () => {
   const navigate = useNavigate();
+  const { id } = useParams();
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isInstantReveal, setIsInstantReveal] = useState(false);
   const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [activeDoc, setActiveDoc] = useState(null);
+
+  useEffect(() => {
+    const fetchDoc = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/documents');
+        const data = await response.json();
+        const doc = data.documents.find(d => d.id === parseInt(id));
+        if (doc) setActiveDoc(doc);
+      } catch (err) {
+        console.error("Failed to fetch document", err);
+      }
+    };
+    if (id) fetchDoc();
+  }, [id]);
 
   const questions = [
     {
@@ -218,15 +234,21 @@ const ExamViewer = () => {
               <button style={{ flex: 1, backgroundColor: '#F8EFEA', border: 'none', borderRadius: '8px', padding: '6px', fontSize: '0.75rem', fontWeight: 700, color: '#8A334B' }}>Mở tab mới</button>
             </div>
 
-            {/* Fake PDF Render */}
-            <div style={{ flex: 1, backgroundColor: 'white', border: '1px solid var(--border-light)', padding: '24px', overflowY: 'auto', color: '#1B2A4E', fontSize: '1rem', lineHeight: '1.8' }}>
-              <h2 style={{ color: '#1B2A4E', fontSize: '1.25rem', fontWeight: 800, marginBottom: '16px' }}>Semi-conservative replication</h2>
-              <p style={{ marginBottom: '16px' }}>
-                Quá trình nhân đôi DNA diễn ra theo kiểu bán bảo tồn, nghĩa là mỗi phân tử DNA con sẽ có một mạch gốc từ phân tử DNA mẹ và một mạch mới được tổng hợp. Điều này đã được chứng minh bởi thí nghiệm của Meselson và Stahl năm 1958.
-              </p>
+            {/* Real PDF Render */}
+            <div style={{ flex: 1, backgroundColor: 'white', border: '1px solid var(--border-light)', padding: '24px', overflowY: 'auto', color: '#1B2A4E', fontSize: '1rem', lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>
+              {activeDoc ? (
+                <>
+                  <h2 style={{ color: '#1B2A4E', fontSize: '1.25rem', fontWeight: 800, marginBottom: '16px' }}>{activeDoc.filename}</h2>
+                  <div style={{ marginBottom: '16px' }}>
+                    {activeDoc.content}
+                  </div>
+                </>
+              ) : (
+                <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '40px' }}>Đang tải tài liệu...</div>
+              )}
             </div>
             <div style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-              Đang hiển thị trang 9
+              Nguồn tài liệu: {activeDoc ? activeDoc.filename : ''}
             </div>
           </div>
         </div>

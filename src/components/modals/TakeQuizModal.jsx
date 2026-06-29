@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle, XCircle, BrainCircuit } from 'lucide-react';
+import { X, CheckCircle, XCircle, BrainCircuit, FileText } from 'lucide-react';
 
 const TakeQuizModal = ({ isOpen, onClose }) => {
   const [documents, setDocuments] = useState([]);
@@ -14,13 +14,40 @@ const TakeQuizModal = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (isOpen) {
-      fetch('http://127.0.0.1:8000/api/documents')
+      const matchDoc = window.location.hash.match(/#\/document\/([^/]+)/);
+      const matchProj = window.location.hash.match(/#\/project\/([^/]+)/);
+      const docId = matchDoc ? parseInt(matchDoc[1], 10) : null;
+      const projId = matchProj ? parseInt(matchProj[1], 10) : null;
+
+      let url = 'http://127.0.0.1:8000/api/documents';
+      if (projId) {
+        url += `?project_id=${projId}`;
+      }
+
+      fetch(url)
         .then(res => res.json())
         .then(data => {
           setDocuments(data.documents);
-          if (data.documents.length > 0) {
-            setActiveDoc(data.documents[data.documents.length - 1]);
+          if (data.documents && data.documents.length > 0) {
+            let doc = data.documents[data.documents.length - 1];
+            if (docId) {
+              const found = data.documents.find(d => d.id === docId);
+              if (found) doc = found;
+            } else {
+              const storedId = sessionStorage.getItem('active_document_id');
+              if (storedId) {
+                const found = data.documents.find(d => String(d.id) === String(storedId));
+                if (found) doc = found;
+              }
+            }
+            setActiveDoc(doc);
+          } else {
+            setActiveDoc(null);
           }
+        })
+        .catch(err => {
+          console.error(err);
+          setActiveDoc(null);
         });
     } else {
       // Reset state when closed
@@ -33,14 +60,23 @@ const TakeQuizModal = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
+  // Đối chiếu shows the real source document. Render the actual PDF (not extracted
+  // text) whenever the active doc is a PDF whose raw file was stored on the backend.
+  const hasPdf = !!activeDoc && activeDoc.has_file && /\.pdf$/i.test(activeDoc.filename || '');
+
   const handleGenerateQuiz = async () => {
     if (!activeDoc) return alert("Please upload a document first!");
     setIsLoading(true);
     try {
       const res = await fetch('http://127.0.0.1:8000/api/generate_quiz', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic_or_text: activeDoc.content })
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          topic_or_text: activeDoc.content,
+          api_key: localStorage.getItem('workflow_api_key') || ''
+        })
       });
       const data = await res.json();
       setQuizData(data);
@@ -90,13 +126,13 @@ const TakeQuizModal = ({ isOpen, onClose }) => {
       display: 'flex', justifyContent: 'center', alignItems: 'center'
     }}>
       <div className="animate-fade-in" style={{
-        backgroundColor: '#FCFAF8', borderRadius: '24px', width: '800px', maxWidth: '90vw',
-        height: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 48px rgba(0,0,0,0.2)'
+        backgroundColor: '#FCFAF8', borderRadius: '24px', width: quizData ? '1180px' : '720px', maxWidth: '95vw',
+        height: '82vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 48px rgba(0,0,0,0.2)'
       }}>
         {/* Header */}
         <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-light)', flexShrink: 0 }}>
           <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#B45309', letterSpacing: '0.05em', marginBottom: '4px' }}>OFFLINE NLP ENGINE</div>
+
             <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1B2A4E' }}>
               {quizData ? quizData.title : "Automated Knowledge Quiz"}
             </h2>
@@ -112,27 +148,26 @@ const TakeQuizModal = ({ isOpen, onClose }) => {
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           {!activeDoc ? (
-            <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '40px' }}>
+            <div style={{ flex: 1, textAlign: 'center', color: 'var(--text-muted)', marginTop: '40px', padding: '24px' }}>
               Chưa có tài liệu. Hãy Upload tài liệu trước.
             </div>
           ) : !quizData ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '24px' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '24px', padding: '24px' }}>
               <BrainCircuit size={64} color="var(--brand-primary)" opacity={0.5} />
               <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
                 Nhấn nút bên dưới để trích xuất câu hỏi trắc nghiệm tự động từ tài liệu <b>{activeDoc.filename}</b>.
               </div>
-              <button 
-                onClick={handleGenerateQuiz} 
-                disabled={isLoading}
-                style={{ padding: '16px 32px', backgroundColor: 'var(--brand-primary)', color: 'white', borderRadius: '12px', fontWeight: 700, fontSize: '1rem', border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', opacity: isLoading ? 0.7 : 1 }}
-              >
-                {isLoading ? "Đang xử lý offline..." : "Tạo Quiz Tự Động"}
+              <button onClick={handleGenerateQuiz} disabled={isLoading} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#3B6B59', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '1rem' }}>
+                <BrainCircuit size={20} />
+                {isLoading ? "Đang tạo..." : "Tạo Đề Trắc Nghiệm"}
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <>
+              {/* Left column: questions */}
+              <div style={{ flex: 1.5, minWidth: 0, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
               {isSubmitted && (
                 <div style={{ backgroundColor: score === quizData.questions.length ? '#ECFDF5' : '#FEF2F2', border: `1px solid ${score === quizData.questions.length ? '#10B981' : '#EF4444'}`, padding: '24px', borderRadius: '16px', textAlign: 'center' }}>
                   <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: score === quizData.questions.length ? '#047857' : '#B91C1C', marginBottom: '8px' }}>
@@ -197,7 +232,33 @@ const TakeQuizModal = ({ isOpen, onClose }) => {
                   )}
                 </div>
               ))}
-            </div>
+              </div>
+              {/* Right column: đối chiếu — the real source PDF viewer */}
+              <div style={{ width: '440px', flexShrink: 0, borderLeft: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', backgroundColor: '#F1F5F9' }}>
+                <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--border-light)', backgroundColor: 'white' }}>
+                  <div style={{ fontWeight: 800, color: 'var(--brand-primary)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <FileText size={15} /> Đối chiếu nguồn
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {activeDoc.filename}
+                  </div>
+                </div>
+                {hasPdf ? (
+                  <iframe
+                    title="Nguồn PDF"
+                    src={`http://127.0.0.1:8000/api/documents/${activeDoc.id}/file#view=FitH`}
+                    style={{ flex: 1, width: '100%', border: 'none' }}
+                  />
+                ) : (
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '16px', fontSize: '0.82rem', lineHeight: 1.8, color: '#475569' }}>
+                    <div style={{ marginBottom: '10px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      Không có file PDF gốc cho tài liệu này — hãy tải lên lại để xem bản PDF. Tạm hiển thị văn bản trích xuất:
+                    </div>
+                    {activeDoc.content}
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
 

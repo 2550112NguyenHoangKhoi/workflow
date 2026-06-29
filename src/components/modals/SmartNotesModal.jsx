@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, FileText, Loader2, Download } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 
 const SmartNotesModal = ({ isOpen, onClose }) => {
   const [markdown, setMarkdown] = useState('');
@@ -22,7 +25,17 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
     setError(null);
     try {
       // 1. Fetch latest doc
-      const docsRes = await fetch('http://127.0.0.1:8000/api/documents');
+      const matchDoc = window.location.hash.match(/#\/document\/([^/]+)/);
+      const matchProj = window.location.hash.match(/#\/project\/([^/]+)/);
+      const docId = matchDoc ? parseInt(matchDoc[1], 10) : null;
+      const projId = matchProj ? parseInt(matchProj[1], 10) : null;
+
+      let url = 'http://127.0.0.1:8000/api/documents';
+      if (projId) {
+        url += `?project_id=${projId}`;
+      }
+
+      const docsRes = await fetch(url);
       if (!docsRes.ok) throw new Error("Lỗi kết nối server");
       const docsData = await docsRes.json();
       
@@ -30,15 +43,21 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
         throw new Error("Chưa có tài liệu nào được tải lên.");
       }
       
-      const latestDoc = docsData.documents[docsData.documents.length - 1];
+      let latestDoc = docsData.documents[docsData.documents.length - 1];
+      if (docId) {
+        const found = docsData.documents.find(d => d.id === docId);
+        if (found) latestDoc = found;
+      } else {
+        const storedId = sessionStorage.getItem('active_document_id');
+        if (storedId) {
+          const found = docsData.documents.find(d => String(d.id) === String(storedId));
+          if (found) latestDoc = found;
+        }
+      }
       setActiveDoc(latestDoc);
       
-      // 2. Generate Notes
-      const res = await fetch('http://127.0.0.1:8000/api/generate_notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic_or_text: latestDoc.content })
-      });
+      // 2. Generate Notes via GET endpoint (which caches in DB)
+      const res = await fetch(`http://127.0.0.1:8000/api/documents/${latestDoc.id}/notes`);
       
       if (!res.ok) throw new Error("Failed to generate notes");
       
@@ -133,7 +152,14 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
               boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '1px solid var(--border-light)',
               color: '#333', lineHeight: '1.6'
             }}>
-              <ReactMarkdown>{markdown}</ReactMarkdown>
+              <div className="markdown-body">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
+                >
+                  {markdown}
+                </ReactMarkdown>
+              </div>
             </div>
           )}
         </div>

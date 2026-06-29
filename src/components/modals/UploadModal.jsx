@@ -1,8 +1,18 @@
 import React, { useState } from 'react';
 import { X, Upload } from 'lucide-react';
 
-const UploadModal = ({ isOpen, onClose, onUpload }) => {
+const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
   const [file, setFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [school, setSchool] = useState('ĐHBK-HCM');
+  const [department, setDepartment] = useState('Khoa học máy tính');
+  const [subject, setSubject] = useState('Khác');
+  const [customSubject, setCustomSubject] = useState('');
+  const [subjectCode, setSubjectCode] = useState('');
+  const [docType, setDocType] = useState('Chọn loại');
+  const [academicYear, setAcademicYear] = useState('Chọn năm học');
+  const [teacher, setTeacher] = useState('');
+  const [adminNote, setAdminNote] = useState('');
 
   if (!isOpen) return null;
 
@@ -14,9 +24,25 @@ const UploadModal = ({ isOpen, onClose, onUpload }) => {
 
   const handleSubmit = async () => {
     if (!file) return;
+    setIsUploading(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('school', school);
+      formData.append('department', department);
+      formData.append('subject', subject === 'Khác' ? customSubject : subject);
+      formData.append('subject_code', subjectCode);
+      formData.append('doc_type', docType);
+      formData.append('academic_year', academicYear);
+      formData.append('teacher', teacher);
+      formData.append('notes', adminNote);
+      if (projectId) {
+        formData.append('project_id', projectId);
+      }
+      if (documentId) {
+        formData.append('document_id', documentId);
+      }
+
       const res = await fetch('http://127.0.0.1:8000/api/documents/upload', {
         method: 'POST',
         body: formData,
@@ -29,6 +55,8 @@ const UploadModal = ({ isOpen, onClose, onUpload }) => {
     } catch (err) {
       console.error(err);
       alert("Error uploading file.");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -76,7 +104,11 @@ const UploadModal = ({ isOpen, onClose, onUpload }) => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>TRƯỜNG *</label>
-              <select style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem' }}>
+              <select 
+                value={school}
+                onChange={(e) => setSchool(e.target.value)}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem' }}
+              >
                 <option>ĐHBK-HCM</option>
                 <option>HCMUS</option>
                 <option>TDTU</option>
@@ -85,7 +117,11 @@ const UploadModal = ({ isOpen, onClose, onUpload }) => {
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>NGÀNH *</label>
-              <select style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem' }}>
+              <select 
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem' }}
+              >
                 <option>Khoa học máy tính</option>
                 <option>Kỹ thuật phần mềm</option>
                 <option>Hệ thống thông tin</option>
@@ -96,21 +132,46 @@ const UploadModal = ({ isOpen, onClose, onUpload }) => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>MÔN HỌC *</label>
-              <select style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem', marginBottom: '8px' }}>
+              <select 
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem', marginBottom: '8px' }}
+              >
                 <option>Khác</option>
+                <option>Cơ sở dữ liệu</option>
+                <option>Mạng máy tính</option>
+                <option>Cấu trúc dữ liệu và giải thuật</option>
               </select>
-              <input type="text" placeholder="Nhập tên môn học" style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', fontSize: '0.9rem' }} />
+              {subject === 'Khác' && (
+                <input 
+                  type="text" 
+                  value={customSubject}
+                  onChange={(e) => setCustomSubject(e.target.value)}
+                  placeholder="Nhập tên môn học" 
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', fontSize: '0.9rem' }} 
+                />
+              )}
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>MÃ MÔN</label>
-              <input type="text" placeholder="VD: CSC10004" style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', fontSize: '0.9rem' }} />
+              <input 
+                type="text" 
+                value={subjectCode}
+                onChange={(e) => setSubjectCode(e.target.value)}
+                placeholder="VD: CSC10004" 
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', fontSize: '0.9rem' }} 
+              />
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>LOẠI TÀI LIỆU</label>
-              <select style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem' }}>
+              <select 
+                value={docType}
+                onChange={(e) => setDocType(e.target.value)}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem' }}
+              >
                 <option>Chọn loại</option>
                 <option>Slide / bài giảng</option>
                 <option>Đề thi</option>
@@ -120,20 +181,39 @@ const UploadModal = ({ isOpen, onClose, onUpload }) => {
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>NĂM HỌC / HỌC KỲ</label>
-              <select style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem' }}>
+              <select 
+                value={academicYear}
+                onChange={(e) => setAcademicYear(e.target.value)}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem' }}
+              >
                 <option>Chọn năm học</option>
+                <option>2025-2026</option>
+                <option>2024-2025</option>
+                <option>2023-2024</option>
               </select>
             </div>
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>GIẢNG VIÊN</label>
-            <input type="text" placeholder="Nếu có" style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', fontSize: '0.9rem' }} />
+            <input 
+              type="text" 
+              value={teacher}
+              onChange={(e) => setTeacher(e.target.value)}
+              placeholder="Nếu có" 
+              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', fontSize: '0.9rem' }} 
+            />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>GHI CHÚ CHO ADMIN</label>
-            <textarea placeholder="Nguồn tài liệu, nội dung chính, lưu ý khi phân loại..." rows={4} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', fontSize: '0.9rem', resize: 'none' }}></textarea>
+            <textarea 
+              value={adminNote}
+              onChange={(e) => setAdminNote(e.target.value)}
+              placeholder="Nguồn tài liệu, nội dung chính, lưu ý khi phân loại..." 
+              rows={4} 
+              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', fontSize: '0.9rem', resize: 'none' }}
+            ></textarea>
           </div>
 
         </div>
@@ -143,8 +223,8 @@ const UploadModal = ({ isOpen, onClose, onUpload }) => {
           <button onClick={onClose} style={{ padding: '12px 24px', backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '12px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
             Hủy
           </button>
-          <button onClick={handleSubmit} style={{ padding: '12px 24px', backgroundColor: 'var(--brand-primary)', border: 'none', borderRadius: '12px', fontWeight: 600, color: 'white', display: 'flex', alignItems: 'center', gap: '8px', cursor: file ? 'pointer' : 'not-allowed', opacity: file ? 1 : 0.6 }}>
-            <Upload size={18} /> Xử lý Offline
+          <button onClick={handleSubmit} disabled={isUploading || !file} style={{ flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: file ? '#1B2A4E' : '#E2E8F0', color: file ? 'white' : '#64748B', fontWeight: 700, border: 'none', cursor: file ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            <Upload size={18} /> Upload
           </button>
         </div>
       </div>

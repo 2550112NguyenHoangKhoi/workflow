@@ -1,12 +1,133 @@
 import React, { useState } from 'react';
-import { Check, MoreVertical, Search, Upload, Calendar, MessageCircle, AlertCircle } from 'lucide-react';
+import { useParams, useLocation } from 'react-router-dom';
+import { Check, MoreVertical, Search, Upload, Calendar, MessageCircle, AlertCircle, FileText, Network, BrainCircuit, Share2, Users } from 'lucide-react';
 import UploadSourcesModal from '../modals/UploadSourcesModal';
 import SearchMaterialsModal from '../modals/SearchMaterialsModal';
+import CreateExamModal from '../modals/CreateExamModal';
+import ConceptMapModal from '../modals/ConceptMapModal';
+import FlashcardReviewModal from '../modals/FlashcardReviewModal';
+import StudyPlanModal from '../modals/StudyPlanModal';
+import CreateLessonPlanModal from '../modals/CreateLessonPlanModal';
 
-const ProjectStudioSidebar = () => {
+const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
+  const { id } = useParams();
+  const location = useLocation();
+  const isProject = location.pathname.startsWith('/project/');
+  const projectId = isProject ? id : null;
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [selectedPersona, setSelectedPersona] = useState('OmiGuide');
+  const [isExamOpen, setIsExamOpen] = useState(false);
+  const [isConceptMapOpen, setIsConceptMapOpen] = useState(false);
+  const [isFlashcardOpen, setIsFlashcardOpen] = useState(false);
+  const [isStudyPlanOpen, setIsStudyPlanOpen] = useState(false);
+  const [isCreateLessonPlanOpen, setIsCreateLessonPlanOpen] = useState(false);
+  
+  const [roadmapItems, setRoadmapItems] = useState([]);
+  const [isGeneratingRoadmap, setIsGeneratingRoadmap] = useState(false);
+  const [artifacts, setArtifacts] = useState([]);
+  const [documents, setDocuments] = useState([]);
+
+  const fetchData = async () => {
+    try {
+      if (isProject && projectId) {
+        const [rRes, aRes, pRes] = await Promise.all([
+          fetch(`http://127.0.0.1:8000/api/projects/${projectId}/roadmap`),
+          fetch(`http://127.0.0.1:8000/api/projects/${projectId}/artifacts`),
+          fetch(`http://127.0.0.1:8000/api/projects/${projectId}`)
+        ]);
+        if (rRes.ok) {
+          const data = await rRes.json();
+          setRoadmapItems(data.items || []);
+        }
+        if (aRes.ok) {
+          const data = await aRes.json();
+          setArtifacts(data || []);
+        }
+        if (pRes.ok) {
+          const data = await pRes.json();
+          setDocuments(data.documents || []);
+        }
+      } else if (id) {
+        // Standalone Document Mode
+        const [rRes, pRes] = await Promise.all([
+          fetch(`http://127.0.0.1:8000/api/documents/${id}/roadmap`),
+          fetch(`http://127.0.0.1:8000/api/documents`)
+        ]);
+        if (rRes.ok) {
+          const data = await rRes.json();
+          setRoadmapItems(data.items || []);
+        }
+        if (pRes.ok) {
+          const data = await pRes.json();
+          setDocuments(data.documents || []);
+        }
+        setArtifacts([]);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchData();
+  }, [id, isProject]);
+
+  const generateRoadmap = async () => {
+    if (!projectId && !id) return alert("Roadmap requires a context.");
+    setIsGeneratingRoadmap(true);
+    try {
+      const url = projectId 
+        ? `http://127.0.0.1:8000/api/projects/${projectId}/roadmap/generate`
+        : `http://127.0.0.1:8000/api/documents/${id}/roadmap/generate`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic_or_text: "general" })
+      });
+      if (res.ok) {
+        fetchData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    setIsGeneratingRoadmap(false);
+  };
+
+  const handleToggleCompleted = async (itemId, currentCompleted) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/roadmap/items/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed: !currentCompleted })
+      });
+      if (res.ok) {
+        setRoadmapItems(prev => prev.map(item => 
+          item.id === itemId ? { ...item, completed: !currentCompleted } : item
+        ));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSelectActive = async (itemId, currentActive) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/roadmap/items/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !currentActive })
+      });
+      if (res.ok) {
+        setRoadmapItems(prev => prev.map(item => 
+          item.id === itemId 
+            ? { ...item, active: !currentActive } 
+            : { ...item, active: false }
+        ));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <>
@@ -24,8 +145,8 @@ const ProjectStudioSidebar = () => {
         <button onClick={() => setIsUploadOpen(true)} style={{ flex: 1, backgroundColor: '#FDF8F5', color: '#1B2A4E', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
           <Upload size={16} /> <span style={{ fontSize: '0.85rem' }}>Upload</span>
         </button>
-        <button style={{ flex: 1, backgroundColor: '#FDF8F5', color: '#1B2A4E', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-          <Calendar size={16} /> <span style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>Study...</span>
+        <button onClick={() => setIsStudyPlanOpen(true)} style={{ flex: 1, backgroundColor: '#FDF8F5', color: '#1B2A4E', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer', overflow: 'hidden' }}>
+          <Calendar size={16} style={{ flexShrink: 0 }} /> <span style={{ fontSize: '0.85rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Roadmap</span>
         </button>
         <button onClick={() => setIsSearchOpen(true)} style={{ flex: 1, backgroundColor: '#FDF8F5', color: '#1B2A4E', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
           <Search size={16} /> <span style={{ fontSize: '0.85rem' }}>Search</span>
@@ -34,6 +155,61 @@ const ProjectStudioSidebar = () => {
 
       <div style={{ padding: '24px' }}>
         
+        {/* Uploaded Documents */}
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>UPLOADED</h3>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--brand-primary)', backgroundColor: '#FDF8F5', padding: '2px 8px', borderRadius: '12px' }}>
+              {documents.length}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {documents.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                Chưa có tài liệu.
+              </div>
+            ) : (
+              documents.map(doc => (
+                <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-light)', backgroundColor: 'white' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <FileText size={16} color="var(--text-secondary)" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1B2A4E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {doc.filename}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{new Date(doc.upload_date).toLocaleDateString()}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--brand-secondary)' }}>
+                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--brand-secondary)' }}></div>
+                        <span style={{ fontSize: '0.7rem', fontWeight: 500 }}>Sẵn sàng</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => alert(`Link chia sẻ tài liệu công khai: https://workflow.com/share/${doc.id}`)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--brand-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Share2 size={14} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Cộng đồng & Chia sẻ */}
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>CỘNG ĐỒNG & CHIA SẺ</h3>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+            <button onClick={() => alert('Tính năng xem Đề thi được cộng đồng chia sẻ sắp ra mắt!')} style={{ backgroundColor: '#FDF8F5', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', color: '#1B2A4E', fontWeight: 600, fontSize: '0.85rem' }}>
+              <Users size={16} color="var(--brand-primary)" /> Đề thi được chia sẻ
+            </button>
+            <button onClick={() => alert('Tính năng xem Tài liệu phòng thi sắp ra mắt!')} style={{ backgroundColor: '#FDF8F5', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', color: '#1B2A4E', fontWeight: 600, fontSize: '0.85rem' }}>
+              <FileText size={16} color="var(--brand-primary)" /> Tài liệu phòng thi
+            </button>
+          </div>
+        </div>
+
         {/* Personas */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
           {['Gia sư thân thiện', 'Coach nghiêm túc', 'Socratic hỏi gợi mở', 'Bạn học Gen Z'].map(persona => (
@@ -48,102 +224,201 @@ const ProjectStudioSidebar = () => {
           ))}
         </div>
         
-        <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '12px', marginBottom: '8px', fontWeight: 700, fontSize: '0.875rem' }}>
-          OmiGuide
-        </div>
-        
-        <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '16px', marginBottom: '8px', fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-          Thân thiện, kiên nhẫn, nói như gia sư 1-1, ưu tiên ví dụ dễ hiểu.
-        </div>
-        
-        <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '16px', marginBottom: '8px', fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-          Giải thích ngắn trước, hỏi lại 1 câu để kiểm tra hiểu, không phán xét khi học sinh sai.
-        </div>
-        
-        <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '16px', marginBottom: '32px', fontSize: '0.875rem', fontWeight: 600, color: '#1B2A4E' }}>
-          Muốn học nhẹ nhàng, có ví dụ đời thườn
-        </div>
-
         {/* Giáo Án (Roadmap) */}
-        <div style={{ marginBottom: '32px' }}>
+        <div style={{ marginTop: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>GIÁO ÁN</h3>
-            <MoreVertical size={16} color="var(--text-muted)" />
+            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>GIÁO ÁN</h3>
+            <button 
+              onClick={generateRoadmap} 
+              disabled={isGeneratingRoadmap}
+              style={{ background: 'transparent', border: 'none', color: 'var(--brand-primary)', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', opacity: isGeneratingRoadmap ? 0.5 : 1 }}
+            >
+              {isGeneratingRoadmap ? 'Đang tạo...' : 'Tạo AI'}
+            </button>
           </div>
           
-          <div style={{ border: '1px solid var(--border-light)', borderRadius: '16px', padding: '16px', backgroundColor: 'white', boxShadow: 'var(--shadow-sm)' }}>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-              <span style={{ border: '1px solid var(--border-medium)', borderRadius: '20px', padding: '4px 12px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Lỗi</span>
-              <span style={{ backgroundColor: '#F3EAE3', borderRadius: '20px', padding: '4px 12px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--brand-primary)' }}>Tài liệu project</span>
-            </div>
-            
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-              Không thể hoàn tất giáo án từ roadmap.
-            </p>
-
-            <div style={{ backgroundColor: '#FDF2F2', border: '1px solid #FCA5A5', color: '#991B1B', padding: '12px 16px', borderRadius: '12px', fontSize: '0.875rem', fontWeight: 600, marginBottom: '16px' }}>
-              Roadmap đang được tạo. Hãy đợi hoàn tất rồi tạo Study Plan.
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', backgroundColor: 'var(--success-bg)', border: '1px solid #A7F3D0', borderRadius: '12px', color: 'var(--brand-secondary)', fontWeight: 700, fontSize: '0.875rem' }}>
-                <div style={{ backgroundColor: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Check size={12} />
-                </div>
-                Kiểm tra tài liệu trong project
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+            {roadmapItems.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                Chưa có giáo án. Hãy tải tài liệu lên và bấm "Tạo AI".
               </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', backgroundColor: '#FDF8F5', border: '1px solid #FCA5A5', borderRadius: '12px', color: 'var(--brand-primary)', fontWeight: 700, fontSize: '0.875rem' }}>
-                <div style={{ backgroundColor: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem' }}>
-                  2
-                </div>
-                Tạo roadmap từ tài liệu
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '12px', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.875rem' }}>
-                <div style={{ borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem' }}>
-                  3
-                </div>
-                Chuyển roadmap thành giáo án
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button style={{ flex: 1, backgroundColor: '#B890A3', color: 'white', border: 'none', padding: '12px', borderRadius: '12px', fontWeight: 700, cursor: 'not-allowed' }}>
+            ) : (
+              roadmapItems.map((item, idx) => {
+                const isCompleted = !!item.completed;
+                const isActive = !!item.active;
+                return (
+                  <div key={item.id} style={{ display: 'flex', gap: '16px', position: 'relative', paddingBottom: idx === roadmapItems.length - 1 ? '0' : '20px' }}>
+                    {idx !== roadmapItems.length - 1 && (
+                      <div style={{ position: 'absolute', left: '11px', top: '24px', bottom: '0', width: '2px', backgroundColor: '#D6C5B3', zIndex: 1 }}></div>
+                    )}
+                    <div 
+                      onClick={() => handleToggleCompleted(item.id, isCompleted)}
+                      style={{ flex: '0 0 auto', position: 'relative', zIndex: 2, cursor: 'pointer' }}
+                    >
+                      <div style={{ 
+                        width: '24px', height: '24px', borderRadius: '50%', 
+                        backgroundColor: isCompleted ? '#8A334C' : 'white', 
+                        border: `2px solid ${isCompleted ? '#8A334C' : '#D6C5B3'}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: isCompleted ? 'white' : 'var(--text-muted)'
+                       }}>
+                        {isCompleted ? <Check size={14} strokeWidth={3} /> : <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>{item.step_number}</span>}
+                      </div>
+                    </div>
+                    <div 
+                      onClick={() => handleSelectActive(item.id, isActive)}
+                      style={{ 
+                        flex: 1, 
+                        backgroundColor: isActive ? '#FDF8F5' : 'white', 
+                        border: isActive ? '2px solid #8A334C' : '1px solid var(--border-light)', 
+                        padding: '12px', 
+                        borderRadius: '12px', 
+                        boxShadow: isActive ? '0 4px 12px rgba(138, 51, 76, 0.1)' : 'var(--shadow-sm)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <h4 style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 700, color: isActive ? '#8A334C' : '#1B2A4E' }}>{item.title}</h4>
+                      <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{item.description}</p>
+                      
+                      {isActive && (
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const chatInput = document.querySelector('input[placeholder*="Hỏi"], textarea');
+                              const targetInput = chatInput || document.querySelector('input[type="text"]') || document.querySelector('textarea');
+                              if (targetInput) {
+                                const valueSetter = Object.getOwnPropertyDescriptor(targetInput.constructor.prototype, 'value')?.set;
+                                if (valueSetter) {
+                                  valueSetter.call(targetInput, `Hãy hướng dẫn tôi học chủ đề "${item.title}": ${item.description}`);
+                                } else {
+                                  targetInput.value = `Hãy hướng dẫn tôi học chủ đề "${item.title}": ${item.description}`;
+                                }
+                                targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                targetInput.focus();
+                              }
+                            }}
+                            style={{ 
+                              background: 'transparent', 
+                              border: '1px solid #8A334C', 
+                              color: '#8A334C', 
+                              padding: '4px 8px', 
+                              borderRadius: '16px', 
+                              fontSize: '0.65rem', 
+                              fontWeight: 700, 
+                              cursor: 'pointer' 
+                            }}
+                          >
+                            Hỏi AI (Chat)
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsExamOpen(true);
+                            }}
+                            style={{ 
+                              background: 'transparent', 
+                              border: '1px solid #D6C5B3', 
+                              color: 'var(--text-secondary)', 
+                              padding: '4px 8px', 
+                              borderRadius: '16px', 
+                              fontSize: '0.65rem', 
+                              fontWeight: 600, 
+                              cursor: 'pointer' 
+                            }}
+                          >
+                            Tạo Quiz
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+              <button 
+                onClick={() => setIsCreateLessonPlanOpen(true)}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#FDF8F5',
+                  color: '#8A334C',
+                  border: '1px solid #D6C5B3',
+                  padding: '8px 12px',
+                  borderRadius: '12px',
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  textAlign: 'center'
+                }}
+              >
                 Tạo giáo án
               </button>
-              <button style={{ flex: 1, backgroundColor: 'white', color: '#B890A3', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', fontWeight: 700 }}>
-                Dùng LLM
+              <button 
+                onClick={generateRoadmap}
+                disabled={isGeneratingRoadmap}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#FDF8F5',
+                  color: '#8A334C',
+                  border: '1px solid #D6C5B3',
+                  padding: '8px 12px',
+                  borderRadius: '12px',
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  cursor: isGeneratingRoadmap ? 'not-allowed' : 'pointer',
+                  opacity: isGeneratingRoadmap ? 0.7 : 1,
+                  textAlign: 'center'
+                }}
+              >
+                {isGeneratingRoadmap ? 'Đang tạo...' : 'Dùng LLM'}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Uploaded */}
-        <div>
+        {/* Tóm tắt Artifact */}
+        <div style={{ marginTop: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>UPLOADED</h3>
-            <MoreVertical size={16} color="var(--text-muted)" />
+            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>TÓM TẮT ARTIFACT</h3>
           </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '2px solid var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--success)' }}>
-              <Check size={16} />
-            </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1B2A4E', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                CK_HK233 (1).pdf <span style={{ color: 'var(--text-muted)' }}>↗</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {artifacts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                Chưa có artifact nào được tạo.
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 600 }}>Sẵn sàng để hỏi</div>
-            </div>
+            ) : (
+              artifacts.map(artifact => (
+                <div key={artifact.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-light)', backgroundColor: 'white', cursor: 'pointer' }}>
+                  <div style={{ 
+                    width: '32px', height: '32px', borderRadius: '8px', 
+                    backgroundColor: artifact.type === 'quiz' ? '#FEF3C7' : artifact.type === 'notes' ? '#E0E7FF' : '#E6F0EC', 
+                    color: artifact.type === 'quiz' ? '#D97706' : artifact.type === 'notes' ? '#4F46E5' : '#059669', 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center' 
+                  }}>
+                    {artifact.type === 'quiz' ? <AlertCircle size={16} /> : artifact.type === 'notes' ? <FileText size={16} /> : <Network size={16} />}
+                  </div>
+                  <div>
+                    <h4 style={{ margin: '0 0 2px', fontSize: '0.85rem', fontWeight: 600, color: '#1B2A4E' }}>{artifact.title}</h4>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{new Date(artifact.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
-        
+
       </div>
     </aside>
 
-    <UploadSourcesModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} />
+    <UploadSourcesModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} projectId={projectId} />
     <SearchMaterialsModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+    <CreateExamModal isOpen={isExamOpen} onClose={() => setIsExamOpen(false)} projectId={projectId} documentId={isProject ? null : id} onSuccess={fetchData} />
+    <ConceptMapModal isOpen={isConceptMapOpen} onClose={() => setIsConceptMapOpen(false)} />
+    <FlashcardReviewModal isOpen={isFlashcardOpen} onClose={() => setIsFlashcardOpen(false)} projectId={projectId} documentId={isProject ? null : id} />
+    <StudyPlanModal isOpen={isStudyPlanOpen} onClose={() => setIsStudyPlanOpen(false)} />
+    <CreateLessonPlanModal isOpen={isCreateLessonPlanOpen} onClose={() => setIsCreateLessonPlanOpen(false)} projectId={projectId} documentId={isProject ? null : id} onSuccess={fetchData} />
     </>
   );
 };

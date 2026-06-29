@@ -47,7 +47,41 @@ def is_vietnamese(text: str) -> bool:
 
 
 def vi_split_sentences(text: str):
-    return [s.strip() for s in re.split(r'(?<=[.!?…])\s+', text) if len(s.strip()) > 1]
+    return [s.strip() for s in re.split(r'(?<=[.!?…])\s+|\n+', text) if len(s.strip()) > 1]
+
+
+def is_clean_sentence(s: str) -> bool:
+    """Heuristic to skip math-heavy or badly-extracted (glued) sentences.
+
+    Dense Vietnamese cheat-sheet / exam PDFs extract with lost spaces
+    ("Côngthức") and lots of math symbols; such fragments make poor
+    flashcards/quiz items, so we filter them out before generation.
+    """
+    s = s.strip()
+    if not (8 <= len(s) <= 400):
+        return False
+    letters = sum(ch.isalpha() for ch in s)
+    if letters < len(s) * 0.55:                      # too many digits / math symbols
+        return False
+    if any(len(tok) > 18 for tok in s.split()):      # glued mega-token (PDF lost spaces)
+        return False
+    return True
+
+
+def vi_clean_sentences(text: str):
+    """Sentences for card/quiz/map generation: de-glue PDF runs, drop math fragments."""
+    from .vi_desegment import desegment
+    out = []
+    for s in vi_split_sentences(text):
+        # Re-insert spaces lost during PDF extraction ("Côngthức" -> "Công thức").
+        # desegment self-gates per token (valid syllables, pure ASCII and math are
+        # left untouched), so it's safe and cheap to run on every sentence. A length
+        # gate here is wrong: glued bigrams are only 6-9 chars, well under a single
+        # syllable's 7-char max, so they'd never trip a token-length threshold.
+        s = desegment(s)
+        if is_clean_sentence(s):
+            out.append(s)
+    return out
 
 
 def vi_pos(text: str):

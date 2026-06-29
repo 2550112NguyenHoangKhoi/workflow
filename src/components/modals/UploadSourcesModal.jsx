@@ -1,7 +1,65 @@
-import React from 'react';
-import { X, Upload } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Upload, Loader2, Link as LinkIcon, Check } from 'lucide-react';
 
-const UploadSourcesModal = ({ isOpen, onClose }) => {
+const UploadSourcesModal = ({ isOpen, onClose, projectId, documentId }) => {
+  const [urlInput, setUrlInput] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleUploadFile = async (files) => {
+    if (!files || files.length === 0) return;
+    setIsUploading(true);
+    setUploadStatus(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', files[0]);
+      if (projectId) {
+        formData.append('project_id', projectId);
+      }
+      if (documentId) {
+        formData.append('document_id', documentId);
+      }
+      
+      const res = await fetch('http://127.0.0.1:8000/api/documents/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        setUploadStatus('success');
+        setTimeout(() => { setUploadStatus(null); }, 3000);
+      } else {
+        setUploadStatus('error');
+      }
+    } catch (e) {
+      console.error(e);
+      setUploadStatus('error');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    if (e.dataTransfer.files) {
+      handleUploadFile(e.dataTransfer.files);
+    }
+  };
+
+  const handleClickBox = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e) => {
+    if (e.target.files) {
+      handleUploadFile(e.target.files);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -28,20 +86,82 @@ const UploadSourcesModal = ({ isOpen, onClose }) => {
         {/* Body */}
         <div style={{ padding: '0 24px 24px' }}>
           
-          <div style={{ border: '2px dashed var(--border-medium)', borderRadius: '16px', padding: '48px 24px', textAlign: 'center', cursor: 'pointer', backgroundColor: 'white', marginBottom: '24px' }}>
-            <Upload size={24} color="var(--text-secondary)" style={{ margin: '0 auto 12px' }} />
-            <div style={{ fontWeight: 700, color: '#1B2A4E', marginBottom: '8px' }}>Drag files here or click to choose</div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>PDF, DOCX, PNG, JPG, WebP, MP4, MP3...</div>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileChange} 
+            style={{ display: 'none' }} 
+          />
+          <div 
+            onClick={handleClickBox}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            style={{ border: '2px dashed var(--border-medium)', borderRadius: '16px', padding: '48px 24px', textAlign: 'center', cursor: 'pointer', backgroundColor: 'white', marginBottom: '16px' }}
+          >
+            {isUploading ? (
+              <>
+                <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 12px', color: 'var(--brand-primary)' }} />
+                <div style={{ fontWeight: 700, color: '#1B2A4E', marginBottom: '8px' }}>Tải tài liệu lên...</div>
+              </>
+            ) : (
+              <>
+                <Upload size={24} color="var(--text-secondary)" style={{ margin: '0 auto 12px' }} />
+                <div style={{ fontWeight: 700, color: '#1B2A4E', marginBottom: '8px' }}>Drag files here or click to choose</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>PDF, DOCX, PNG, JPG, WebP, MP4, MP3...</div>
+              </>
+            )}
           </div>
+          {uploadStatus === 'success' && <div style={{ fontSize: '0.82rem', color: 'var(--brand-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '4px' }}><Check size={14}/> Tải tài liệu lên thành công!</div>}
+          {uploadStatus === 'error' && <div style={{ fontSize: '0.82rem', color: 'red', marginBottom: '16px' }}>Lỗi khi xử lý tài liệu.</div>}
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1B2A4E' }}>Links</div>
-            <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--brand-primary)', cursor: 'pointer' }}>+ Add link</div>
           </div>
           
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <input type="text" placeholder="Add YouTube, website or any URL" style={{ flex: 1, padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--border-medium)', fontSize: '0.9rem' }} />
-            <button style={{ backgroundColor: '#5A2E3D', color: 'white', border: 'none', padding: '0 24px', borderRadius: '12px', fontWeight: 600 }}>Add</button>
+          <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input 
+                type="text" 
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="Add YouTube, website or any URL" 
+                style={{ flex: 1, padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--border-medium)', fontSize: '0.9rem' }} 
+              />
+              <button 
+                onClick={async () => {
+                  if (!urlInput) return;
+                  setIsUploading(true);
+                  setUploadStatus(null);
+                  try {
+                    const res = await fetch('http://127.0.0.1:8000/api/documents/url', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ 
+                        url: urlInput, 
+                        project_id: projectId ? parseInt(projectId) : null,
+                        document_id: documentId ? parseInt(documentId) : null
+                      })
+                    });
+                    if (res.ok) {
+                      setUploadStatus('success');
+                      setUrlInput('');
+                      setTimeout(() => { setUploadStatus(null); }, 3000);
+                    } else {
+                      setUploadStatus('error');
+                    }
+                  } catch (e) {
+                    setUploadStatus('error');
+                  } finally {
+                    setIsUploading(false);
+                  }
+                }}
+                disabled={isUploading}
+                style={{ backgroundColor: '#5A2E3D', color: 'white', border: 'none', padding: '0 24px', borderRadius: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', opacity: isUploading ? 0.7 : 1, cursor: isUploading ? 'not-allowed' : 'pointer' }}>
+                {isUploading ? <Loader2 size={16} className="animate-spin" /> : 'Add'}
+              </button>
+            </div>
+            {uploadStatus === 'success' && <div style={{ fontSize: '0.8rem', color: 'var(--brand-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}><Check size={14}/> Thêm link thành công!</div>}
+            {uploadStatus === 'error' && <div style={{ fontSize: '0.8rem', color: 'red' }}>Lỗi khi xử lý link.</div>}
           </div>
 
         </div>

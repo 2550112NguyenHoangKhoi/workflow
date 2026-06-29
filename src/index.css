@@ -1,3 +1,4 @@
+@import 'katex/dist/katex.min.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -42,13 +43,44 @@
   --transition-normal: 250ms ease;
 }
 
-body {
+:root.dark-mode {
+  --bg-primary: #121212;
+  --bg-secondary: #1E1E1E;
+  --bg-tertiary: #2D2D2D;
+  
+  --brand-primary: #E05A7E;
+  --brand-primary-hover: #F06A8E;
+  --brand-secondary: #4A9C82;
+  --brand-secondary-hover: #5AAC92;
+  
+  --text-primary: #E0E0E0;
+  --text-secondary: #A0A0A0;
+  --text-muted: #707070;
+  
+  --border-light: #3D3D3D;
+  --border-medium: #4D4D4D;
+  
+  --success: #34D399;
+  --success-bg: #064E3B;
+  
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
+  --shadow-premium: 0 8px 24px rgba(0, 0, 0, 0.7);
+}
+
+html, body {
   margin: 0;
   padding: 0;
+  height: 100%;
+  width: 100%;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
 /* 3-Column App Layout Container */
