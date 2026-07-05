@@ -1,4 +1,4 @@
-name: Build Windows Release
+Name: Build Windows Release
 
 on:
   workflow_dispatch:
@@ -11,6 +11,10 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    
+    # GRANT WRITE PERMISSIONS HERE
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -19,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24 # Updated to 24 to fix the deprecation warning
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -51,5 +55,6 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.version }}
           files: release/*.exe
+          overwrite_files: true # Added this back based on your previous error log
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
