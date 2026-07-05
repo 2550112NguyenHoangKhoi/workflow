@@ -47,6 +47,13 @@ jobs:
       - name: Install Node dependencies
         run: npm install
 
+      - name: Set App Version
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          VERSION="${VERSION#v}"
+          npm version $VERSION --no-git-tag-version --allow-same-version
+
       - name: Build Electron App
         run: npm run electron:build
         env:
