@@ -4,7 +4,7 @@
 
 ---
 
-## 📥 Tải xuống & Cài đặt (Dành cho người dùng)
+## 📥 Tải xuống & Cài đặt 
 
 Bạn không cần biết lập trình để sử dụng Workflow AI. Chỉ cần tải bản cài đặt có sẵn cho hệ điều hành của bạn!
 
