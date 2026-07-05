@@ -128,7 +128,7 @@ const DueFlashcardModal = ({ isOpen, onClose }) => {
           padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)'
         }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#1B2A4E', fontWeight: 800 }}>Daily Review</h2>
+            <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-navy)', fontWeight: 800 }}>Daily Review</h2>
             <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Spaced Repetition (SM-2)</p>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
@@ -147,7 +147,7 @@ const DueFlashcardModal = ({ isOpen, onClose }) => {
               <div style={{ width: '80px', height: '80px', backgroundColor: '#D1FAE5', color: '#059669', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
                 <Check size={40} />
               </div>
-              <h3 style={{ fontSize: '1.5rem', color: '#1B2A4E', fontWeight: 800, marginBottom: '8px' }}>You're all caught up!</h3>
+              <h3 style={{ fontSize: '1.5rem', color: 'var(--text-navy)', fontWeight: 800, marginBottom: '8px' }}>You're all caught up!</h3>
               <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>Excellent work! You have reviewed all your due flashcards for today.</p>
               <button onClick={onClose} style={{ padding: '12px 32px', backgroundColor: 'var(--brand-primary)', color: 'white', borderRadius: '12px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
                 Hoàn Thành
@@ -168,19 +168,19 @@ const DueFlashcardModal = ({ isOpen, onClose }) => {
               <div 
                 onClick={() => setIsFlipped(true)}
                 style={{
-                  width: '100%', minHeight: '200px', backgroundColor: 'white', border: '2px solid var(--border-medium)',
+                  width: '100%', minHeight: '200px', backgroundColor: 'var(--bg-tertiary)', border: '2px solid var(--border-medium)',
                   borderRadius: '16px', padding: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                   cursor: isFlipped ? 'default' : 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', textAlign: 'center',
                   transition: 'all 0.3s ease'
                 }}
               >
                 {!isFlipped ? (
-                  <h3 style={{ fontSize: '1.5rem', color: '#1B2A4E', fontWeight: 700, margin: 0 }}>{currentCard?.front}</h3>
+                  <h3 style={{ fontSize: '1.5rem', color: 'var(--text-navy)', fontWeight: 700, margin: 0 }}>{currentCard?.front}</h3>
                 ) : (
                   <div>
                     <h3 style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '16px', opacity: 0.7 }}>{currentCard?.front}</h3>
                     <div style={{ height: '1px', width: '40px', backgroundColor: 'var(--border-medium)', margin: '0 auto 16px' }} />
-                    <p style={{ fontSize: '1.25rem', color: '#1B2A4E', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{currentCard?.back}</p>
+                    <p style={{ fontSize: '1.25rem', color: 'var(--text-navy)', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{currentCard?.back}</p>
                   </div>
                 )}
               </div>

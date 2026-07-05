@@ -94,13 +94,13 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
         boxShadow: '0 24px 48px rgba(0,0,0,0.2)'
       }}>
         {/* Header */}
-        <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', backgroundColor: 'white' }}>
+        <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ backgroundColor: '#1B2A4E', padding: '10px', borderRadius: '12px' }}>
+            <div style={{ backgroundColor: 'var(--btn-navy)', padding: '10px', borderRadius: '12px' }}>
               <Calendar color="white" size={24} />
             </div>
             <div>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1B2A4E', margin: 0 }}>Study Plan</h2>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-navy)', margin: 0 }}>Study Plan</h2>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: 0 }}>
                 {activeDoc ? `Lộ trình học thuật cho ${activeDoc.filename}` : 'Lộ trình học thuật'}
               </p>
@@ -121,11 +121,11 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
           ) : error ? (
             <div style={{ color: 'red', textAlign: 'center', fontWeight: 600 }}>{error}</div>
           ) : !pathData ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '400px', margin: '0 auto', backgroundColor: 'white', padding: '32px', borderRadius: '16px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)' }}>
-              <h3 style={{ fontSize: '1.25rem', color: '#1B2A4E', textAlign: 'center', margin: 0 }}>Quick Check-in</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '400px', margin: '0 auto', backgroundColor: 'var(--bg-tertiary)', padding: '32px', borderRadius: '16px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)' }}>
+              <h3 style={{ fontSize: '1.25rem', color: 'var(--text-navy)', textAlign: 'center', margin: 0 }}>Quick Check-in</h3>
               <p style={{ color: 'var(--text-secondary)', textAlign: 'center', fontSize: '0.875rem', marginBottom: '8px' }}>Thiết lập mục tiêu để AI tạo lộ trình phù hợp nhất với bạn.</p>
               
-              <label style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1B2A4E' }}>Thời lượng học dự kiến</label>
+              <label style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-navy)' }}>Thời lượng học dự kiến</label>
               <select value={duration} onChange={(e) => setDuration(e.target.value)} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-medium)', outline: 'none' }}>
                 <option value="7 ngày">7 ngày</option>
                 <option value="14 ngày">14 ngày</option>
@@ -133,7 +133,7 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
                 <option value="8 tuần">8 tuần</option>
               </select>
 
-              <label style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1B2A4E', marginTop: '8px' }}>Mục tiêu đầu ra</label>
+              <label style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-navy)', marginTop: '8px' }}>Mục tiêu đầu ra</label>
               <select value={targetLevel} onChange={(e) => setTargetLevel(e.target.value)} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-medium)', outline: 'none' }}>
                 <option value="Nắm bắt cơ bản">Nắm bắt cơ bản</option>
                 <option value="Thành thạo">Thành thạo</option>
@@ -147,9 +147,9 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+              <div style={{ backgroundColor: 'var(--bg-tertiary)', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                 <div style={{ flex: 1 }}>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', color: '#1B2A4E' }}>{pathData.title}</h3>
+                  <h3 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', color: 'var(--text-navy)' }}>{pathData.title}</h3>
                   <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: '1.5' }}>{pathData.description}</p>
                 </div>
                 <button onClick={() => alert('Đã tạo file .ics và kết nối Google Calendar thành công!')} style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#4285F4', color: 'white', padding: '10px 16px', borderRadius: '8px', border: 'none', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
@@ -158,7 +158,7 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
               </div>
 
               {pathData.modules && pathData.modules.map((mod, idx) => (
-                <div key={idx} style={{ backgroundColor: 'white', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)' }}>
+                <div key={idx} style={{ backgroundColor: 'var(--bg-tertiary)', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)' }}>
                   <h4 style={{ margin: '0 0 16px 0', fontSize: '1.2rem', color: 'var(--brand-primary)', borderBottom: '2px solid #E6F0EC', paddingBottom: '8px' }}>
                     {mod.title}
                   </h4>
@@ -169,7 +169,7 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
                           <BookOpen size={16} color="var(--brand-primary)" />
                         </div>
                         <div style={{ flex: 1 }}>
-                          <h5 style={{ margin: '0 0 4px 0', fontSize: '1rem', color: '#1B2A4E' }}>{topic.title}</h5>
+                          <h5 style={{ margin: '0 0 4px 0', fontSize: '1rem', color: 'var(--text-navy)' }}>{topic.title}</h5>
                           <p style={{ margin: '0 0 8px 0', fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
                             {topic.description}
                           </p>

@@ -74,27 +74,61 @@ export function disconnectDrive() {
   tokenExpiry = 0;
 }
 
+const SHORTCUT_MIME = 'application/vnd.google-apps.shortcut';
+
+// The public study library mirrored from omilearn.com — a shared Drive folder that is
+// listable with just the API key (no OAuth). This is the default "Duyệt Drive" root.
+export const LIBRARY_ROOT = '1VTmwR9iVndmKvI2O3jiHPlAu0OBnWPir';
+export const LIBRARY_ROOT_NAME = 'ĐẠI HỌC BÁCH KHOA HÀ NỘI (HUST)';
+
+// Public folders need only the API key; the OAuth token is attached when present so the
+// same helpers also browse the user's private Drive after they connect.
+function authHeaders() {
+  return isConnected() ? { Authorization: `Bearer ${accessToken}` } : {};
+}
+
 async function driveGet(path) {
   const sep = path.includes('?') ? '&' : '?';
   const res = await fetch(`https://www.googleapis.com/drive/v3/${path}${sep}key=${API_KEY}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: authHeaders(),
   });
   if (!res.ok) throw new Error(`Drive API ${res.status}: ${await res.text()}`);
   return res.json();
+}
+
+// The library is built from Drive shortcuts; resolve them to their targets so folder
+// navigation and file preview/download use the real object id + mime type.
+function resolveShortcut(f) {
+  if (f.mimeType === SHORTCUT_MIME && f.shortcutDetails?.targetId) {
+    return { ...f, id: f.shortcutDetails.targetId, mimeType: f.shortcutDetails.targetMimeType || f.mimeType };
+  }
+  return f;
+}
+
+// Fetch one file/folder's metadata — used for the breadcrumb title when browsing ?folder=<id>.
+export async function getFileMeta(fileId) {
+  return resolveShortcut(await driveGet(`files/${fileId}?fields=id,name,mimeType,shortcutDetails`));
 }
 
 // List folders + files inside a parent folder ('root' = My Drive top level).
 export async function listChildren(parentId = 'root') {
   const q = `'${parentId}' in parents and trashed=false`;
   const data = await driveGet(
-    `files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,modifiedTime)&pageSize=200&orderBy=folder,name`
+    `files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,modifiedTime,shortcutDetails)&pageSize=200&orderBy=folder,name`
   );
-  const files = data.files || [];
+  const files = (data.files || []).map(resolveShortcut);
   return {
     folders: files.filter((f) => f.mimeType === FOLDER_MIME),
     files: files.filter((f) => f.mimeType !== FOLDER_MIME),
   };
 }
+
+// Public-file URLs that work without OAuth (like the reference product's library):
+// card preview thumbnails, the embedded viewer, and raw downloads.
+export const publicThumbUrl = (fileId) => `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
+export const publicPreviewUrl = (fileId) => `https://drive.google.com/file/d/${fileId}/preview`;
+export const publicDownloadUrl = (fileId) => `https://drive.google.com/uc?export=download&id=${fileId}`;
+export const publicShareUrl = (fileId) => `https://drive.google.com/file/d/${fileId}/view`;
 
 // Download a Drive file's text. Google-native docs are exported to text/plain;
 // everything else is fetched as a Blob (PDF/txt/etc.) for the backend to parse.
@@ -103,7 +137,7 @@ export async function downloadFile(file) {
   const url = isNative
     ? `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=text/plain&key=${API_KEY}`
     : `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&key=${API_KEY}`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const res = await fetch(url, { headers: authHeaders() });
   if (!res.ok) throw new Error(`Tải file thất bại (${res.status})`);
   const blob = await res.blob();
   const name = isNative ? `${file.name}.txt` : file.name;

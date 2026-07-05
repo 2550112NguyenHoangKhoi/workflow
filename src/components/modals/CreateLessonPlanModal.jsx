@@ -118,7 +118,7 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
           <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', backgroundColor: '#FCFAF8', borderRadius: '24px 24px 0 0', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <BookOpen size={20} color="#8A334C" />
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1B2A4E', margin: 0 }}>{resultData.title || title}</h2>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-navy)', margin: 0 }}>{resultData.title || title}</h2>
             </div>
             <button onClick={handleClose} style={{ background: 'transparent', border: '1px solid var(--border-medium)', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-secondary)' }}>
               <X size={16} />
@@ -127,7 +127,7 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
 
           {/* Scrollable Markdown Body */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
-            <div className="markdown-body" style={{ fontSize: '0.95rem', lineHeight: 1.7, color: '#1B2A4E' }}>
+            <div className="markdown-body" style={{ fontSize: '0.95rem', lineHeight: 1.7, color: 'var(--text-navy)' }}>
               <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                 {resultData.markdown_content || ''}
               </ReactMarkdown>
@@ -135,8 +135,8 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
           </div>
 
           {/* Footer */}
-          <div style={{ padding: '20px 24px', backgroundColor: 'white', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'center', gap: '12px', borderRadius: '0 0 24px 24px', flexShrink: 0 }}>
-            <button onClick={handleRegenerate} style={{ padding: '12px 28px', backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '24px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ padding: '20px 24px', backgroundColor: 'var(--bg-tertiary)', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'center', gap: '12px', borderRadius: '0 0 24px 24px', flexShrink: 0 }}>
+            <button onClick={handleRegenerate} style={{ padding: '12px 28px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '24px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <RotateCcw size={15} /> Tạo lại
             </button>
             <button onClick={handleClose} style={{ padding: '12px 28px', backgroundColor: '#8A334C', border: 'none', borderRadius: '24px', fontWeight: 600, color: 'white', cursor: 'pointer' }}>
@@ -163,7 +163,7 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
         <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', position: 'sticky', top: 0, backgroundColor: '#FCFAF8', zIndex: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <BookOpen size={20} color="#8B4B6E" />
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1B2A4E' }}>Cấu hình Giáo án giảng dạy</h2>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-navy)' }}>Cấu hình Giáo án giảng dạy</h2>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: '1px solid var(--border-medium)', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-secondary)' }}>
             <X size={16} />
@@ -241,7 +241,7 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Hỗ trợ PDF, DOCX, TXT, PNG/JPG/WebP/TIFF. Tổng nguồn tối đa 20 MB.</span>
             </div>
 
-            <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'white', border: '1px solid var(--border-light)', borderRadius: '12px', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', borderRadius: '12px', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
               <span>Đã chọn {uploadedFiles.length} file</span>
               <span>Tổng dung lượng: {getTotalSize()} KB / 20 MB</span>
             </div>
@@ -250,8 +250,8 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '24px', backgroundColor: 'white', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'center', gap: '12px', borderBottomLeftRadius: '24px', borderBottomRightRadius: '24px' }}>
-          <button onClick={onClose} style={{ padding: '12px 32px', backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '24px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+        <div style={{ padding: '24px', backgroundColor: 'var(--bg-tertiary)', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'center', gap: '12px', borderBottomLeftRadius: '24px', borderBottomRightRadius: '24px' }}>
+          <button onClick={onClose} style={{ padding: '12px 32px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '24px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
             Hủy bỏ
           </button>
           <button 

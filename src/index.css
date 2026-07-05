@@ -28,7 +28,15 @@
   
   --success: #10B981;
   --success-bg: #E6F8F1;
-  
+
+  /* Semantic accents (each has a dark-mode counterpart below) */
+  --text-navy: #1B2A4E;      /* headings / emphasized text */
+  --btn-navy: #1B2A4E;       /* navy buttons with white label */
+  --accent-warm: #F3EAE3;    /* expanded folder row */
+  --accent-green: #E6F0EC;   /* active project row */
+  --accent-amber-bg: #FEF3C7;   /* AI-tokens widget */
+  --accent-amber-text: #D97706;
+
   /* Utilities */
   --radius-sm: 6px;
   --radius-md: 12px;
@@ -62,10 +70,19 @@
   
   --success: #34D399;
   --success-bg: #064E3B;
-  
+
+  --text-navy: #D7DFF5;
+  --btn-navy: #33456F;
+  --accent-warm: #3A322C;
+  --accent-green: #1F3A31;
+  --accent-amber-bg: #423409;
+  --accent-amber-text: #FBBF24;
+
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
   --shadow-premium: 0 8px 24px rgba(0, 0, 0, 0.7);
+
+  color-scheme: dark; /* native inputs, scrollbars, etc. */
 }
 
 html, body {
@@ -149,4 +166,11 @@ html, body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+.animate-spin {
+  animation: wf-spin 1s linear infinite;
+}
+@keyframes wf-spin {
+  to { transform: rotate(360deg); }
 }

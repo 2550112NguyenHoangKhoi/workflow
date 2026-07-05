@@ -4,7 +4,9 @@ import { signInWithGoogle, signOutGoogle, getStoredUser, isAuthConfigured } from
 import PricingModal from '../modals/PricingModal';
 import UserProfileModal from '../modals/UserProfileModal';
 import ProjectCollaborationModal from '../modals/ProjectCollaborationModal';
-import { useLocation, useParams } from 'react-router-dom';
+import ArtifactViewerModal from '../modals/ArtifactViewerModal';
+import NotificationsBell from './NotificationsBell';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 
 // Official multi-color Google "G" mark for the sign-in button.
 const GoogleG = () => (
@@ -23,7 +25,14 @@ const Topbar = () => {
   const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isCollabOpen, setIsCollabOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [usage, setUsage] = useState(null);
+  const [viewArtifactId, setViewArtifactId] = useState(null);
+  const [memberCount, setMemberCount] = useState(1);
 
+  const fmtK = (n) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+
+  const navigate = useNavigate();
   const location = useLocation();
   const match = location.pathname.match(/\/project\/(\d+)/);
   const projectId = match ? match[1] : null;
@@ -37,6 +46,32 @@ const Topbar = () => {
     }
   }, []);
 
+  // Refresh usage each time the account dropdown opens, so numbers stay current.
+  useEffect(() => {
+    if (!menuOpen) return;
+    fetch('http://127.0.0.1:8000/api/usage')
+      .then(res => res.json())
+      .then(setUsage)
+      .catch(() => {});
+  }, [menuOpen]);
+
+  // Notifications open shared exams/docs via this event (bell lives in its own component).
+  useEffect(() => {
+    const onOpen = (e) => setViewArtifactId(e.detail?.id ?? null);
+    window.addEventListener('open-artifact', onOpen);
+    return () => window.removeEventListener('open-artifact', onOpen);
+  }, []);
+
+  // Real member count for the chip (owner + accepted members).
+  useEffect(() => {
+    const target = projectId ? `projects/${projectId}` : documentId ? `documents/${documentId}` : null;
+    if (!target) return;
+    fetch(`http://127.0.0.1:8000/api/${target}/members`)
+      .then(res => res.json())
+      .then(data => setMemberCount((data.members?.length || 0) + 1))
+      .catch(() => setMemberCount(1));
+  }, [projectId, documentId]);
+
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
     setIsDarkMode(newMode);
@@ -45,6 +80,8 @@ const Topbar = () => {
     } else {
       document.documentElement.classList.remove('dark-mode');
     }
+    // Read back in main.jsx before first paint, so the choice survives reloads.
+    localStorage.setItem('workflow_dark_mode', newMode ? '1' : '0');
   };
 
   const handleLogin = async () => {
@@ -75,7 +112,7 @@ const Topbar = () => {
       borderLeft: 'none',
       borderRight: 'none',
       borderTop: 'none',
-      backgroundColor: 'white'
+      backgroundColor: 'var(--bg-tertiary)'
     }}>
       {/* Search Bar */}
       <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
@@ -83,9 +120,16 @@ const Topbar = () => {
           <Search size={18} style={{ 
             position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)'
           }} />
-          <input 
-            type="text" 
-            placeholder="Search material..." 
+          <input
+            type="text"
+            placeholder="Search material..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchQuery.trim()) {
+                navigate(`/documents?q=${encodeURIComponent(searchQuery.trim())}`);
+              }
+            }}
             style={{
               width: '100%', padding: '10px 16px 10px 40px', borderRadius: '24px',
               border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)',
@@ -127,11 +171,11 @@ const Topbar = () => {
         {(projectId || documentId) && (
           <button onClick={() => setIsCollabOpen(true)} style={{ 
             background: 'transparent', border: '1px solid var(--border-light)', borderRadius: '24px', 
-            padding: '6px 12px', cursor: 'pointer', color: '#1B2A4E', display: 'flex', alignItems: 'center', gap: '6px',
+            padding: '6px 12px', cursor: 'pointer', color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '6px',
             fontWeight: 700, fontSize: '0.85rem'
           }} title="Project Members">
             <Users size={16} color="var(--brand-primary)" />
-            1 members
+            {memberCount} members
           </button>
         )}
 
@@ -139,9 +183,7 @@ const Topbar = () => {
           {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
-        <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} title="Notifications">
-          <Bell size={20} />
-        </button>
+        <NotificationsBell />
         
         {/* Google Account */}
         {user ? (
@@ -158,21 +200,21 @@ const Topbar = () => {
                 </div>
               )}
               <div style={{ paddingRight: '8px' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1B2A4E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100px' }}>{user.name || 'Tài khoản'}</div>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-navy)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100px' }}>{user.name || 'Tài khoản'}</div>
               </div>
             </div>
             {menuOpen && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: '200px', backgroundColor: 'white', border: '1px solid var(--border-light)', borderRadius: '12px', boxShadow: 'var(--shadow-md)', overflow: 'hidden', zIndex: 20 }}>
+              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: '200px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', borderRadius: '12px', boxShadow: 'var(--shadow-md)', overflow: 'hidden', zIndex: 20 }}>
                 <div style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1B2A4E' }}>{user.name}</div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-navy)' }}>{user.name}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email}</div>
                 </div>
-                <div style={{ padding: '12px', borderBottom: '1px solid var(--border-light)', backgroundColor: '#FEF3C7' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#D97706', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <div style={{ padding: '12px', borderBottom: '1px solid var(--border-light)', backgroundColor: 'var(--accent-amber-bg)' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-amber-text)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <Sparkles size={14} /> AI TOKENS
                   </div>
-                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#B45309', marginTop: '4px' }}>436.8k còn lại</div>
-                  <div style={{ fontSize: '0.75rem', color: '#D97706' }}>Đã dùng 63.2k (12.65%)</div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--accent-amber-text)', marginTop: '4px' }}>{usage ? fmtK(usage.remaining) : '…'} còn lại</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--accent-amber-text)' }}>Đã dùng {usage ? `${fmtK(usage.used)} (${usage.percent}%)` : '…'}</div>
                 </div>
                 <button onClick={() => { setMenuOpen(false); setIsProfileOpen(true); }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '0.85rem' }}>
                   <User size={16} /> Hồ sơ
@@ -189,8 +231,8 @@ const Topbar = () => {
             title={isAuthConfigured() ? '' : 'Chưa cấu hình VITE_GOOGLE_OAUTH_CLIENT_ID'}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-              padding: '8px 16px', borderRadius: '24px', border: '1px solid var(--border-medium)', backgroundColor: 'white',
-              color: '#1B2A4E', fontWeight: 700, fontSize: '0.85rem',
+              padding: '8px 16px', borderRadius: '24px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-tertiary)',
+              color: 'var(--text-navy)', fontWeight: 700, fontSize: '0.85rem',
               cursor: isAuthConfigured() ? 'pointer' : 'not-allowed', opacity: isAuthConfigured() ? 1 : 0.6
             }}>
             <GoogleG /> Đăng nhập
@@ -198,6 +240,7 @@ const Topbar = () => {
         )}
       </div>
 
+      <ArtifactViewerModal isOpen={viewArtifactId !== null} artifactId={viewArtifactId} onClose={() => setViewArtifactId(null)} />
       <PricingModal isOpen={isPricingOpen} onClose={() => setIsPricingOpen(false)} />
       <UserProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} />
       <ProjectCollaborationModal isOpen={isCollabOpen} onClose={() => setIsCollabOpen(false)} projectId={projectId} documentId={documentId} />

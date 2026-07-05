@@ -83,7 +83,7 @@ const PricingModal = ({ isOpen, onClose }) => {
         </button>
 
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#1B2A4E', margin: '0 0 12px 0' }}>
+          <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-navy)', margin: '0 0 12px 0' }}>
             Nâng cấp Workflow Pro
           </h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>
@@ -94,8 +94,8 @@ const PricingModal = ({ isOpen, onClose }) => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
           {/* Free Tier */}
           <div style={{ border: '2px solid var(--border-light)', borderRadius: '20px', padding: '32px', backgroundColor: 'var(--bg-tertiary)' }}>
-            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1B2A4E', marginBottom: '8px' }}>Gói Cơ bản</div>
-            <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#1B2A4E', marginBottom: '24px' }}>Miễn phí</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '8px' }}>Gói Cơ bản</div>
+            <div style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '24px' }}>Miễn phí</div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '32px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-secondary)' }}><Check size={20} color="var(--success)" /> 1 Dự án (Workspace)</div>
@@ -104,7 +104,7 @@ const PricingModal = ({ isOpen, onClose }) => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-secondary)' }}><Check size={20} color="var(--success)" /> Tính năng Chat cơ bản</div>
             </div>
 
-            <button style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: 'transparent', color: '#1B2A4E', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>
+            <button style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: 'transparent', color: 'var(--text-navy)', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>
               Đang sử dụng
             </button>
           </div>
@@ -116,13 +116,13 @@ const PricingModal = ({ isOpen, onClose }) => {
             </div>
             
             <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--brand-primary)', marginBottom: '8px' }}>Workflow Pro</div>
-            <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#1B2A4E', marginBottom: '24px' }}>99.000đ<span style={{ fontSize: '1rem', color: 'var(--text-muted)', fontWeight: 500 }}>/tháng</span></div>
+            <div style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '24px' }}>99.000đ<span style={{ fontSize: '1rem', color: 'var(--text-muted)', fontWeight: 500 }}>/tháng</span></div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '32px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#1B2A4E', fontWeight: 500 }}><Zap size={20} color="var(--brand-primary)" /> Không giới hạn Dự án</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#1B2A4E', fontWeight: 500 }}><Zap size={20} color="var(--brand-primary)" /> Sử dụng AI không cần API Key</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#1B2A4E', fontWeight: 500 }}><Zap size={20} color="var(--brand-primary)" /> Tạo Giáo án thông minh (AI)</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#1B2A4E', fontWeight: 500 }}><Zap size={20} color="var(--brand-primary)" /> Truy cập sớm tính năng mới</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-navy)', fontWeight: 500 }}><Zap size={20} color="var(--brand-primary)" /> Không giới hạn Dự án</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-navy)', fontWeight: 500 }}><Zap size={20} color="var(--brand-primary)" /> Sử dụng AI không cần API Key</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-navy)', fontWeight: 500 }}><Zap size={20} color="var(--brand-primary)" /> Tạo Giáo án thông minh (AI)</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-navy)', fontWeight: 500 }}><Zap size={20} color="var(--brand-primary)" /> Truy cập sớm tính năng mới</div>
             </div>
 
             <button 

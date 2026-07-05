@@ -155,8 +155,8 @@ def save_chat_message(db: Session, project_id: int = None, role: str = "", conte
     db.refresh(msg)
     return msg
 
-def create_artifact(db: Session, project_id: int = None, type: str = "", title: str = "", content: str = "", document_id: int = None):
-    db_artifact = models.Artifact(project_id=project_id, type=type, title=title, content=content, document_id=document_id)
+def create_artifact(db: Session, project_id: int = None, type: str = "", title: str = "", content: str = "", document_id: int = None, owner_email: str = None):
+    db_artifact = models.Artifact(project_id=project_id, type=type, title=title, content=content, document_id=document_id, owner_email=owner_email)
     db.add(db_artifact)
     db.commit()
     db.refresh(db_artifact)

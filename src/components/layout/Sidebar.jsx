@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { FolderOpen, MessageCircle, Folder, Settings, Zap, FileText, User, LogOut } from 'lucide-react';
+import { FolderOpen, MessageCircle, Folder, Settings, Zap, FileText, User, LogOut, ChevronRight, ChevronDown, PenTool, Brain, BookMarked } from 'lucide-react';
+import { LIBRARY_ROOT, LIBRARY_ROOT_NAME, listChildren } from '../../utils/googleDrive';
 import UserProfileModal from '../modals/UserProfileModal';
 
 const Sidebar = () => {
@@ -14,6 +15,9 @@ const Sidebar = () => {
   const [projects, setProjects] = useState([]);
   const [expandedFolders, setExpandedFolders] = useState({});
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [usage, setUsage] = useState(null);
+
+  const fmtK = (n) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 
   const fetchData = async () => {
     try {
@@ -33,6 +37,10 @@ const Sidebar = () => {
 
   useEffect(() => {
     fetchData();
+    fetch('http://127.0.0.1:8000/api/usage')
+      .then(res => res.json())
+      .then(setUsage)
+      .catch(() => {});
   }, []);
 
   const handleNewProject = async (folderId = null) => {
@@ -69,6 +77,50 @@ const Sidebar = () => {
 
   const toggleFolder = (folderId) => {
     setExpandedFolders(prev => ({ ...prev, [folderId]: !prev[folderId] }));
+  };
+
+  // --- Public Drive library tree (lazy-loaded, mirrors the reference product's sidebar) ---
+  const activeDriveFolder = new URLSearchParams(location.search).get('folder');
+  const [driveTree, setDriveTree] = useState({});      // parentId -> subfolders
+  const [driveExpanded, setDriveExpanded] = useState({ [LIBRARY_ROOT]: false });
+
+  const toggleDriveNode = async (id) => {
+    const opening = !driveExpanded[id];
+    setDriveExpanded(prev => ({ ...prev, [id]: opening }));
+    if (opening && !driveTree[id]) {
+      try {
+        const { folders: subs } = await listChildren(id);
+        setDriveTree(prev => ({ ...prev, [id]: subs }));
+      } catch {
+        setDriveTree(prev => ({ ...prev, [id]: [] }));
+      }
+    }
+  };
+
+  const DriveNode = ({ id, name, depth }) => {
+    const isActive = activeDriveFolder === id;
+    const isOpen = driveExpanded[id];
+    return (
+      <div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 8px', paddingLeft: `${8 + depth * 14}px`,
+          borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: isActive ? 700 : 500,
+          color: isActive ? 'var(--brand-secondary)' : 'var(--text-secondary)',
+          backgroundColor: isActive ? 'var(--accent-green)' : 'transparent'
+        }}>
+          <span onClick={(e) => { e.stopPropagation(); toggleDriveNode(id); }} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          </span>
+          <span onClick={() => navigate(`/documents?folder=${id}`)} style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+            <Folder size={13} style={{ flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase' }}>{name}</span>
+          </span>
+        </div>
+        {isOpen && (driveTree[id] || []).map(sub => (
+          <DriveNode key={sub.id} id={sub.id} name={sub.name} depth={depth + 1} />
+        ))}
+      </div>
+    );
   };
 
 
@@ -110,11 +162,55 @@ const Sidebar = () => {
             <div>Hub tài liệu</div>
           </div>
         </NavLink>
+
+        <NavLink to="/writing" style={({ isActive }) => ({
+          display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px',
+          color: (isActive || location.pathname === '/writing') ? 'var(--bg-tertiary)' : 'var(--text-primary)',
+          backgroundColor: (isActive || location.pathname === '/writing') ? 'var(--brand-primary)' : 'transparent',
+          fontWeight: 600, textDecoration: 'none'
+        })}>
+          <PenTool size={20} />
+          <div>
+            <div>Luyện viết</div>
+          </div>
+        </NavLink>
+
+        <NavLink to="/active-learning" style={({ isActive }) => ({
+          display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px',
+          color: (isActive || location.pathname === '/active-learning') ? 'var(--bg-tertiary)' : 'var(--text-primary)',
+          backgroundColor: (isActive || location.pathname === '/active-learning') ? 'var(--brand-primary)' : 'transparent',
+          fontWeight: 600, textDecoration: 'none'
+        })}>
+          <Brain size={20} />
+          <div>
+            <div>Học chủ động</div>
+          </div>
+        </NavLink>
+
+        <NavLink to="/vocabulary" style={({ isActive }) => ({
+          display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px',
+          color: (isActive || location.pathname === '/vocabulary') ? 'var(--bg-tertiary)' : 'var(--text-primary)',
+          backgroundColor: (isActive || location.pathname === '/vocabulary') ? 'var(--brand-primary)' : 'transparent',
+          fontWeight: 600, textDecoration: 'none'
+        })}>
+          <BookMarked size={20} />
+          <div>
+            <div>Từ vựng</div>
+          </div>
+        </NavLink>
       </div>
 
       {/* Contextual Sections */}
       {isDocumentView ? (
         <>
+          {/* Public Drive library tree */}
+          <div style={{ padding: '0 24px', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>THƯ VIỆN DRIVE</h3>
+          </div>
+          <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', marginBottom: '20px', padding: '0 12px', maxHeight: '220px', overflowY: 'auto' }}>
+            <DriveNode id={LIBRARY_ROOT} name={LIBRARY_ROOT_NAME} depth={0} />
+          </div>
+
           {/* Drive Folders */}
       <div style={{ padding: '0 24px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>THƯ MỤC DRIVE</h3>
@@ -134,7 +230,7 @@ const Sidebar = () => {
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px',
                   borderRadius: '8px', color: 'var(--text-secondary)',
-                  backgroundColor: isExpanded ? '#F3EAE3' : 'transparent',
+                  backgroundColor: isExpanded ? 'var(--accent-warm)' : 'transparent',
                   fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer',
                   borderLeft: isExpanded ? '3px solid var(--brand-secondary)' : '3px solid transparent'
                 }}
@@ -163,7 +259,7 @@ const Sidebar = () => {
                         style={{
                           display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 16px',
                           borderRadius: '8px', color: isActive ? 'var(--brand-secondary)' : 'var(--text-secondary)', 
-                          backgroundColor: isActive ? '#E6F0EC' : 'transparent',
+                          backgroundColor: isActive ? 'var(--accent-green)' : 'transparent',
                           fontWeight: isActive ? 600 : 500, fontSize: '0.875rem', cursor: 'pointer'
                         }}
                       >
@@ -196,7 +292,7 @@ const Sidebar = () => {
                 style={{
                   display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px',
                   borderRadius: '8px', color: isActive ? 'var(--brand-secondary)' : 'var(--text-secondary)', 
-                  backgroundColor: isActive ? '#E6F0EC' : 'transparent',
+                  backgroundColor: isActive ? 'var(--accent-green)' : 'transparent',
                   fontWeight: isActive ? 600 : 500, fontSize: '0.875rem', cursor: 'pointer'
                 }}
               >
@@ -227,7 +323,7 @@ const Sidebar = () => {
                   style={{
                     display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px',
                     borderRadius: '8px', color: isActive ? 'var(--brand-secondary)' : 'var(--text-secondary)', 
-                    backgroundColor: isActive ? '#E6F0EC' : 'transparent',
+                    backgroundColor: isActive ? 'var(--accent-green)' : 'transparent',
                     fontWeight: isActive ? 600 : 500, fontSize: '0.875rem', cursor: 'pointer'
                   }}
                 >
@@ -243,12 +339,12 @@ const Sidebar = () => {
       {/* Bottom section */}
       <div style={{ padding: '16px', borderTop: '1px solid var(--border-light)', marginTop: 'auto' }}>
         <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '12px', padding: '16px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)', position: 'relative' }}>
-          <div style={{ position: 'absolute', top: '-10px', left: '-10px', backgroundColor: '#FEF3C7', color: '#D97706', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ position: 'absolute', top: '-10px', left: '-10px', backgroundColor: 'var(--accent-amber-bg)', color: 'var(--accent-amber-text)', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Zap size={14} />
           </div>
           <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px' }}>AI TOKENS</div>
-          <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>500.0k còn lại</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Đã dùng 0 (0.00%)</div>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{usage ? fmtK(usage.remaining) : '…'} còn lại</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Đã dùng {usage ? `${fmtK(usage.used)} (${usage.percent}%)` : '…'}</div>
         </div>
 
         <NavLink to="/settings" style={({ isActive }) => ({

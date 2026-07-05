@@ -19,20 +19,40 @@ const Settings = () => {
   const [engineMode, setEngineMode] = useState('ai'); // 'ai' | 'local' | 'algorithm'
   const [localStatus, setLocalStatus] = useState(null);
   const [checkingLocal, setCheckingLocal] = useState(false);
+  const [localRecommendation, setLocalRecommendation] = useState(null);
+  const [selectedLocalModel, setSelectedLocalModel] = useState('');
 
   useEffect(() => {
     const savedKey = localStorage.getItem('workflow_gemini_key');
     const savedMode = localStorage.getItem('workflow_engine_mode');
+    const savedApiKey = localStorage.getItem('workflow_api_key');
     if (savedKey) setApiKey(savedKey);
     if (savedMode) setEngineMode(savedMode);
+    if (savedApiKey && savedApiKey.startsWith('LOCAL:')) {
+      setSelectedLocalModel(savedApiKey.replace('LOCAL:', ''));
+    }
   }, []);
+
+  useEffect(() => {
+    if (engineMode === 'local' && !localRecommendation) {
+      fetch('http://127.0.0.1:8000/api/engine/recommend_local')
+        .then(res => res.json())
+        .then(data => {
+          setLocalRecommendation(data);
+          if (!selectedLocalModel) {
+            setSelectedLocalModel(data.recommended_model);
+          }
+        })
+        .catch(err => console.error("Could not fetch recommendation:", err));
+    }
+  }, [engineMode]);
 
   const handleSave = () => {
     const key = apiKey.trim();
     localStorage.setItem('workflow_gemini_key', key);
     localStorage.setItem('workflow_engine_mode', engineMode);
     // Encode the engine choice into the signal every API call already sends.
-    const signal = engineMode === 'algorithm' ? 'OFFLINE' : engineMode === 'local' ? 'LOCAL' : key;
+    const signal = engineMode === 'algorithm' ? 'OFFLINE' : engineMode === 'local' ? (selectedLocalModel ? `LOCAL:${selectedLocalModel}` : 'LOCAL') : key;
     localStorage.setItem('workflow_api_key', signal);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
@@ -42,7 +62,8 @@ const Settings = () => {
     setCheckingLocal(true);
     setLocalStatus(null);
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/engine/local_status');
+      const url = selectedLocalModel ? `http://127.0.0.1:8000/api/engine/local_status?model_name=${encodeURIComponent(selectedLocalModel)}` : 'http://127.0.0.1:8000/api/engine/local_status';
+      const res = await fetch(url);
       setLocalStatus(await res.json());
     } catch {
       setLocalStatus({ available: false, error: 'Không kết nối được backend (cổng 8000).' });
@@ -59,16 +80,16 @@ const Settings = () => {
   return (
     <div className="animate-fade-in" style={{ maxWidth: '800px', margin: '0 auto', padding: '48px 24px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
       <div>
-        <h1 style={{ fontSize: '2rem', fontWeight: 900, color: '#1B2A4E', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+        <h1 style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
           <SettingsIcon size={32} color="#8A334B" />
           Cài đặt hệ thống
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>Cấu hình bộ máy AI cho mọi tính năng học tập của hệ thống.</p>
       </div>
 
-      <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '16px', padding: '32px', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '24px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1B2A4E', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Server size={20} />
             Mô hình AI Mặc định
           </h3>
@@ -77,7 +98,7 @@ const Settings = () => {
           </p>
         </div>
 
-        {/* Engine选择 — 3 cards */}
+        {/* Engine picker — 3 cards */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '28px' }}>
           {ENGINES.map((e) => (
             <div key={e.id} onClick={() => setEngineMode(e.id)} style={{
@@ -85,7 +106,7 @@ const Settings = () => {
               backgroundColor: engineMode === e.id ? e.bg : 'white',
               padding: '20px', borderRadius: '16px', cursor: 'pointer', transition: 'all 0.2s'
             }}>
-              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#1B2A4E', marginBottom: '6px' }}>{e.title}</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '6px' }}>{e.title}</div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{e.desc}</div>
             </div>
           ))}
@@ -96,24 +117,26 @@ const Settings = () => {
         {/* === Cloud API (Gemini) === */}
         {engineMode === 'ai' && (
           <div>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#1B2A4E', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Key size={22} color="#8A334B" /> Google Gemini API Key
             </h2>
             <div style={{ backgroundColor: '#FFFBEB', borderLeft: '4px solid #F59E0B', padding: '20px', borderRadius: '0 12px 12px 0', marginBottom: '20px' }}>
               <h3 style={{ fontWeight: 700, color: '#B45309', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem' }}>
                 <ShieldAlert size={18} /> Cách lấy API Key miễn phí:
               </h3>
-              <ol style={{ paddingLeft: '24px', color: '#92400E', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.9rem', lineHeight: '1.6', margin: 0 }}>
+              <ol style={{ paddingLeft: '24px', color: '#92400E', display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.9rem', lineHeight: '1.6', margin: 0 }}>
                 <li>Truy cập <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" style={{ color: '#8A334B', textDecoration: 'underline', fontWeight: 600 }}>Google AI Studio → API Keys</a>.</li>
-                <li>Đăng nhập bằng tài khoản Google của bạn.</li>
-                <li>Nhấn <strong>"Create API Key"</strong> → chọn project (hoặc tạo mới).</li>
-                <li>Copy mã bắt đầu bằng <code style={{ backgroundColor: 'white', padding: '2px 8px', borderRadius: '6px', border: '1px solid #FCD34D', color: '#1B2A4E', fontWeight: 'bold' }}>AIzaSy...</code></li>
-                <li>Dán vào ô bên dưới và nhấn <strong>Lưu</strong>.</li>
+                <li>Đăng nhập bằng tài khoản Google của bạn. Đảm bảo bạn đã đồng ý với các điều khoản sử dụng của Google AI Studio nếu đây là lần đầu truy cập.</li>
+                <li>Nhấn nút <strong>"Create API Key"</strong> màu xanh ở góc trên bên trái màn hình.</li>
+                <li>Hệ thống sẽ yêu cầu chọn một dự án (Project). Bạn có thể chọn project có sẵn hoặc nhấn <strong>"Create API key in a new project"</strong>.</li>
+                <li>Sau khi tạo thành công, một bảng chứa mã API Key sẽ hiện ra. Copy toàn bộ đoạn mã (thường bắt đầu bằng <code style={{ backgroundColor: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: '6px', border: '1px solid #FCD34D', color: 'var(--text-navy)', fontWeight: 'bold' }}>AIzaSy...</code>)</li>
+                <li>Dán đoạn mã vừa copy vào ô "Mã API Key của bạn" ở bên dưới.</li>
+                <li>Nhấn nút <strong>Lưu cài đặt</strong> ở cuối trang. Hệ thống sẽ ngay lập tức kết nối và sử dụng Gemini cho toàn bộ tính năng học tập. <br/><span style={{ fontSize: '0.85rem', opacity: 0.9 }}>* Lưu ý: Gemini API hiện tại cung cấp gói miễn phí (Free Tier) rất hào phóng, đủ để sử dụng thoải mái cho mục đích cá nhân.</span></li>
               </ol>
             </div>
-            <label style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1B2A4E' }}>Mã API Key của bạn</label>
+            <label style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-navy)' }}>Mã API Key của bạn</label>
             <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="AIzaSy..........................."
-              style={{ width: '100%', marginTop: '8px', padding: '16px', borderRadius: '16px', border: '2px solid var(--border-light)', color: '#1B2A4E', fontFamily: 'monospace', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }} />
+              style={{ width: '100%', marginTop: '8px', padding: '16px', borderRadius: '16px', border: '2px solid var(--border-light)', color: 'var(--text-navy)', fontFamily: 'monospace', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }} />
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px' }}>Key lưu trên thiết bị của bạn và chỉ gửi tới máy chủ Google.</p>
           </div>
         )}
@@ -121,18 +144,53 @@ const Settings = () => {
         {/* === Local model (Ollama) === */}
         {engineMode === 'local' && (
           <div>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#1B2A4E', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Download size={22} color="#2563EB" /> Tải & chạy model AI cục bộ
             </h2>
             <div style={{ backgroundColor: '#EFF6FF', borderLeft: '4px solid #2563EB', padding: '20px', borderRadius: '0 12px 12px 0', marginBottom: '20px' }}>
-              <ol style={{ paddingLeft: '24px', color: '#1E40AF', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.9rem', lineHeight: '1.6', margin: 0 }}>
-                <li>Cài <a href="https://ollama.com/download" target="_blank" rel="noreferrer" style={{ color: '#1D4ED8', textDecoration: 'underline', fontWeight: 600 }}>Ollama</a> (macOS / Windows / Linux).</li>
-                <li>Mở Terminal và tải một model về máy (≈2GB):
-                  {codeBox('ollama pull llama3.2')}
-                  <span style={{ fontSize: '0.82rem' }}>Có thể thay bằng <code>qwen2.5</code>, <code>mistral</code>, <code>phi3</code>… Đổi model qua biến môi trường <code>OLLAMA_MODEL</code>.</span>
+              {localRecommendation && (
+                <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#DBEAFE', borderRadius: '12px', border: '1px solid #BFDBFE' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#1E40AF', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={18} /> Gợi ý cho máy của bạn
+                  </h3>
+                  <p style={{ color: '#1E3A8A', fontSize: '0.9rem', lineHeight: 1.5, margin: 0 }}>
+                    {localRecommendation.reasoning}
+                  </p>
+                </div>
+              )}
+              
+              <ol style={{ paddingLeft: '24px', color: '#1E40AF', display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.9rem', lineHeight: '1.6', margin: 0 }}>
+                <li>Truy cập trang chủ của <a href="https://ollama.com/download" target="_blank" rel="noreferrer" style={{ color: '#1D4ED8', textDecoration: 'underline', fontWeight: 600 }}>Ollama</a> và tải bản cài đặt tương ứng với hệ điều hành của bạn (macOS / Windows / Linux). Tiến hành cài đặt như các phần mềm thông thường.</li>
+                <li>Sau khi cài đặt xong, hãy chạy phần mềm Ollama (bạn sẽ thấy biểu tượng Ollama xuất hiện ở thanh trạng thái hoặc taskbar).</li>
+                <li>Mở ứng dụng <strong>Terminal</strong> (trên macOS/Linux) hoặc <strong>Command Prompt/PowerShell</strong> (trên Windows).</li>
+                <li>Copy lệnh dưới đây và dán vào Terminal để tải model AI về máy (Quá trình tải có thể mất từ 5-15 phút tùy thuộc vào tốc độ mạng, dung lượng thường từ 2GB đến 8GB):
+                  {codeBox(`ollama pull ${selectedLocalModel || 'gemma2:9b'}`)}
+                  <span style={{ fontSize: '0.82rem' }}>* Lưu ý: Lệnh này sẽ tự động thay đổi dựa trên model bạn chọn ở danh sách bên dưới.</span>
                 </li>
-                <li>Ollama tự chạy ở <code>http://127.0.0.1:11434</code>. Bấm <strong>Kiểm tra</strong> để xác nhận.</li>
+                <li>Chờ đến khi Terminal chạy xong và báo "success". Lúc này Ollama đã tự động lưu trữ model và chạy ngầm ở địa chỉ <code>http://127.0.0.1:11434</code>.</li>
+                <li>Quay lại màn hình này, cuộn xuống và nhấn nút <strong>Kiểm tra model cục bộ</strong> để ứng dụng quét xác nhận model đã sẵn sàng, sau đó nhấn <strong>Lưu cài đặt</strong>.</li>
               </ol>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-navy)', display: 'block', marginBottom: '8px' }}>Chọn Model AI</label>
+              <select 
+                value={selectedLocalModel}
+                onChange={(e) => setSelectedLocalModel(e.target.value)}
+                style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '2px solid var(--border-light)', fontSize: '1rem', outline: 'none', backgroundColor: 'white', color: 'var(--text-navy)', appearance: 'auto' }}
+              >
+                <option value="gemma2">gemma2 (Gợi ý cho máy &gt; 8GB RAM)</option>
+                <option value="gemma2:2b">gemma2:2b (Nhẹ, máy &lt; 8GB RAM)</option>
+                <option value="qwen2.5:14b">qwen2.5:14b (Siêu tốt, máy &gt; 16GB RAM)</option>
+                <option value="qwen2.5">qwen2.5 (7B - Cân bằng)</option>
+                <option value="qwen2.5:3b">qwen2.5:3b (Nhẹ)</option>
+                <option value="llama3.1">llama3.1 (8B)</option>
+                <option value="llama3.2">llama3.2 (3B)</option>
+                <option value="mistral">mistral (7B)</option>
+                {selectedLocalModel && !["gemma2", "gemma2:2b", "qwen2.5:14b", "qwen2.5", "qwen2.5:3b", "llama3.1", "llama3.2", "mistral"].includes(selectedLocalModel) && (
+                  <option value={selectedLocalModel}>{selectedLocalModel} (Tùy chỉnh)</option>
+                )}
+              </select>
             </div>
 
             <button onClick={checkLocal} disabled={checkingLocal} style={{

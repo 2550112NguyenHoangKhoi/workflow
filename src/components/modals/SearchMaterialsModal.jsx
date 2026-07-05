@@ -105,7 +105,7 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
         {/* Header */}
         <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1B2A4E', margin: 0 }}>Search learning materials</h2>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-navy)', margin: 0 }}>Search learning materials</h2>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Choose links to add, or preview them first in a new tab.</div>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
@@ -196,11 +196,11 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
                   })}
                 </div>
               ) : hasSearched ? (
-                <div style={{ border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '48px 24px', textAlign: 'center', backgroundColor: 'white', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                <div style={{ border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '48px 24px', textAlign: 'center', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                   Không tìm thấy kết quả nào đủ chất lượng. Vui lòng thử từ khóa khác.
                 </div>
               ) : (
-                <div style={{ border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '48px 24px', textAlign: 'center', backgroundColor: 'white', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                <div style={{ border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '48px 24px', textAlign: 'center', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                   Nhập từ khóa rồi bấm Search để lấy tài liệu thật từ API.
                 </div>
               )}
@@ -208,7 +208,7 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
 
             {/* Right side: iframe preview */}
             {previewUrl && (
-              <div style={{ flex: 1, border: '1px solid var(--border-medium)', borderRadius: '16px', overflow: 'hidden', backgroundColor: 'white', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ flex: 1, border: '1px solid var(--border-medium)', borderRadius: '16px', overflow: 'hidden', backgroundColor: 'var(--bg-tertiary)', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '12px', borderBottom: '1px solid var(--border-light)', backgroundColor: '#F9F9F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }}>
                     Previewing: <a href={previewUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-primary)', textDecoration: 'none' }}>{previewUrl}</a>
@@ -231,7 +231,7 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
 
         {/* Footer */}
         <div style={{ padding: '24px', display: 'flex', justifyContent: 'flex-end', gap: '12px', flexShrink: 0, borderTop: '1px solid var(--border-light)' }}>
-          <button onClick={onClose} style={{ padding: '10px 24px', backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '20px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+          <button onClick={onClose} style={{ padding: '10px 24px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '20px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
             Cancel
           </button>
           <button 

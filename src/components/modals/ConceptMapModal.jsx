@@ -130,7 +130,7 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
           borderRadius: '8px',
           padding: '10px',
           fontWeight: 600,
-          color: '#1B2A4E',
+          color: 'var(--text-navy)',
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
         }
       }));
@@ -185,7 +185,7 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
       backdropFilter: 'blur(4px)'
     }}>
       <div style={{
-        backgroundColor: 'white', borderRadius: '24px', width: '90%', maxWidth: '1000px', height: '80vh',
+        backgroundColor: 'var(--bg-tertiary)', borderRadius: '24px', width: '90%', maxWidth: '1000px', height: '80vh',
         display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)'
       }}>
         {/* Header */}
@@ -199,7 +199,7 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
               <Network color="white" size={24} />
             </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#1B2A4E', fontWeight: 800 }}>Semantic Concept Map</h2>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-navy)', fontWeight: 800 }}>Semantic Concept Map</h2>
               <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Generated locally via TF-IDF clustering</p>
             </div>
           </div>
@@ -245,13 +245,13 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
           {selectedNode && (
             <div className="animate-fade-in" style={{
               position: 'absolute', bottom: '24px', left: '24px', right: '24px',
-              backgroundColor: 'white', borderRadius: '16px', padding: '20px',
+              backgroundColor: 'var(--bg-tertiary)', borderRadius: '16px', padding: '20px',
               boxShadow: '0 10px 25px -5px rgba(0,0,0,0.2), 0 8px 10px -6px rgba(0,0,0,0.1)',
               border: '1px solid var(--border-medium)', zIndex: 10,
               display: 'flex', flexDirection: 'column', gap: '8px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#1B2A4E' }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-navy)' }}>
                   {selectedNode.data.label}
                 </h3>
                 <button onClick={() => setSelectedNode(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>

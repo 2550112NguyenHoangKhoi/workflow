@@ -92,7 +92,7 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ backgroundColor: '#8A334B', padding: '10px', borderRadius: '12px' }}><FolderUp color="white" size={22} /></div>
             <div>
-              <h2 style={{ fontSize: '1.2rem', fontWeight: 900, color: '#1B2A4E', margin: 0 }}>Nhập tài liệu hàng loạt</h2>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 900, color: 'var(--text-navy)', margin: 0 }}>Nhập tài liệu hàng loạt</h2>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>Từ thư mục máy tính hoặc Google Drive</p>
             </div>
           </div>
@@ -109,7 +109,7 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
 
           {/* === Section 1: local folder bulk import (works instantly) === */}
           <div style={{ border: '2px solid var(--brand-secondary)', borderRadius: '16px', padding: '20px', backgroundColor: '#F0F7F4', marginBottom: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800, color: '#1B2A4E', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '6px' }}>
               <FolderUp size={18} color="var(--brand-secondary)" /> Tải lên cả thư mục
               <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--brand-secondary)', backgroundColor: '#D1FAE5', padding: '2px 8px', borderRadius: '10px' }}>KHÔNG CẦN ĐĂNG NHẬP</span>
             </div>
@@ -148,7 +148,7 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
             <div style={{ textAlign: 'center', padding: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Chưa cấu hình OAuth Client ID.</div>
           ) : !connected ? (
             <div style={{ textAlign: 'center', padding: '8px 16px' }}>
-              <button onClick={handleConnect} style={{ padding: '12px 24px', backgroundColor: 'white', color: 'var(--brand-primary)', border: '1px solid var(--brand-primary)', borderRadius: '12px', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              <button onClick={handleConnect} style={{ padding: '12px 24px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--brand-primary)', border: '1px solid var(--brand-primary)', borderRadius: '12px', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                 <Cloud size={18} /> Kết nối Google Drive
               </button>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>Cần thêm email của bạn vào "Test users" trong Google Cloud Console.</div>
@@ -170,13 +170,13 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {folders.map((f) => (
-                    <button key={f.id} onClick={() => openFolder(f)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', backgroundColor: 'white', border: '1px solid var(--border-light)', borderRadius: '12px', cursor: 'pointer', textAlign: 'left' }}>
-                      <Folder size={18} color="var(--brand-primary)" /><span style={{ flex: 1, fontWeight: 600, color: '#1B2A4E', fontSize: '0.9rem' }}>{f.name}</span><ChevronRight size={16} color="var(--text-muted)" />
+                    <button key={f.id} onClick={() => openFolder(f)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', borderRadius: '12px', cursor: 'pointer', textAlign: 'left' }}>
+                      <Folder size={18} color="var(--brand-primary)" /><span style={{ flex: 1, fontWeight: 600, color: 'var(--text-navy)', fontSize: '0.9rem' }}>{f.name}</span><ChevronRight size={16} color="var(--text-muted)" />
                     </button>
                   ))}
                   {files.map((f) => (
-                    <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', backgroundColor: 'white', border: '1px solid var(--border-light)', borderRadius: '12px' }}>
-                      <FileText size={18} color="var(--text-muted)" /><span style={{ flex: 1, color: '#1B2A4E', fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                    <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', borderRadius: '12px' }}>
+                      <FileText size={18} color="var(--text-muted)" /><span style={{ flex: 1, color: 'var(--text-navy)', fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
                       {importing[f.id] === 'done' ? (
                         <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--success)', fontSize: '0.8rem', fontWeight: 700 }}><CheckCircle2 size={16} /> Đã nhập</span>
                       ) : (

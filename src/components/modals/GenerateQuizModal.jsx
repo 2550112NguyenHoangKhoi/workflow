@@ -35,12 +35,12 @@ const GenerateQuizModal = ({ isOpen, onClose, document, onGenerate }) => {
 
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="animate-fade-in" style={{ backgroundColor: 'white', borderRadius: '16px', width: '500px', maxWidth: '90%', padding: '24px', position: 'relative', boxShadow: 'var(--shadow-lg)' }}>
+      <div className="animate-fade-in" style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '16px', width: '500px', maxWidth: '90%', padding: '24px', position: 'relative', boxShadow: 'var(--shadow-lg)' }}>
         <button onClick={onClose} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
           <X size={20} />
         </button>
         
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1B2A4E', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
           <Sparkles size={24} color="#8A334B" />
           Tạo Đề Từ Tài Liệu
         </h2>
@@ -48,13 +48,13 @@ const GenerateQuizModal = ({ isOpen, onClose, document, onGenerate }) => {
         <div style={{ padding: '16px', backgroundColor: '#F8F9FA', borderRadius: '12px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <FileText size={24} color="#3B6B59" />
           <div>
-            <div style={{ fontWeight: 600, color: '#1B2A4E' }}>{document.filename}</div>
+            <div style={{ fontWeight: 600, color: 'var(--text-navy)' }}>{document.filename}</div>
             <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{document.page_count ? `${document.page_count} trang` : 'Không xác định số trang'}</div>
           </div>
         </div>
 
         <div style={{ marginBottom: '24px' }}>
-          <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1B2A4E', marginBottom: '8px' }}>
+          <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-navy)', marginBottom: '8px' }}>
             Trang muốn tạo đề (Để trống sẽ chọn toàn bộ)
           </label>
           <input 

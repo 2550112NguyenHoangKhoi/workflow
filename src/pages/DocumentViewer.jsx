@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useOutletContext } from 'react-router-dom';
 import { Users, ArrowRight, BrainCircuit, FileText, Sparkles, MessageCircle, Settings, FileSearch, PenTool, LayoutTemplate, Briefcase, Languages, Network } from 'lucide-react';
+import PdfViewer from '../components/PdfViewer';
 import ProjectCollaborationModal from '../components/modals/ProjectCollaborationModal';
 import CreateExamModal from '../components/modals/CreateExamModal';
 import ConceptMapModal from '../components/modals/ConceptMapModal';
@@ -37,6 +38,8 @@ const DocumentViewer = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  // 'omiguide' = persona-driven tutor; 'main' = plain AI chat (no persona prompt).
+  const [chatMode, setChatMode] = useState('omiguide');
   const threadEndRef = useRef(null);
 
   // Fetch documents with filtering if project route
@@ -141,7 +144,7 @@ const DocumentViewer = () => {
     const payload = {
       message: content,
       context: activeDoc ? activeDoc.content.slice(0, 6000) : '',
-      persona: selectedPersona
+      persona: chatMode === 'omiguide' ? selectedPersona : null
     };
     
     if (isProjectRoute && id) {
@@ -182,10 +185,8 @@ const DocumentViewer = () => {
   const actionPills = [
     "Tạo quiz nhanh",
     "Tạo flashcard",
-    "Giải thích lại đơn giản",
-    "Cho ví dụ thực tế",
-    "Tóm tắt tài liệu này",
-    "Các ý chính là gì?"
+    "Giải thích lại",
+    "Cho ví dụ"
   ];
 
   return (
@@ -197,13 +198,13 @@ const DocumentViewer = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--brand-primary)', fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.05em', marginBottom: '8px' }}>
             <span style={{ fontSize: '1rem' }}>✧</span> THƯ VIỆN CÁ NHÂN
           </div>
-          <h2 style={{ fontSize: '2rem', fontWeight: 900, color: '#1B2A4E', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <h2 style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '12px' }}>
             {activeDoc ? activeDoc.filename : "Thư viện trống"}
             {documents.length > 0 && (
               <select
                 value={activeDocId || ''}
                 onChange={(e) => { setActiveDocId(Number(e.target.value)); setMessages([]); }}
-                style={{ fontSize: '1rem', padding: '4px 8px', borderRadius: '8px', border: '1px solid var(--border-medium)', color: '#1B2A4E', fontWeight: 600, outline: 'none' }}
+                style={{ fontSize: '1rem', padding: '4px 8px', borderRadius: '8px', border: '1px solid var(--border-medium)', color: 'var(--text-navy)', fontWeight: 600, outline: 'none' }}
               >
                 {documents.map(d => (
                   <option key={d.id} value={d.id}>{d.filename}</option>
@@ -231,9 +232,9 @@ const DocumentViewer = () => {
           <button 
             onClick={() => setIsCollabOpen(true)}
             style={{ 
-              backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '20px', 
+              backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '20px', 
               padding: '6px 16px', display: 'flex', alignItems: 'center', gap: '8px', 
-              fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', color: '#1B2A4E' 
+              fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', color: 'var(--text-navy)' 
             }}
           >
             <Users size={16} color="var(--brand-primary)" /> 1 members
@@ -272,10 +273,10 @@ const DocumentViewer = () => {
                           </button>
                         </div>
                       </div>
-                      <iframe src={`http://127.0.0.1:8000/api/documents/${activeDoc.id}/file#view=FitH`} style={{ width: '100%', height: '100%', border: 'none', flex: 1 }} title={activeDoc.filename} />
+                      <PdfViewer url={`http://127.0.0.1:8000/api/documents/${activeDoc.id}/file`} />
                     </div>
                   ) : (
-                    <div className="markdown-body" style={{ flex: 1, backgroundColor: 'white', padding: '32px', borderRadius: '16px', border: '1px solid var(--border-medium)' }}>
+                    <div className="markdown-body" style={{ flex: 1, backgroundColor: 'var(--bg-tertiary)', padding: '32px', borderRadius: '16px', border: '1px solid var(--border-medium)' }}>
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
                         rehypePlugins={[rehypeKatex]}
@@ -293,6 +294,20 @@ const DocumentViewer = () => {
           
           {/* Chat Panel */}
           <>
+              {/* Chat mode toggle — Chat chính (plain AI) vs OmiGuide (persona tutor) */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 24px 0' }}>
+                <div style={{ display: 'flex', gap: '4px', backgroundColor: '#E5E7EB', padding: '4px', borderRadius: '24px' }}>
+                  {[['main', 'Chat chính'], ['omiguide', 'OmiGuide']].map(([mode, label]) => (
+                    <button key={mode} onClick={() => setChatMode(mode)} style={{
+                      backgroundColor: chatMode === mode ? 'var(--brand-primary)' : 'transparent',
+                      border: 'none', borderRadius: '20px', padding: '6px 16px', fontSize: '0.8rem',
+                      fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
+                      color: chatMode === mode ? 'white' : '#6B7280',
+                      boxShadow: chatMode === mode ? 'var(--shadow-sm)' : 'none'
+                    }}>{label}</button>
+                  ))}
+                </div>
+              </div>
               {/* Chat Messages */}
               <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {(isProjectRoute && !activeDoc && messages.length === 0) && (
@@ -302,10 +317,11 @@ const DocumentViewer = () => {
                       <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 600 }}>0 sources attached</span>
                       <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 600 }}>No roadmap yet</span>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', backgroundColor: '#E5E7EB', padding: '4px', borderRadius: '24px' }}>
-                      <button style={{ backgroundColor: 'white', border: 'none', borderRadius: '20px', padding: '6px 16px', fontSize: '0.85rem', fontWeight: 700, color: '#1B2A4E', boxShadow: 'var(--shadow-sm)' }}>Chat chính</button>
-                      <button style={{ backgroundColor: 'transparent', border: 'none', borderRadius: '20px', padding: '6px 16px', fontSize: '0.85rem', fontWeight: 600, color: '#6B7280' }}>Workflow</button>
-                    </div>
+                    <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', maxWidth: '420px', textAlign: 'center', margin: 0 }}>
+                      {chatMode === 'omiguide'
+                        ? 'OmiGuide dạy kèm theo persona đã chọn trong Studio, bám sát giáo án.'
+                        : 'Chat chính hỏi đáp trực tiếp với AI trên nguồn tài liệu của dự án.'}
+                    </p>
                   </div>
                 )}
                 {messages.map((msg, idx) => (
@@ -353,8 +369,8 @@ const DocumentViewer = () => {
                             { label: 'Tạo flashcard', action: () => setIsFlashcardOpen(true) }
                           ].map(pill => (
                             <button key={pill.label} onClick={pill.action} style={{
-                              backgroundColor: 'white', border: '1px solid #D6C5B3', borderRadius: '20px',
-                              padding: '5px 14px', fontSize: '0.8rem', fontWeight: 600, color: '#1B2A4E',
+                              backgroundColor: 'var(--bg-tertiary)', border: '1px solid #D6C5B3', borderRadius: '20px',
+                              padding: '5px 14px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-navy)',
                               cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.2s'
                             }}>
                               {pill.label}
@@ -367,7 +383,7 @@ const DocumentViewer = () => {
                 ))}
                 {isTyping && (
                   <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                    <div style={{ backgroundColor: 'white', border: '1px solid var(--border-light)', padding: '12px 16px', borderRadius: '16px 16px 16px 4px', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                    <div style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', padding: '12px 16px', borderRadius: '16px 16px 16px 4px', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.9rem' }}>
                       Workflow đang suy nghĩ...
                     </div>
                   </div>
@@ -376,30 +392,11 @@ const DocumentViewer = () => {
               </div>
               {/* Chat Input */}
               <div style={{ padding: '16px 24px', borderTop: '1px solid #E5E7EB', backgroundColor: '#FAFAF9' }}>
-                {/* Tool Pills */}
-                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-start', marginBottom: '8px', flexWrap: 'wrap' }}>
-                  {[
-                    { label: 'Trắc nghiệm', icon: '📝', onClick: () => setIsExamModalOpen(true) },
-                    { label: 'Flashcard', icon: '🧠', onClick: () => setIsFlashcardOpen(true) },
-                    { label: 'Sơ đồ tư duy', icon: '🔗', onClick: () => setIsConceptMapOpen(true) },
-                    { label: 'Tài liệu học', icon: '📄', onClick: () => setIsStudyDocOpen(true) },
-                    { label: 'Giáo án', icon: '📋', onClick: () => setIsLessonPlanOpen(true) },
-                    { label: 'Smart Notes', icon: '✨', onClick: () => setIsSmartNotesOpen(true) }
-                  ].map(tool => (
-                    <button key={tool.label} onClick={tool.onClick} style={{
-                      backgroundColor: '#FDF8F5', border: '1px solid #D6C5B3', borderRadius: '20px', padding: '5px 12px',
-                      fontSize: '0.75rem', fontWeight: 600, color: '#8A334C', cursor: 'pointer',
-                      whiteSpace: 'nowrap', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '4px'
-                    }}>
-                      <span>{tool.icon}</span> {tool.label}
-                    </button>
-                  ))}
-                </div>
-                {/* Chat Action Pills */}
+                {/* Action Pills — sends prompt directly to chat like Workflow */}
                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-start', marginBottom: '12px', flexWrap: 'wrap' }}>
                   {actionPills.map(pill => (
                     <button key={pill} onClick={() => sendMessage(pill)} disabled={!activeDoc || isTyping} style={{
-                      backgroundColor: 'white', border: '1px solid #D6C5B3', borderRadius: '20px', padding: '6px 14px',
+                      backgroundColor: 'var(--bg-tertiary)', border: '1px solid #D6C5B3', borderRadius: '20px', padding: '6px 14px',
                       fontSize: '0.8rem', fontWeight: 600, color: '#1F2937', cursor: (!activeDoc || isTyping) ? 'not-allowed' : 'pointer',
                       whiteSpace: 'nowrap', opacity: (!activeDoc || isTyping) ? 0.5 : 1, transition: 'all 0.2s'
                     }}>
@@ -408,7 +405,7 @@ const DocumentViewer = () => {
                   ))}
                 </div>
                 {/* Input Bar */}
-                <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #D6C5B3', display: 'flex', alignItems: 'center', padding: '6px 6px 6px 16px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '24px', border: '1px solid #D6C5B3', display: 'flex', alignItems: 'center', padding: '6px 6px 6px 16px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
                   <input
                     type="text"
                     value={input}

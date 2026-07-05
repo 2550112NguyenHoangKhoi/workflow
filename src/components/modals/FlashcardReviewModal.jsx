@@ -171,7 +171,7 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
         {/* Header */}
         <div style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)' }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.2rem', color: '#1B2A4E', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-navy)', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Sparkles size={18} color="var(--brand-primary)" /> Flashcards
             </h2>
             <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{activeDoc?.filename || 'Spaced Repetition (SM-2)'}</p>
@@ -179,7 +179,7 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {cards.length > 0 && !done && (
               <>
-                <button onClick={shuffle} title="Xáo trộn (S)" style={{ background: 'white', border: '1px solid var(--border-medium)', cursor: 'pointer', color: 'var(--text-secondary)', padding: '8px', borderRadius: '8px', display: 'flex' }}><Shuffle size={16} /></button>
+                <button onClick={shuffle} title="Xáo trộn (S)" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', cursor: 'pointer', color: 'var(--text-secondary)', padding: '8px', borderRadius: '8px', display: 'flex' }}><Shuffle size={16} /></button>
                 <button onClick={exportToCSV} title="Xuất CSV (Anki/Quizlet)" style={{ background: '#E8F5E9', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.85rem' }}><Download size={16} /> CSV</button>
               </>
             )}
@@ -203,7 +203,7 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
           ) : done ? (
             <div style={{ margin: 'auto', textAlign: 'center' }}>
               <div style={{ width: '72px', height: '72px', borderRadius: '50%', backgroundColor: '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}><Check size={36} color="#059669" /></div>
-              <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1B2A4E', margin: '0 0 8px' }}>Hoàn thành bộ thẻ! 🎉</h3>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-navy)', margin: '0 0 8px' }}>Hoàn thành bộ thẻ! 🎉</h3>
               <p style={{ color: 'var(--text-secondary)', margin: '0 0 8px' }}>Đã ôn {reviewedCount}/{cards.length} thẻ</p>
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginBottom: '24px', fontSize: '0.85rem', fontWeight: 700 }}>
                 <span style={{ color: '#991B1B' }}>Khó: {counts.hard || 0}</span>
@@ -211,7 +211,7 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
                 <span style={{ color: '#065F46' }}>Dễ: {counts.easy || 0}</span>
               </div>
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                <button onClick={restart} style={{ padding: '12px 24px', backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', color: '#1B2A4E', display: 'flex', alignItems: 'center', gap: '8px' }}><RotateCcw size={16} /> Ôn lại</button>
+                <button onClick={restart} style={{ padding: '12px 24px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '8px' }}><RotateCcw size={16} /> Ôn lại</button>
                 <button onClick={shuffle} style={{ padding: '12px 24px', backgroundColor: 'var(--brand-primary)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}><Shuffle size={16} /> Xáo trộn & ôn</button>
               </div>
             </div>
@@ -229,12 +229,12 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
               <div style={{ perspective: '1600px', width: '100%', height: '230px' }}>
                 <div onClick={() => setIsFlipped(f => !f)} style={{ position: 'relative', width: '100%', height: '100%', transition: 'transform 0.5s', transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'none', cursor: 'pointer' }}>
                   {/* Front */}
-                  <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', backgroundColor: 'white', border: '2px solid var(--border-medium)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                  <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', backgroundColor: 'var(--bg-tertiary)', border: '2px solid var(--border-medium)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                     <span style={{ position: 'absolute', top: 12, left: 16, fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)' }}>CÂU HỎI</span>
-                    <h3 style={{ fontSize: '1.4rem', color: '#1B2A4E', fontWeight: 700, margin: 0 }}>{currentCard?.front}</h3>
+                    <h3 style={{ fontSize: '1.4rem', color: 'var(--text-navy)', fontWeight: 700, margin: 0 }}>{currentCard?.front}</h3>
                   </div>
                   {/* Back */}
-                  <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)', backgroundColor: '#1B2A4E', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                  <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)', backgroundColor: 'var(--btn-navy)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
                     <span style={{ position: 'absolute', top: 12, left: 16, fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.05em', color: 'rgba(255,255,255,0.5)' }}>ĐÁP ÁN</span>
                     <p style={{ fontSize: '1.25rem', color: 'white', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{currentCard?.back}</p>
                   </div>
@@ -245,9 +245,9 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
               <div style={{ marginTop: '20px', width: '100%' }}>
                 {!isFlipped ? (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <button onClick={() => go(-1)} disabled={pos === 0} style={{ background: 'white', border: '1px solid var(--border-medium)', borderRadius: '12px', padding: '12px', cursor: pos === 0 ? 'not-allowed' : 'pointer', opacity: pos === 0 ? 0.4 : 1, color: '#1B2A4E', display: 'flex' }}><ArrowLeft size={18} /></button>
+                    <button onClick={() => go(-1)} disabled={pos === 0} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '12px', padding: '12px', cursor: pos === 0 ? 'not-allowed' : 'pointer', opacity: pos === 0 ? 0.4 : 1, color: 'var(--text-navy)', display: 'flex' }}><ArrowLeft size={18} /></button>
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 500, textAlign: 'center' }}>Nhấn <b>Space</b> để lật thẻ</div>
-                    <button onClick={() => go(1)} style={{ background: 'white', border: '1px solid var(--border-medium)', borderRadius: '12px', padding: '12px', cursor: 'pointer', color: '#1B2A4E', display: 'flex' }}><ArrowRight size={18} /></button>
+                    <button onClick={() => go(1)} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '12px', padding: '12px', cursor: 'pointer', color: 'var(--text-navy)', display: 'flex' }}><ArrowRight size={18} /></button>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', gap: '12px' }}>

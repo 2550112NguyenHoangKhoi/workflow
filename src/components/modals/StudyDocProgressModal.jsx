@@ -83,13 +83,13 @@ const StudyDocProgressModal = ({ isOpen, onClose }) => {
         boxShadow: '0 24px 48px rgba(0,0,0,0.2)', overflow: 'hidden'
       }}>
         {/* Header */}
-        <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', backgroundColor: 'white' }}>
+        <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ backgroundColor: '#8A334B', padding: '10px', borderRadius: '12px' }}>
               <Activity color="white" size={24} />
             </div>
             <div>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1B2A4E', margin: 0 }}>Study Analytics</h2>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-navy)', margin: 0 }}>Study Analytics</h2>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: 0 }}>
                 {activeDoc ? `Tracking: ${activeDoc.filename}` : 'Document Progress'}
               </p>
@@ -113,10 +113,10 @@ const StudyDocProgressModal = ({ isOpen, onClose }) => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
               
               {/* Readability Card */}
-              <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-light)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div style={{ backgroundColor: 'var(--bg-tertiary)', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-light)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
                 <BookOpen size={32} color="var(--brand-primary)" style={{ marginBottom: '16px' }} />
                 <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Readability Score</div>
-                <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#1B2A4E', margin: '8px 0' }}>
+                <div style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--text-navy)', margin: '8px 0' }}>
                   {data.readability.score}
                 </div>
                 {(() => {
@@ -130,10 +130,10 @@ const StudyDocProgressModal = ({ isOpen, onClose }) => {
               </div>
 
               {/* Quiz Performance Card */}
-              <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-light)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div style={{ backgroundColor: 'var(--bg-tertiary)', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-light)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
                 <Target size={32} color="#3B6B59" style={{ marginBottom: '16px' }} />
                 <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Average Quiz Score</div>
-                <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#1B2A4E', margin: '8px 0' }}>
+                <div style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--text-navy)', margin: '8px 0' }}>
                   {data.total_quizzes_taken > 0 ? `${data.average_quiz_score}%` : '--'}
                 </div>
                 <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', fontWeight: 500 }}>

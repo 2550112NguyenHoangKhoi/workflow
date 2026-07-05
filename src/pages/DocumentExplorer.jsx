@@ -1,18 +1,37 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, Folder, FileText, Download, Trash2, Eye, ArrowLeft, BrainCircuit, Cloud } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Search, Folder, FileText, Download, Trash2, Eye, ArrowLeft, BrainCircuit, Cloud, PlusCircle, CheckCircle2, Share2 } from 'lucide-react';
 import { getLocalFiles, saveLocalFile, deleteLocalFile } from '../utils/storage';
+import * as drive from '../utils/googleDrive';
+import { toggleSource, isSelected } from '../utils/examSources';
 import DueFlashcardModal from '../components/modals/DueFlashcardModal';
 import GoogleDriveModal from '../components/modals/GoogleDriveModal';
 
 const DocumentExplorer = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // ?folder=<Google Drive folder id> switches the page into Drive-browsing mode
+  // (e.g. /documents?folder=1VTmwR9iVndmKvI2O3jiHPlAu0OBnWPir). 'root' = My Drive.
+  const folderId = searchParams.get('folder');
   const [files, setFiles] = useState([]);
   const [dueCardsCount, setDueCardsCount] = useState(0);
   const [isDueModalOpen, setIsDueModalOpen] = useState(false);
   const [isDriveOpen, setIsDriveOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState('Tất cả');
+  const [driveItems, setDriveItems] = useState(null);   // { folders, files } of the current Drive folder
+  const [driveName, setDriveName] = useState('');
+  const [driveLoading, setDriveLoading] = useState(false);
+  const [driveError, setDriveError] = useState('');
+  const [importingId, setImportingId] = useState(null);
+  const [importedIds, setImportedIds] = useState(() => new Set());
+  const [, bumpSelection] = useState(0); // re-render after (de)selecting an exam source
+
+  const handleToggleSource = (e, src) => {
+    e.stopPropagation();
+    toggleSource(src);
+    bumpSelection(v => v + 1);
+  };
 
   const loadFiles = () => {
     fetch('http://127.0.0.1:8000/api/documents')
@@ -43,6 +62,81 @@ const DocumentExplorer = () => {
   };
 
   useEffect(() => { loadFiles(); }, [isDueModalOpen]);
+
+  // Load the Drive folder named in the URL. The public library works with just the API
+  // key (no OAuth) — like the reference product. Private folders ('root' or the user's
+  // own) still go through the consent popup, triggered by the connect button below.
+  const loadDriveFolder = async (id, { connect = false } = {}) => {
+    setDriveLoading(true);
+    setDriveError('');
+    try {
+      if (connect && !drive.isConnected()) await drive.connectDrive();
+      let realId = id;
+      let name = 'Google Drive của tôi';
+      if (id !== 'root') {
+        // getFileMeta resolves Drive shortcuts, so listing uses the target folder.
+        const meta = await drive.getFileMeta(id).catch(() => null);
+        if (meta) { realId = meta.id; name = meta.name; }
+      }
+      setDriveItems(await drive.listChildren(realId));
+      setDriveName(name);
+    } catch (e) {
+      setDriveError(e.message || String(e));
+      setDriveItems(null);
+    }
+    setDriveLoading(false);
+  };
+
+  useEffect(() => {
+    if (!folderId) { setDriveItems(null); setDriveName(''); setDriveError(''); return; }
+    if (folderId === 'root' && !drive.isConnected()) { setDriveItems(null); setDriveName(''); return; }
+    loadDriveFolder(folderId);
+  }, [folderId]);
+
+  // ?q=<text> seeds the library search — used by the global Topbar search pill.
+  const urlQuery = searchParams.get('q');
+  useEffect(() => {
+    if (urlQuery !== null) setSearch(urlQuery);
+  }, [urlQuery]);
+
+  // Auto-refresh the live Drive library every 10 minutes while browsing it.
+  useEffect(() => {
+    if (!folderId) return;
+    const iv = setInterval(() => { if (drive.isConnected() || folderId !== 'root') loadDriveFolder(folderId); }, 10 * 60 * 1000);
+    return () => clearInterval(iv);
+  }, [folderId]);
+
+  const handleImport = async (file) => {
+    setImportingId(file.id);
+    try {
+      await drive.importFileToLibrary(file);
+      setImportedIds(prev => new Set(prev).add(file.id));
+      loadFiles();
+    } catch (e) {
+      alert('Nhập thất bại: ' + (e.message || e));
+    }
+    setImportingId(null);
+  };
+
+  // Import every file in the current Drive folder, sequentially so the backend
+  // parses one PDF at a time. Failures are collected instead of aborting the batch.
+  const handleImportAll = async () => {
+    const pending = (driveItems?.files || []).filter(f => !importedIds.has(f.id));
+    if (pending.length === 0) return;
+    const failed = [];
+    for (const f of pending) {
+      setImportingId(f.id);
+      try {
+        await drive.importFileToLibrary(f);
+        setImportedIds(prev => new Set(prev).add(f.id));
+      } catch {
+        failed.push(f.name);
+      }
+    }
+    setImportingId(null);
+    loadFiles();
+    if (failed.length) alert(`Không nhập được ${failed.length} file:\n` + failed.join('\n'));
+  };
 
   const handleDelete = async (e, file) => {
     e.stopPropagation();
@@ -77,12 +171,13 @@ const DocumentExplorer = () => {
   );
   const showFolders = !q && activeTag === 'Tất cả';
 
+  // Real folders from the public GIẢI TÍCH 1 library (Drive shortcut ids; resolved on open).
   const staticFolders = [
-    { name: 'Đề cuối kỳ', school: 'ĐẠI HỌC BÁCH KHOA HÀ NỘI...' },
-    { name: 'Đề cương Giải tích 1', school: 'ĐẠI HỌC BÁCH KHOA HÀ NỘI...' },
-    { name: 'Giáo trình - Bài giảng', school: 'ĐẠI HỌC BÁCH KHOA HÀ NỘI...' },
-    { name: 'Lý thuyết và giải đề cương', school: 'ĐẠI HỌC BÁCH KHOA HÀ NỘI...' },
-    { name: 'Tóm tắt công thức', school: 'ĐẠI HỌC BÁCH KHOA HÀ NỘI...' }
+    { id: '1uuuOZlyZmbDoRrz0yuW6FsTm3oFu5vrP', name: 'Đề cuối kỳ', school: 'ĐẠI HỌC BÁCH KHOA HÀ NỘI (HUST)/GIẢI TÍCH 1' },
+    { id: '19O2TCOvcItFzCDRaZsiHPzcpvPkDVgBC', name: 'Đề cương Giải tích 1', school: 'ĐẠI HỌC BÁCH KHOA HÀ NỘI (HUST)/GIẢI TÍCH 1' },
+    { id: '1ZszCTJzaA3AtsKtINjEKSZwuxq56nDxr', name: 'Giáo trình - Bài giảng', school: 'ĐẠI HỌC BÁCH KHOA HÀ NỘI (HUST)/GIẢI TÍCH 1' },
+    { id: '1bGX1jgO7rhl1Nz69uJtX3GYhW7KRy1VF', name: 'Lý thuyết và giải đề cương', school: 'ĐẠI HỌC BÁCH KHOA HÀ NỘI (HUST)/GIẢI TÍCH 1' },
+    { id: '1Wl3trbhxN-RiS4109V6qEmsIF8wWMTzv', name: 'Tóm tắt công thức', school: 'ĐẠI HỌC BÁCH KHOA HÀ NỘI (HUST)/GIẢI TÍCH 1' }
   ];
 
   return (
@@ -97,7 +192,7 @@ const DocumentExplorer = () => {
           Thư viện Học thuật
         </h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', maxWidth: '600px', margin: '0 auto', lineHeight: '1.5' }}>
-          Tài liệu được đồng bộ tự động mỗi 10 phút từ Google Drive, cache về MinIO và xem bằng viewer nội bộ của Workflow.
+          Thư viện đọc trực tiếp từ Google Drive công khai (tự làm mới mỗi 10 phút) và xem bằng viewer nội bộ của Workflow.
         </p>
       </div>
 
@@ -137,6 +232,9 @@ const DocumentExplorer = () => {
           <button onClick={() => setIsDriveOpen(true)} title="Nhập cả thư mục (máy tính / Google Drive)" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--brand-primary)', border: '1px solid var(--brand-primary)', borderRadius: '12px', height: '48px', padding: '0 18px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
             <Cloud size={18} /> Nhập thư mục
           </button>
+          <button onClick={() => setSearchParams({ folder: drive.LIBRARY_ROOT })} title="Duyệt thư viện học liệu (Google Drive công khai)" style={{ backgroundColor: folderId ? 'var(--brand-primary)' : 'var(--bg-tertiary)', color: folderId ? 'white' : 'var(--brand-primary)', border: '1px solid var(--brand-primary)', borderRadius: '12px', height: '48px', padding: '0 18px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
+            <Folder size={18} /> Duyệt Drive
+          </button>
         </div>
         
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
@@ -155,24 +253,126 @@ const DocumentExplorer = () => {
 
       {/* Breadcrumb & Title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-        <button onClick={() => { setSearch(''); setActiveTag('Tất cả'); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '20px', color: 'var(--brand-primary)', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
-          <ArrowLeft size={16} /> {q || activeTag !== 'Tất cả' ? 'Xem tất cả' : 'Lên thư mục cha'}
-        </button>
+        {folderId ? (
+          <button onClick={() => navigate(-1)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '20px', color: 'var(--brand-primary)', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
+            <ArrowLeft size={16} /> Quay lại
+          </button>
+        ) : (
+          <button onClick={() => { setSearch(''); setActiveTag('Tất cả'); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '20px', color: 'var(--brand-primary)', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
+            <ArrowLeft size={16} /> {q || activeTag !== 'Tất cả' ? 'Xem tất cả' : 'Lên thư mục cha'}
+          </button>
+        )}
         <div>
           <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>ĐANG XEM</div>
-          <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-primary)' }}>GIẢI TÍCH 1</div>
+          <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-primary)' }}>
+            {folderId ? (driveName || 'GOOGLE DRIVE') : 'GIẢI TÍCH 1'}
+          </div>
         </div>
-        <div style={{ marginLeft: 'auto', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-          {(showFolders ? staticFolders.length : 0) + filteredFiles.length} mục
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+          {folderId && driveItems && driveItems.files.some(f => !importedIds.has(f.id)) && (
+            <button onClick={handleImportAll} disabled={importingId !== null} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', backgroundColor: 'var(--brand-primary)', color: 'white', border: 'none', borderRadius: '20px', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', opacity: importingId !== null ? 0.6 : 1 }}>
+              <PlusCircle size={14} /> {importingId !== null ? 'Đang nhập…' : `Nhập tất cả (${driveItems.files.filter(f => !importedIds.has(f.id)).length})`}
+            </button>
+          )}
+          <span>
+            {folderId
+              ? (driveItems ? `${driveItems.folders.length + driveItems.files.length} mục` : '')
+              : `${(showFolders ? staticFolders.length : 0) + filteredFiles.length} mục`}
+          </span>
         </div>
       </div>
 
+      {/* === Google Drive browsing mode (?folder=<id>) === */}
+      {folderId && (
+        <div style={{ paddingBottom: '32px' }}>
+          {!drive.isConfigured() && (
+            <div style={{ padding: '24px', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '16px', color: '#B91C1C', fontSize: '0.9rem' }}>
+              Chưa cấu hình <code>VITE_GOOGLE_OAUTH_CLIENT_ID</code> trong <code>.env</code> nên không thể duyệt Google Drive.
+            </div>
+          )}
+          {drive.isConfigured() && !driveItems && !driveLoading && (
+            <div style={{ textAlign: 'center', padding: '48px 24px', backgroundColor: 'var(--bg-tertiary)', border: '1px dashed var(--border-medium)', borderRadius: '24px' }}>
+              <Cloud size={40} color="var(--brand-primary)" style={{ marginBottom: '12px' }} />
+              <h3 style={{ margin: '0 0 8px', fontWeight: 800, color: 'var(--text-primary)' }}>Kết nối Google Drive để mở thư mục này</h3>
+              {driveError && <p style={{ color: '#B91C1C', fontSize: '0.85rem', maxWidth: '520px', margin: '0 auto 12px' }}>{driveError}</p>}
+              <button onClick={() => loadDriveFolder(folderId, { connect: true })} style={{ backgroundColor: 'var(--brand-primary)', color: 'white', border: 'none', padding: '12px 28px', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                Kết nối &amp; mở thư mục
+              </button>
+            </div>
+          )}
+          {driveLoading && (
+            <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)', fontWeight: 600 }}>Đang tải thư mục từ Google Drive…</div>
+          )}
+          {driveItems && !driveLoading && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+              {driveItems.folders.map(f => (
+                <div key={f.id} onClick={() => setSearchParams({ folder: f.id })} className="glass-card hover-lift" style={{ padding: '24px', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+                    <div style={{ width: '48px', height: '48px', backgroundColor: 'var(--border-light)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-primary)' }}>
+                      <Folder size={24} />
+                    </div>
+                    <span style={{ color: 'var(--text-muted)' }}>›</span>
+                  </div>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>{f.name}</h3>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>GOOGLE DRIVE</p>
+                </div>
+              ))}
+              {driveItems.files.map(f => (
+                <div key={f.id} className="glass-card hover-lift" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                  {/* Real first-page thumbnail from Drive's public thumbnail endpoint */}
+                  <div style={{ height: '140px', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-light)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    <img src={drive.publicThumbUrl(f.id)} alt="" loading="lazy" referrerPolicy="no-referrer"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }}
+                      onError={(e) => { e.target.style.display = 'none'; }} />
+                    <FileText size={48} color="var(--border-medium)" opacity={0.5} style={{ position: 'absolute', zIndex: 0 }} />
+                    <div style={{ position: 'absolute', top: '12px', right: '12px', backgroundColor: 'var(--bg-tertiary)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, border: '1px solid var(--brand-primary)', color: 'var(--brand-primary)' }}>
+                      {(f.name.split('.').pop() || 'FILE').toUpperCase().slice(0, 4)}
+                    </div>
+                    <input type="checkbox" checked={isSelected('drive', f.id)}
+                      onChange={(e) => handleToggleSource(e, { type: 'drive', value: String(f.id), name: f.name })}
+                      onClick={(e) => e.stopPropagation()}
+                      title="Chọn làm nguồn tạo đề thi / tài liệu phòng thi"
+                      style={{ position: 'absolute', top: '12px', left: '12px', width: '18px', height: '18px', accentColor: 'var(--brand-primary)', cursor: 'pointer' }} />
+                  </div>
+                  <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{f.name}</h3>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{driveName}</p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', marginBottom: '14px' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString('vi-VN') : ''}</span>
+                      <span style={{ backgroundColor: 'var(--success-bg)', color: 'var(--success)', padding: '4px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 700 }}>Sẵn sàng</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => navigate(`/drive/${f.id}?name=${encodeURIComponent(f.name)}&folder=${folderId}`)} style={{ flex: 1, backgroundColor: 'var(--brand-primary)', color: 'white', border: 'none', padding: '10px', borderRadius: '12px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <Eye size={16} /> Xem ngay
+                      </button>
+                      <a href={drive.publicDownloadUrl(f.id)} target="_blank" rel="noreferrer" title="Tải file gốc" style={{ width: '40px', height: '40px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                        <Download size={16} />
+                      </a>
+                      <button onClick={() => { navigator.clipboard.writeText(drive.publicShareUrl(f.id)); alert('Đã sao chép liên kết chia sẻ!'); }} title="Chia sẻ (sao chép liên kết)" style={{ width: '40px', height: '40px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                        <Share2 size={16} />
+                      </button>
+                      <button onClick={() => handleImport(f)} disabled={importingId === f.id || importedIds.has(f.id)} title={importedIds.has(f.id) ? 'Đã nhập vào thư viện' : 'Nhập vào thư viện để dùng AI'} style={{ width: '40px', height: '40px', backgroundColor: importedIds.has(f.id) ? 'var(--success-bg)' : 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: importedIds.has(f.id) ? 'var(--success)' : 'var(--brand-primary)', cursor: 'pointer', opacity: importingId === f.id ? 0.5 : 1 }}>
+                        {importedIds.has(f.id) ? <CheckCircle2 size={16} /> : <PlusCircle size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {driveItems.folders.length === 0 && driveItems.files.length === 0 && (
+                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '48px', color: 'var(--text-muted)' }}>Thư mục này trống.</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Grid Content */}
+      {!folderId && (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px', paddingBottom: '32px' }}>
-        
-        {/* Folder shortcuts (filter by name) */}
+
+        {/* Folder shortcuts into the public Drive library */}
         {showFolders && staticFolders.map((folder, i) => (
-          <div key={i} onClick={() => setSearch(folder.name)} className="glass-card hover-lift" style={{ padding: '24px', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
+          <div key={i} onClick={() => setSearchParams({ folder: folder.id })} className="glass-card hover-lift" style={{ padding: '24px', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
               <div style={{ width: '48px', height: '48px', backgroundColor: 'var(--border-light)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-primary)' }}>
                 <Folder size={24} />
@@ -192,6 +392,11 @@ const DocumentExplorer = () => {
               <div style={{ position: 'absolute', top: '12px', right: '12px', backgroundColor: 'var(--bg-tertiary)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, border: '1px solid var(--brand-primary)', color: 'var(--brand-primary)' }}>
                 {file.type.toUpperCase()}
               </div>
+              <input type="checkbox" checked={isSelected('document', file.id)}
+                onChange={(e) => handleToggleSource(e, { type: 'document', value: String(file.id), name: file.name })}
+                onClick={(e) => e.stopPropagation()}
+                title="Chọn làm nguồn tạo đề thi / tài liệu phòng thi"
+                style={{ position: 'absolute', top: '12px', left: '12px', width: '18px', height: '18px', accentColor: 'var(--brand-primary)', cursor: 'pointer' }} />
               <FileText size={48} color="var(--border-medium)" opacity={0.5} />
             </div>
             
@@ -227,6 +432,7 @@ const DocumentExplorer = () => {
           </div>
         ))}
       </div>
+      )}
 
       <DueFlashcardModal isOpen={isDueModalOpen} onClose={() => setIsDueModalOpen(false)} />
       <GoogleDriveModal isOpen={isDriveOpen} onClose={() => setIsDriveOpen(false)} onImport={loadFiles} />

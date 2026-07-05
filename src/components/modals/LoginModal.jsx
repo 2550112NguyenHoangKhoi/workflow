@@ -68,7 +68,7 @@ const LoginModal = ({ onLoginSuccess }) => {
           onClick={handleGoogleLogin} 
           disabled={loading}
           style={{ 
-            padding: '16px', borderRadius: '12px', backgroundColor: 'white', 
+            padding: '16px', borderRadius: '12px', backgroundColor: 'var(--bg-tertiary)', 
             color: 'var(--text-primary)', border: '1px solid var(--border-light)', 
             fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',

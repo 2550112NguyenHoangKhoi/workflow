@@ -89,19 +89,45 @@ def extract_flashcards(text: str, max_cards: int = 10) -> List[Dict[str, str]]:
                         })
                         seen_terms.add(subject_chunk.lower())
 
-    # 3. Last Resort Fallback (TF-IDF / Noun extraction)
-    if len(flashcards) < 3:
+    # 3. High-quality Dictionary Fallback (Extract nouns and lookup)
+    if len(flashcards) < max_cards:
+        import difflib
+        import urllib.request
+        import json
+        
+        # Extract potential salient nouns
+        candidates = []
         for chunk in doc.noun_chunks:
+            text_clean = chunk.text.strip().lower()
+            # Only single words or two words
+            if 1 <= len(text_clean.split()) <= 2 and text_clean not in seen_terms:
+                candidates.append(text_clean)
+        
+        # Try to look them up using FreeDictionaryAPI to get real definitions
+        for term in set(candidates):
             if len(flashcards) >= max_cards:
                 break
-            if len(chunk.text.split()) >= 2 and chunk.text.lower() not in seen_terms:
-                sent = chunk.sent.text
-                front_text = sent.replace(chunk.text, "_______", 1)
-                flashcards.append({
-                    "front": front_text,
-                    "back": chunk.text
-                })
-                seen_terms.add(chunk.text.lower())
+            if term in seen_terms:
+                continue
+                
+            try:
+                # Use a simple request to FreeDictionaryAPI
+                url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{urllib.parse.quote(term)}"
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=2) as response:
+                    data = json.loads(response.read().decode())
+                    if isinstance(data, list) and len(data) > 0:
+                        meanings = data[0].get("meanings", [])
+                        if meanings and meanings[0].get("definitions"):
+                            definition = meanings[0]["definitions"][0].get("definition", "")
+                            if definition:
+                                flashcards.append({
+                                    "front": f"What is the definition of **{term}**?",
+                                    "back": definition.capitalize()
+                                })
+                                seen_terms.add(term)
+            except Exception:
+                pass
 
     # Format fallback if completely empty
     if not flashcards:

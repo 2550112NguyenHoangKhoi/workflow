@@ -34,3 +34,11 @@ __pycache__/
 backend/build/
 backend/dist/
 backend/*.spec
+
+# Local secrets (API keys)
+.env
+
+# Raw uploaded source files (served by /api/documents/{id}/file)
+backend/uploads/
+*.db
+*.db.bak

@@ -133,7 +133,7 @@ const TakeQuizModal = ({ isOpen, onClose }) => {
         <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-light)', flexShrink: 0 }}>
           <div>
 
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1B2A4E' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-navy)' }}>
               {quizData ? quizData.title : "Automated Knowledge Quiz"}
             </h2>
             {activeDoc && !quizData && (
@@ -178,8 +178,8 @@ const TakeQuizModal = ({ isOpen, onClose }) => {
               )}
 
               {quizData.questions.map((q, qIdx) => (
-                <div key={qIdx} style={{ backgroundColor: 'white', border: '1px solid var(--border-light)', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1B2A4E', marginBottom: '16px', lineHeight: 1.5 }}>
+                <div key={qIdx} style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-navy)', marginBottom: '16px', lineHeight: 1.5 }}>
                     Câu {qIdx + 1}: {q.question}
                   </h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -235,7 +235,7 @@ const TakeQuizModal = ({ isOpen, onClose }) => {
               </div>
               {/* Right column: đối chiếu — the real source PDF viewer */}
               <div style={{ width: '440px', flexShrink: 0, borderLeft: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', backgroundColor: '#F1F5F9' }}>
-                <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--border-light)', backgroundColor: 'white' }}>
+                <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)' }}>
                   <div style={{ fontWeight: 800, color: 'var(--brand-primary)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <FileText size={15} /> Đối chiếu nguồn
                   </div>
@@ -264,7 +264,7 @@ const TakeQuizModal = ({ isOpen, onClose }) => {
 
         {/* Footer */}
         {quizData && !isSubmitted && (
-          <div style={{ padding: '24px', backgroundColor: 'white', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end', borderBottomLeftRadius: '24px', borderBottomRightRadius: '24px', flexShrink: 0 }}>
+          <div style={{ padding: '24px', backgroundColor: 'var(--bg-tertiary)', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end', borderBottomLeftRadius: '24px', borderBottomRightRadius: '24px', flexShrink: 0 }}>
             <button 
               onClick={handleSubmitQuiz}
               disabled={Object.keys(answers).length < quizData.questions.length}

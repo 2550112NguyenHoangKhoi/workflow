@@ -1,8 +1,26 @@
 import os
 import re
+import json
 import random
 import asyncio
 import datetime
+import ssl
+import nltk
+from nltk.corpus import wordnet as wn
+
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    ssl._create_default_https_context = ssl._create_unverified_context
+    nltk.download('wordnet', quiet=True)
+    nltk.download('omw-1.4', quiet=True)
+
+import difflib
+try:
+    ALL_LEMMAS = list(set(wn.all_lemma_names()))
+except Exception:
+    ALL_LEMMAS = []
+
 from fastapi import FastAPI, HTTPException, Header, UploadFile, File, Depends
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -14,23 +32,52 @@ from google.antigravity import Agent, LocalAgentConfig, CapabilitiesConfig
 FAST_CAPS = CapabilitiesConfig(enable_subagents=False, enabled_tools=[])
 
 
+# AI-token accounting: a small JSON file next to the backend (no DB schema change).
+# Tokens are estimated at ~4 chars/token from prompt + response; powers GET /api/usage
+# and the "AI TOKENS" widgets in the Sidebar / account dropdown.
+USAGE_FILE = os.path.join(os.path.dirname(__file__), "usage.json")
+USAGE_QUOTA = 500_000
+
+def _read_usage():
+    try:
+        with open(USAGE_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {"used_tokens": 0}
+
+def _record_usage(prompt, result):
+    data = _read_usage()
+    data["used_tokens"] = data.get("used_tokens", 0) + int((len(prompt) + len(str(result))) / 4)
+    try:
+        with open(USAGE_FILE, "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass  # accounting must never break a generation
+
+
 # Run a one-shot Gemini generation with a HARD timeout. On timeout/error the caller falls
 # back to the offline NLP engine, so the app never hangs on a slow/rate-limited AI call.
 async def agent_run(config, prompt, structured=True, timeout=30):
     # Local-LLM engine: the UI sets the key to "LOCAL", so every generator that builds a
     # LocalAgentConfig(api_key="LOCAL", ...) is transparently routed to the local model here.
     # On any failure the caller's except-branch falls back to the offline NLP engine.
-    if getattr(config, "api_key", None) == "LOCAL":
+    if getattr(config, "api_key", None) and config.api_key.startswith("LOCAL"):
+        model_name = config.api_key.split(":", 1)[1] if ":" in config.api_key else None
         from nlp.local_llm import local_generate
         schema = getattr(config, "response_schema", None)
-        return await local_generate(prompt, structured=structured, schema=schema,
-                                    timeout=max(timeout, 120))
+        result = await local_generate(prompt, structured=structured, schema=schema,
+                                      model_name=model_name,
+                                      timeout=max(timeout, 120))
+        _record_usage(prompt, result)
+        return result
 
     async def _call():
         async with Agent(config) as agent:
             response = await agent.chat(prompt)
             return await (response.structured_output() if structured else response.text())
-    return await asyncio.wait_for(_call(), timeout=timeout)
+    result = await asyncio.wait_for(_call(), timeout=timeout)
+    _record_usage(prompt, result)
+    return result
 
 # Load env vars from parent directory .env if it exists
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
@@ -66,6 +113,8 @@ def patch_database_schema(engine):
             cols = [c["name"] for c in inspector.get_columns("artifacts")]
             if "document_id" not in cols:
                 conn.execute(text("ALTER TABLE artifacts ADD COLUMN document_id INTEGER REFERENCES documents(id)"))
+            if "owner_email" not in cols:
+                conn.execute(text("ALTER TABLE artifacts ADD COLUMN owner_email VARCHAR"))
                 
         if "flashcards" in inspector.get_table_names():
             cols = [c["name"] for c in inspector.get_columns("flashcards")]
@@ -133,8 +182,8 @@ def get_api_key(x_api_key: str | None) -> str | None:
     #   "LOCAL"   -> force the local downloaded LLM (Ollama); routed inside agent_run.
     if x_api_key == "OFFLINE":
         return None
-    if x_api_key == "LOCAL":
-        return "LOCAL"
+    if x_api_key and x_api_key.startswith("LOCAL"):
+        return x_api_key
     # Accept both Google AI Studio keys (AIzaSy...) and Antigravity keys (AQ...).
     if x_api_key and x_api_key.startswith(("AIzaSy", "AQ")):
         return x_api_key
@@ -573,10 +622,52 @@ async def get_document_notes_api(document_id: int, db: Session = Depends(get_db)
 # --- AI Engine ---
 
 @app.get("/api/engine/local_status")
-async def engine_local_status():
+async def engine_local_status(model_name: str | None = None):
     """Whether a local downloaded model (Ollama) is reachable, for the Settings checker."""
     from nlp.local_llm import status
-    return status()
+    return status(model_name)
+
+@app.get("/api/engine/recommend_local")
+async def recommend_local_model():
+    """Detect system RAM and recommend the best local model for Vietnamese & study app."""
+    import os
+    ram_gb = 8.0 # default
+    try:
+        if hasattr(os, 'sysconf'):
+            if 'SC_PAGE_SIZE' in os.sysconf_names and 'SC_PHYS_PAGES' in os.sysconf_names:
+                ram_gb = (os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')) / (1024.**3)
+    except Exception:
+        pass
+    
+    ram_gb = round(ram_gb, 1)
+    
+    if ram_gb >= 14:
+        rec = "gemma2"
+        reason = f"Máy bạn có {ram_gb}GB RAM, cực kỳ mạnh mẽ để chạy Gemma 2 (9B) hoặc Qwen2.5 (14B) - các model vượt trội về khả năng suy luận logic và tiếng Việt."
+        alts = ["qwen2.5:14b", "llama3.1", "qwen2.5"]
+    elif ram_gb >= 6:
+        rec = "qwen2.5"
+        reason = f"Máy bạn có {ram_gb}GB RAM, đủ để chạy mượt Qwen2.5 (7B) hoặc Llama 3.1 (8B) - cân bằng hoàn hảo giữa tốc độ và chất lượng tiếng Việt."
+        alts = ["llama3.1", "gemma2", "mistral"]
+    else:
+        rec = "qwen2.5:3b"
+        reason = f"Máy bạn có {ram_gb}GB RAM, phù hợp chạy các model nhỏ và nhẹ như Qwen2.5 (3B) hoặc Gemma 2 (2B) để đảm bảo không bị giật lag."
+        alts = ["gemma2:2b", "llama3.2"]
+
+    return {
+        "system_ram_gb": ram_gb,
+        "recommended_model": rec,
+        "reasoning": reason,
+        "alternatives": alts
+    }
+
+@app.get("/api/usage")
+async def get_usage():
+    """AI-token usage for the Sidebar / account-dropdown widgets (estimated, local-only)."""
+    used = _read_usage().get("used_tokens", 0)
+    remaining = max(USAGE_QUOTA - used, 0)
+    percent = round(used / USAGE_QUOTA * 100, 2) if USAGE_QUOTA else 0.0
+    return {"used": used, "quota": USAGE_QUOTA, "remaining": remaining, "percent": percent}
 
 # --- Endpoints ---
 
@@ -661,7 +752,11 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
         if doc and doc.content:
             context = doc.content[:30000]
             
-    persona_prompt = PERSONA_PROMPTS.get(request.persona, PERSONA_PROMPTS["Gia sư thân thiện"])
+    # persona=None means "Chat chính" (plain AI Q&A, no tutor persona).
+    if request.persona is None:
+        persona_prompt = "Bạn là trợ lý AI trả lời trực tiếp, chính xác và ngắn gọn dựa trên tài liệu."
+    else:
+        persona_prompt = PERSONA_PROMPTS.get(request.persona, PERSONA_PROMPTS["Gia sư thân thiện"])
     
     active_step_context = ""
     if request.project_id:
@@ -736,6 +831,15 @@ async def generate_flashcards(request: FlashcardRequest, db: Session = Depends(g
             text_to_process = doc_text
 
     def _save(cards):
+        if request.project_id or request.document_id:
+            query = db.query(models.Flashcard)
+            if request.document_id:
+                query = query.filter(models.Flashcard.document_id == request.document_id)
+            elif request.project_id:
+                query = query.filter(models.Flashcard.project_id == request.project_id)
+            query.delete()
+            db.commit()
+
         out = []
         for c in cards:
             db_card = crud.create_flashcard(db, front=c.get("front", ""), back=c.get("back", ""), project_id=request.project_id, document_id=request.document_id)
@@ -747,7 +851,7 @@ async def generate_flashcards(request: FlashcardRequest, db: Session = Depends(g
         return out
 
     current_key = get_api_key(request.api_key)
-    if current_key and not current_key.startswith("AQ"):
+    if current_key:
         try:
             config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite", response_schema=FlashcardList, capabilities=FAST_CAPS)
             prompt = f"Generate 5 to 10 highly effective study flashcards based on the following topic or text. Front = a clear question or concept, back = a concise answer or definition. Use the SAME language as the text.\n\nText:\n{text_to_process}"
@@ -801,7 +905,7 @@ def upload_document(
                 import docx
                 d = docx.Document(path)
                 text = "\n".join([p.text for p in d.paragraphs])
-            except ImportError:
+            except Exception:
                 pass
         elif suffix in [".png", ".jpg", ".jpeg", ".webp"]:
             kind = "image"
@@ -938,7 +1042,7 @@ async def remove_document(document_id: int, db: Session = Depends(get_db)):
 @app.post("/api/generate_path")
 async def generate_path(request: LearningPathRequest, x_api_key: str | None = Header(default=None), db: Session = Depends(get_db)):
     current_key = get_api_key(x_api_key)
-    if current_key and not current_key.startswith("AQ"):
+    if current_key:
         try:
             config = LocalAgentConfig(
                 api_key=current_key,
@@ -977,7 +1081,7 @@ async def search_materials(request: SearchRequest, x_api_key: str | None = Heade
                 })
         
         # If we have a valid key, use AI to filter and score for quality
-        if current_key and not current_key.startswith("AQ"):
+        if current_key:
             config = LocalAgentConfig(
                 api_key=current_key,
                 response_schema=SearchMaterialSchema
@@ -1068,13 +1172,20 @@ async def generate_quiz_endpoint(request: TopicRequest, db: Session = Depends(ge
             text_to_process = doc_text
 
     current_key = get_api_key(request.api_key)
-    if current_key and not current_key.startswith("AQ"):
+    if current_key:
         try:
             config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite", response_schema=QuizSchema, capabilities=FAST_CAPS)
             prompt = f"Generate a multiple-choice quiz (5 questions), in the SAME language as the text: '{text_to_process}'. Each question must have 4 options, a correct option ID, and an explanation."
             data = await agent_run(config, prompt)
             if data and data.get("questions"):
                 if request.project_id or request.document_id:
+                    query = db.query(models.Artifact).filter(models.Artifact.type == "quiz")
+                    if request.document_id:
+                        query = query.filter(models.Artifact.document_id == request.document_id)
+                    elif request.project_id:
+                        query = query.filter(models.Artifact.project_id == request.project_id)
+                    query.delete()
+                    db.commit()
                     crud.create_artifact(db, project_id=request.project_id, type="quiz", title=data.get("title", "Bài Trắc Nghiệm"), content=json.dumps(data), document_id=request.document_id)
                 return data
         except Exception as e:
@@ -1082,6 +1193,13 @@ async def generate_quiz_endpoint(request: TopicRequest, db: Session = Depends(ge
     from nlp.quizzes import extract_quiz
     quiz_data = extract_quiz(text_to_process, num_questions=5)
     if request.project_id or request.document_id:
+        query = db.query(models.Artifact).filter(models.Artifact.type == "quiz")
+        if request.document_id:
+            query = query.filter(models.Artifact.document_id == request.document_id)
+        elif request.project_id:
+            query = query.filter(models.Artifact.project_id == request.project_id)
+        query.delete()
+        db.commit()
         crud.create_artifact(db, project_id=request.project_id, type="quiz", title=quiz_data.get("title", "Bài Trắc Nghiệm"), content=json.dumps(quiz_data), document_id=request.document_id)
     return quiz_data
 class ExamPrepSchema(BaseModel):
@@ -1098,13 +1216,20 @@ async def generate_exam_prep_endpoint(request: TopicRequest, db: Session = Depen
             text_to_process = doc_text
 
     current_key = get_api_key(request.api_key)
-    if current_key and not current_key.startswith("AQ"):
+    if current_key:
         try:
             config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite", response_schema=ExamPrepSchema, capabilities=FAST_CAPS)
             prompt = f"Generate a comprehensive Exam Preparation cheat sheet or study guide based on the following text: '{text_to_process}'. Use markdown formatting."
             data = await agent_run(config, prompt)
             if data and data.get("markdown_content"):
                 if request.project_id or request.document_id:
+                    query = db.query(models.Artifact).filter(models.Artifact.type == "examprep")
+                    if request.document_id:
+                        query = query.filter(models.Artifact.document_id == request.document_id)
+                    elif request.project_id:
+                        query = query.filter(models.Artifact.project_id == request.project_id)
+                    query.delete()
+                    db.commit()
                     crud.create_artifact(db, project_id=request.project_id, type="examprep", title=data.get("title", "Tài liệu phòng thi"), content=json.dumps(data), document_id=request.document_id)
                 return data
         except Exception as e:
@@ -1114,6 +1239,13 @@ async def generate_exam_prep_endpoint(request: TopicRequest, db: Session = Depen
     from nlp.concept_map import generate_offline_exam_prep
     data = generate_offline_exam_prep(text_to_process)
     if request.project_id or request.document_id:
+        query = db.query(models.Artifact).filter(models.Artifact.type == "examprep")
+        if request.document_id:
+            query = query.filter(models.Artifact.document_id == request.document_id)
+        elif request.project_id:
+            query = query.filter(models.Artifact.project_id == request.project_id)
+        query.delete()
+        db.commit()
         crud.create_artifact(db, project_id=request.project_id, type="examprep", title=data.get("title", "Tài liệu phòng thi"), content=json.dumps(data), document_id=request.document_id)
     return data
 
@@ -1130,13 +1262,20 @@ async def generate_study_plan_endpoint(request: TopicRequest, db: Session = Depe
             text_to_process = doc_text
 
     current_key = get_api_key(request.api_key)
-    if current_key and not current_key.startswith("AQ"):
+    if current_key:
         try:
             config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite", response_schema=StudyPlanSchema, capabilities=FAST_CAPS)
             prompt = f"Generate a detailed step-by-step study plan (Giáo án) based on the following roadmap/text: '{text_to_process}'. Include specific learning activities and estimated time. Format as markdown."
             data = await agent_run(config, prompt)
             if data and data.get("markdown_content"):
                 if request.project_id or request.document_id:
+                    query = db.query(models.Artifact).filter(models.Artifact.type == "studyplan")
+                    if request.document_id:
+                        query = query.filter(models.Artifact.document_id == request.document_id)
+                    elif request.project_id:
+                        query = query.filter(models.Artifact.project_id == request.project_id)
+                    query.delete()
+                    db.commit()
                     crud.create_artifact(db, project_id=request.project_id, type="studyplan", title=data.get("title", "Giáo Án"), content=json.dumps(data), document_id=request.document_id)
                 return data
         except Exception as e:
@@ -1146,6 +1285,13 @@ async def generate_study_plan_endpoint(request: TopicRequest, db: Session = Depe
     from nlp.concept_map import generate_offline_study_plan
     data = generate_offline_study_plan(text_to_process)
     if request.project_id or request.document_id:
+        query = db.query(models.Artifact).filter(models.Artifact.type == "studyplan")
+        if request.document_id:
+            query = query.filter(models.Artifact.document_id == request.document_id)
+        elif request.project_id:
+            query = query.filter(models.Artifact.project_id == request.project_id)
+        query.delete()
+        db.commit()
         crud.create_artifact(db, project_id=request.project_id, type="studyplan", title=data.get("title", "Giáo Án"), content=json.dumps(data), document_id=request.document_id)
     return data
 
@@ -1289,7 +1435,7 @@ if __name__ == "__main__":
 async def generate_suggestions(request: TopicRequest, x_api_key: str | None = Header(default=None)):
     current_key = get_api_key(x_api_key)
     
-    if current_key and not current_key.startswith("AQ"):
+    if current_key:
         try:
             config = LocalAgentConfig(api_key=current_key, response_schema=SuggestionSchema)
             prompt = f"""Analyze the following text corpus from a user's document library. Suggest 3 things: a topic for a structured learning path, a specific topic for a multiple-choice quiz, and a topic for a set of flashcards. Keep the suggestions concise.
@@ -1308,3 +1454,1504 @@ Corpus:
     from nlp.concept_map import generate_offline_suggestions
     return generate_offline_suggestions(request.topic_or_text)
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Studio: exams with full config, exam-room documents, sharing (drafted via 9Router)
+# ═══════════════════════════════════════════════════════════════════════════════
+from pydantic import BaseModel as _BaseModel
+import urllib.request
+import tempfile
+
+# ── Pydantic models ──────────────────────────────────────────────────────────
+
+class ExamSource(_BaseModel):
+    type: str  # "text"|"document"|"drive"
+    value: str
+    name: str | None = None
+
+class ExamGenRequest(_BaseModel):
+    title: str = "Đề thi ôn tập"
+    description: str = ""
+    duration_minutes: int = 45
+    num_questions: int = 10
+    difficulty: str = "Trung bình"
+    language: str = "Tiếng Việt"
+    question_types: list[str] = ["mcq"]
+    with_explanation: bool = True
+    sources: list[ExamSource] = []
+    api_key: str | None = None
+    project_id: int | None = None
+    document_id: int | None = None
+    owner_email: str | None = None
+
+class ExamDocGenRequest(_BaseModel):
+    title: str = "Tài liệu ôn thi"
+    description: str = ""
+    objective: str = ""
+    length: str = "Độ dài vừa phải"
+    sources: list[ExamSource] = []
+    api_key: str | None = None
+    owner_email: str | None = None
+
+class ShareRequest(_BaseModel):
+    artifact_id: int | None = None
+    drive_file_id: str | None = None
+    drive_file_name: str | None = None
+    owner_email: str
+    to_email: str
+
+# ── Writing practice (Vietnamese -> English translation, modeled on datpmt) ──
+class WritingLessonRequest(_BaseModel):
+    mode: str = "sentence"        # "sentence" | "paragraph" | "ielts"
+    level: str = "beginner"       # "beginner" | "intermediate" | "advanced"
+    category: str = ""            # sentence category or paragraph content type
+    task: str = "task2"           # IELTS only: "task1" | "task2"
+    topic: str = ""
+    num_sentences: int = 10
+    project_id: int | None = None
+    owner_email: str | None = None
+    api_key: str | None = None
+    question_type: str | None = ""
+
+class TeachBackPromptSchema(_BaseModel):
+    concept: str
+    key_points: list[str] = []
+    question_vi: str
+
+class TeachBackMisconception(_BaseModel):
+    claim: str
+    correction: str
+
+class TeachBackEvalSchema(_BaseModel):
+    understanding_score: int
+    covered: list[str] = []
+    gaps: list[str] = []
+    misconceptions: list[TeachBackMisconception] = []
+    followup_question: str
+    feedback_vi: str
+
+from pydantic import BaseModel
+class TeachBackStartRequest(BaseModel):
+    topic: str
+    context: str | None = ""
+    level: str | None = ""
+    document_id: int | None = None
+    project_id: int | None = None
+    api_key: str | None = None
+
+class TeachBackEvalRequest(BaseModel):
+    concept: str
+    key_points: list[str] = []
+    explanation: str
+    context: str | None = ""
+    api_key: str | None = None
+
+
+class WritingGradeRequest(_BaseModel):
+    vi: str = ""
+    reference_en: str = ""
+    user_en: str = ""
+    level: str = ""
+    api_key: str | None = None
+
+class WritingIeltsRequest(_BaseModel):
+    prompt: str = ""
+    essay: str = ""
+    task: str = "task2"
+    api_key: str | None = None
+    question_type: str | None = ""
+
+class WritingWordRequest(_BaseModel):
+    word: str = ""
+    sentence_en: str = ""
+    api_key: str | None = None
+
+class WritingAttemptRequest(_BaseModel):
+    owner_email: str | None = None
+    mode: str = "sentence"
+    level: str = "beginner"
+    category: str = ""
+    task: str = ""
+    score: float = 0.0          # sentence/paragraph: avg /10; ielts: band /9
+    num_items: int = 0
+
+class VocabAddRequest(_BaseModel):
+    word: str
+    meaning_vi: str | None = ""
+    ipa: str | None = ""
+    part_of_speech: str | None = ""
+    example_en: str | None = ""
+    example_vi: str | None = ""
+    owner_email: str | None = None
+    api_key: str | None = None
+
+class VocabGradeRequest(_BaseModel):
+    id: int
+    correct: bool
+    owner_email: str | None = None
+
+# AI response schemas for writing
+class WritingSentenceSchema(_BaseModel):
+    vi: str
+    reference_en: str
+    hint: str | None = ""
+
+class WritingLessonSchema(_BaseModel):
+    mode: str
+    level: str
+    category: str | None = ""
+    sentences: list[WritingSentenceSchema] = []
+    ielts_prompt: str | None = ""
+    min_words: int | None = 0
+    question_type: str | None = ""
+    structure_hint: list[str] = []
+
+class WritingWordSchema(_BaseModel):
+    word: str
+    ipa: str | None = ""
+    part_of_speech: str | None = ""
+    meaning_vi: str
+    example_en: str | None = ""
+    example_vi: str | None = ""
+
+class WritingErrorSchema(_BaseModel):
+    type: str
+    vi_explanation: str
+
+class WritingGradeSchema(_BaseModel):
+    score: float
+    corrected: str
+    errors: list[WritingErrorSchema] = []
+    tip_vi: str
+    accuracy: int = 0
+    is_good: bool = False
+    suggestion: str | None = ""
+    improvements: list[str] = []
+
+class WritingVocabBankRequest(BaseModel):
+    text: str
+    api_key: str | None = None
+
+class WritingVocabBankSchema(_BaseModel):
+    words: list[WritingWordSchema] = []
+
+class WritingBandDescriptors(_BaseModel):
+    task_response: str | None = ""
+    coherence: str | None = ""
+    lexical: str | None = ""
+    grammar: str | None = ""
+
+class WritingAnnotation(_BaseModel):
+    original: str
+    issue_vi: str
+    suggestion: str
+
+class WritingVocabItem(_BaseModel):
+    basic: str
+    better: str
+    note_vi: str | None = ""
+
+class WritingStructureSchema(_BaseModel):
+    intro: str | None = ""
+    body: str | None = ""
+    conclusion: str | None = ""
+
+class WritingIeltsSchema(_BaseModel):
+    band: float
+    task_response: float
+    coherence: float
+    lexical: float
+    grammar: float
+    feedback_vi: str
+    improved_intro: str
+    descriptors: WritingBandDescriptors | None = None
+    annotations: list[WritingAnnotation] = []
+    vocabulary: list[WritingVocabItem] = []
+    model_answer: str | None = ""
+    structure: WritingStructureSchema | None = None
+    question_type: str | None = ""
+
+# AI response schemas
+class ExamOption(_BaseModel):
+    id: str
+    text: str
+
+class ExamQuestionSchema(_BaseModel):
+    type: str
+    question: str
+    options: list[ExamOption] | None = None
+    correct_option_id: str | None = None
+    answer: str | None = None
+    explanation: str | None = None
+
+class ExamSchema(_BaseModel):
+    title: str
+    questions: list[ExamQuestionSchema]
+
+class ExamDocSchema(_BaseModel):
+    title: str
+    markdown_content: str
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _fetch_drive_text(file_id: str) -> str:
+    try:
+        key = os.getenv("VITE_GOOGLE_DRIVE_API_KEY", "")
+        # macOS system Python lacks CA certs (CERTIFICATE_VERIFY_FAILED) — use certifi's bundle.
+        import ssl, certifi
+        ctx = ssl.create_default_context(cafile=certifi.where())
+        # The public library is built from Drive shortcuts; alt=media 403s on a shortcut id,
+        # so resolve to the target file first.
+        meta_url = f"https://www.googleapis.com/drive/v3/files/{file_id}?fields=id,shortcutDetails&key={key}"
+        try:
+            with urllib.request.urlopen(meta_url, timeout=30, context=ctx) as resp:
+                meta = json.loads(resp.read().decode())
+            file_id = meta.get("shortcutDetails", {}).get("targetId") or file_id
+        except Exception:
+            pass
+        url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media&key={key}"
+        with urllib.request.urlopen(url, timeout=60, context=ctx) as resp:
+            data = resp.read()
+        if data[:4] == b"%PDF":
+            import pdfplumber
+            tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+            try:
+                tmp.write(data)
+                tmp.close()
+                with pdfplumber.open(tmp.name) as pdf:
+                    return "\n".join(p.extract_text() or "" for p in pdf.pages)
+            finally:
+                os.unlink(tmp.name)
+        return data.decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
+def _assemble_source_text(db, sources: list, document_id=None) -> str:
+    parts = []
+    for src in sources:
+        try:
+            if src.type == "text":
+                parts.append(src.value)
+            elif src.type == "document":
+                parts.append(get_document_text(db, int(src.value)))
+            elif src.type == "drive":
+                parts.append(_fetch_drive_text(src.value))
+        except Exception:
+            pass
+    if document_id:
+        try:
+            parts.append(get_document_text(db, document_id))
+        except Exception:
+            pass
+    return "\n\n".join(filter(None, parts))[:60000]
+
+
+# ── Endpoints ────────────────────────────────────────────────────────────────
+
+@app.post("/api/exams/generate")
+async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
+    from nlp.exam import extract_exam
+
+    text = _assemble_source_text(db, req.sources, document_id=req.document_id)
+    if not text.strip():
+        text = f"{req.title}. {req.description}"
+
+    data = None
+    current_key = get_api_key(req.api_key)
+    if current_key:
+        try:
+            prompt_text = text[:30000]
+            type_names = ", ".join(req.question_types)
+            expl_instruction = "Có giải thích cho mỗi câu." if req.with_explanation else "Không cần giải thích."
+            prompt = (
+                f"Tạo đề thi gồm {req.num_questions} câu hỏi ({type_names}), "
+                f"độ khó: {req.difficulty}, ngôn ngữ: {req.language}. {expl_instruction}\n\n"
+                f"Nội dung:\n{prompt_text}"
+            )
+            config = LocalAgentConfig(
+                api_key=current_key,
+                model="gemini-3.1-flash-lite",
+                response_schema=ExamSchema,
+                capabilities=FAST_CAPS,
+            )
+            result = await agent_run(config, prompt, structured=True, timeout=30)
+            if result and result.get("questions"):
+                data = result
+        except Exception as e:
+            print(f"[exam AI failed] {e}")
+
+    if not data:
+        data = extract_exam(
+            text,
+            num_questions=req.num_questions,
+            types=req.question_types,
+            with_explanation=req.with_explanation,
+        )
+
+    cfg = {
+        "duration_minutes": req.duration_minutes,
+        "difficulty": req.difficulty,
+        "language": req.language,
+        "question_types": req.question_types,
+        "with_explanation": req.with_explanation,
+        "description": req.description,
+    }
+
+    if req.project_id or req.document_id:
+        query = db.query(models.Artifact).filter(models.Artifact.type == "exam")
+        if req.document_id:
+            query = query.filter(models.Artifact.document_id == req.document_id)
+        elif req.project_id:
+            query = query.filter(models.Artifact.project_id == req.project_id)
+        query.delete()
+        db.commit()
+
+    artifact = crud.create_artifact(
+        db,
+        project_id=req.project_id,
+        type="exam",
+        title=req.title or data.get("title", "Đề thi"),
+        content=json.dumps({"config": cfg, "questions": data["questions"]}, ensure_ascii=False),
+        document_id=req.document_id,
+        owner_email=req.owner_email,
+    )
+    return {"id": artifact.id, "title": artifact.title, "config": cfg, "questions": data["questions"]}
+
+
+@app.post("/api/examdocs/generate")
+async def generate_examdoc(req: ExamDocGenRequest, db=Depends(get_db)):
+    from nlp.concept_map import generate_offline_exam_prep
+
+    text = _assemble_source_text(db, req.sources)
+    if not text.strip():
+        text = f"{req.title}. {req.description}"
+
+    data = None
+    current_key = get_api_key(req.api_key)
+    if current_key:
+        try:
+            prompt_text = text[:30000]
+            prompt = (
+                f"Tạo tài liệu phòng thi (cram sheet) toàn diện bằng tiếng Việt. "
+                f"Mục tiêu: {req.objective or 'ôn tập tổng quát'}. "
+                f"Độ dài mong muốn: {req.length}. "
+                f"Mô tả thêm: {req.description}.\n\n"
+                f"Trình bày dạng Markdown, có tiêu đề, gạch đầu dòng, bảng nếu cần. "
+                f"Tóm tắt các điểm then chốt, công thức, định nghĩa quan trọng.\n\n"
+                f"Nội dung nguồn:\n{prompt_text}"
+            )
+            config = LocalAgentConfig(
+                api_key=current_key,
+                model="gemini-3.1-flash-lite",
+                response_schema=ExamDocSchema,
+                capabilities=FAST_CAPS,
+            )
+            result = await agent_run(config, prompt, structured=True, timeout=30)
+            if result and result.get("markdown_content"):
+                data = result
+        except Exception as e:
+            print(f"[examdoc AI failed] {e}")
+
+    if not data:
+        data = generate_offline_exam_prep(text)
+
+    cfg = {"objective": req.objective, "length": req.length, "description": req.description}
+    artifact = crud.create_artifact(
+        db,
+        type="examdoc",
+        title=req.title or data.get("title", "Tài liệu ôn thi"),
+        content=json.dumps({"config": cfg, "markdown_content": data["markdown_content"]}, ensure_ascii=False),
+        owner_email=req.owner_email,
+    )
+    return {
+        "id": artifact.id,
+        "title": artifact.title,
+        "markdown_content": data["markdown_content"],
+        "config": cfg,
+    }
+
+
+@app.get("/api/artifacts/{artifact_id}")
+def get_artifact(artifact_id: int, db=Depends(get_db)):
+    artifact = db.query(models.Artifact).filter(models.Artifact.id == artifact_id).first()
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Artifact không tìm thấy")
+    try:
+        content = json.loads(artifact.content)
+    except Exception:
+        content = artifact.content
+    return {
+        "id": artifact.id,
+        "type": artifact.type,
+        "title": artifact.title,
+        "content": content,
+        "created_at": artifact.created_at.isoformat() if artifact.created_at else None,
+        "owner_email": artifact.owner_email,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Writing practice: VN -> EN translation lessons, sentence grading, IELTS scoring.
+# Every AI path falls back to the deterministic nlp.writing engine (never 500).
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/writing/lessons/generate")
+async def writing_generate_lesson(req: WritingLessonRequest, db=Depends(get_db)):
+    from nlp import writing as writing_engine
+
+    data = None
+    current_key = get_api_key(req.api_key)
+    if current_key:
+        try:
+            if req.mode == "ielts":
+                task_label = "Task 1 (biểu đồ)" if req.task == "task1" else "Task 2 (bài luận)"
+                if req.task == "task2":
+                    ask = (
+                        f"Tạo một bài luận IELTS Task 2 hoàn chỉnh đạt band 8 trả lời cho một đề bài ngẫu nhiên "
+                        f"thuộc loại '{req.question_type or 'bất kỳ'}'. Sau đó, tách bài luận thành từng câu. "
+                        "Với mỗi câu, cung cấp bản dịch tiếng Việt tự nhiên ('vi') và câu tiếng Anh gốc ('reference_en'), hint để rỗng. "
+                        "Trả về thêm trường 'question_type' và 'structure_hint' (dàn ý gợi ý 4 mục bằng tiếng Việt)."
+                    )
+                else:
+                    ask = f"Tạo một đề bài IELTS Writing {task_label} ngẫu nhiên tiếng Anh."
+                prompt = (
+                    ask + "\n\nTrả về JSON đúng schema: mode, level, category, "
+                    "sentences[{vi, reference_en, hint}], ielts_prompt, min_words (250 cho task2), question_type, structure_hint."
+                )
+            elif req.mode == "paragraph":
+                ask = (
+                    f"Tạo một đoạn văn tiếng Việt mạch lạc thuộc thể loại '{req.category or 'Essays'}' "
+                    f"ở trình độ {req.level}, rồi tách thành {req.num_sentences} câu. "
+                    "Với mỗi câu, cung cấp bản dịch tiếng Anh chuẩn."
+                )
+                prompt = (
+                    ask + "\n\nTrả về JSON đúng schema: mode, level, category, "
+                    "sentences[{vi, reference_en, hint}], ielts_prompt, min_words."
+                )
+            else:
+                ask = (
+                    f"Tạo {req.num_sentences} câu tiếng Việt thuộc chủ đề '{req.category or 'đời sống hằng ngày'}' "
+                    f"ở trình độ {req.level} để luyện dịch sang tiếng Anh. "
+                    "Với mỗi câu, cung cấp bản dịch tiếng Anh chuẩn và một gợi ý ngắn (hint) bằng tiếng Việt."
+                )
+                prompt = (
+                    ask + "\n\nTrả về JSON đúng schema: mode, level, category, "
+                    "sentences[{vi, reference_en, hint}], ielts_prompt, min_words."
+                )
+            config = LocalAgentConfig(
+                api_key=current_key, model="gemini-3.1-flash-lite",
+                response_schema=WritingLessonSchema, capabilities=FAST_CAPS,
+            )
+            result = await agent_run(config, prompt, structured=True, timeout=30)
+            
+            # Additional fallback checking for IELTS
+            if result and (result.get("sentences") or req.mode == "ielts"):
+                result.setdefault("mode", req.mode)
+                result.setdefault("level", req.level)
+                result.setdefault("category", req.category)
+                if req.mode == "ielts":
+                    if req.task == "task2" and not result.get("sentences"):
+                        # Fallback for omitted sentences or structure
+                        fallback_data = writing_engine.generate_lesson(
+                            mode=req.mode, level=req.level, category=req.category,
+                            topic=req.topic, num_sentences=req.num_sentences, task=req.task,
+                            question_type=req.question_type,
+                        )
+                        result["sentences"] = fallback_data.get("sentences", [])
+                        if not result.get("question_type"):
+                            result["question_type"] = fallback_data.get("question_type", "")
+                        if not result.get("structure_hint"):
+                            result["structure_hint"] = fallback_data.get("structure_hint", [])
+                        if not result.get("ielts_prompt"):
+                            result["ielts_prompt"] = fallback_data.get("ielts_prompt", "")
+                    else:
+                        result.setdefault("sentences", [])
+                    result.setdefault("min_words", 150 if req.task == "task1" else 250)
+                else:
+                    result.setdefault("ielts_prompt", "")
+                    result.setdefault("min_words", 0)
+                data = result
+        except Exception as e:
+            print(f"[writing lesson AI failed] {e}")
+
+    if not data:
+        data = writing_engine.generate_lesson(
+            mode=req.mode, level=req.level, category=req.category,
+            topic=req.topic, num_sentences=req.num_sentences, task=req.task,
+            question_type=req.question_type,
+        )
+
+    title_map = {"sentence": "Luyện câu", "paragraph": "Luyện đoạn văn", "ielts": "Luyện IELTS Writing"}
+    title = f"{title_map.get(req.mode, 'Luyện viết')} · {req.category or req.level}"
+    artifact = crud.create_artifact(
+        db, project_id=req.project_id, type="writing_lesson", title=title,
+        content=json.dumps(data, ensure_ascii=False),
+        owner_email=req.owner_email,
+    )
+    return {"id": artifact.id, "title": title, **data}
+
+
+@app.post("/api/writing/grade")
+async def writing_grade(req: WritingGradeRequest):
+    from nlp import writing as writing_engine
+
+    current_key = get_api_key(req.api_key)
+    if current_key and req.user_en.strip():
+        try:
+            prompt = (
+                "Bạn là huấn luyện viên dịch thuật (translation coach). Chấm điểm bản dịch của học viên.\n"
+                f"Câu tiếng Việt: {req.vi}\n"
+                f"Đáp án tham khảo: {req.reference_en}\n"
+                f"Bản dịch của học viên: {req.user_en}\n"
+                "Trả về JSON khớp với WritingGradeSchema gồm: "
+                "score (0-10), accuracy (0-100, độ sát nghĩa và ngữ pháp so với câu dịch chuẩn), "
+                "is_good (true nếu dịch chính xác và tự nhiên), "
+                "corrected (phiên bản đã sửa/tốt hơn), "
+                "suggestion (câu đã sửa/câu tham khảo nếu chưa tốt, ngược lại rỗng), "
+                "errors[{type, vi_explanation}], "
+                "improvements (2-4 gạch đầu dòng ngắn gọn bằng tiếng Việt chỉ ra điểm cần sửa: thiếu ý, sai cấu trúc, sai thì...), "
+                "tip_vi (1 câu khen ngợi nếu tốt, hoặc 1 câu khuyên nhủ/nhắc nhở từ khoá cần dùng nếu chưa tốt)."
+            )
+            config = LocalAgentConfig(
+                api_key=current_key, model="gemini-3.1-flash-lite",
+                response_schema=WritingGradeSchema, capabilities=FAST_CAPS,
+            )
+            result = await agent_run(config, prompt, structured=True, timeout=25)
+            if result and "score" in result:
+                result.setdefault("errors", [])
+                result.setdefault("accuracy", int(result["score"] * 10))
+                result.setdefault("is_good", result["score"] >= 8.0)
+                result.setdefault("suggestion", req.reference_en if not result["is_good"] else "")
+                result.setdefault("improvements", [])
+                result["reference_en"] = req.reference_en
+                return result
+        except Exception as e:
+            print(f"[writing grade AI failed] {e}")
+
+    return writing_engine.grade_sentence(req.vi, req.reference_en, req.user_en, req.level)
+
+
+@app.post("/api/writing/ielts/grade")
+async def writing_grade_ielts(req: WritingIeltsRequest):
+    from nlp import writing as writing_engine
+
+    task_label = "Task 1 (mô tả biểu đồ/quy trình, báo cáo trang trọng, tối thiểu 150 từ)" \
+        if req.task == "task1" else "Task 2 (bài luận nêu quan điểm, tối thiểu 250 từ)"
+    current_key = get_api_key(req.api_key)
+    if current_key and req.essay.strip():
+        try:
+            prompt = (
+                f"Bạn là giám khảo IELTS khó tính nhưng luôn khuyến khích học viên. Chấm bài Writing {task_label} dưới đây IN VIETNAMESE.\n"
+                f"Đề bài: {req.prompt}\n\nBài làm:\n{req.essay}\n\n"
+                "Cho band tổng và 4 tiêu chí (task_response, coherence, lexical, grammar) theo thang 0-9 (bước 0.5). "
+                "Viết feedback_vi bằng tiếng Việt (vài gạch đầu dòng), "
+                "improved_intro là đoạn mở bài được cải thiện (tiếng Anh), và descriptors là mô tả ngắn cho band đạt được. "
+                "Cung cấp annotations (4-8 câu cần sửa từ bài làm), vocabulary (5-8 từ nên nâng cấp), "
+                "model_answer (bài mẫu band 8 tiếng Anh), structure (đánh giá cấu trúc intro, body, conclusion bằng tiếng Việt). "
+                f"question_type là '{req.question_type or ''}'."
+            )
+            config = LocalAgentConfig(
+                api_key=current_key, model="gemini-3.1-flash-lite",
+                response_schema=WritingIeltsSchema, capabilities=FAST_CAPS,
+            )
+            result = await agent_run(config, prompt, structured=True, timeout=35)
+            if result and "band" in result:
+                result.setdefault("task", req.task)
+                result.setdefault("question_type", req.question_type)
+                return result
+        except Exception as e:
+            print(f"[writing ielts AI failed] {e}")
+
+    return writing_engine.grade_ielts(req.prompt, req.essay, task=req.task, question_type=req.question_type)
+
+
+@app.post("/api/writing/word")
+async def writing_word_lookup(req: WritingWordRequest):
+    """Click-a-word dictionary lookup — the 'interactive translation' feature."""
+    from nlp import writing as writing_engine
+
+    current_key = get_api_key(req.api_key)
+    if current_key and req.word.strip():
+        try:
+            prompt = (
+                f"Tra cứu từ tiếng Anh '{req.word}'"
+                + (f" trong câu: \"{req.sentence_en}\"." if req.sentence_en else ".")
+                + " Trả về: word (từ gốc), ipa (phiên âm IPA), part_of_speech (từ loại), "
+                "meaning_vi (nghĩa tiếng Việt ngắn gọn), example_en (một câu ví dụ tiếng Anh), "
+                "example_vi (bản dịch tiếng Việt của ví dụ)."
+            )
+            config = LocalAgentConfig(
+                api_key=current_key, model="gemini-3.1-flash-lite",
+                response_schema=WritingWordSchema, capabilities=FAST_CAPS,
+            )
+            result = await agent_run(config, prompt, structured=True, timeout=20)
+            if result and result.get("meaning_vi"):
+                return result
+        except Exception as e:
+            print(f"[writing word AI failed] {e}")
+
+    return writing_engine.lookup_word(req.word, req.sentence_en)
+
+@app.post("/api/writing/vocab_bank")
+async def writing_vocab_bank(req: WritingVocabBankRequest):
+    from nlp import writing as writing_engine
+    current_key = get_api_key(req.api_key)
+    if current_key and req.text.strip():
+        try:
+            config = LocalAgentConfig(
+                response_schema=WritingVocabBankSchema, 
+                model="gemini-3.1-flash-lite",
+                capabilities=FAST_CAPS,
+                api_key=current_key
+            )
+            prompt = "Trích tối đa 12 từ/cụm từ vựng quan trọng trong đoạn văn tiếng Anh sau. Với mỗi từ trả về word, ipa, part_of_speech, meaning_vi, example_en.\n\n" + req.text
+            result = await agent_run(config, prompt, structured=True, timeout=20)
+            if result and result.get("words"):
+                return result
+        except Exception as e:
+            print(f"[vocab bank AI failed] {e}")
+
+    return {"words": writing_engine.vocab_bank(req.text)}
+
+
+# End of writing endpoints, append vocab endpoints here
+@app.post("/api/vocabulary/add")
+async def add_vocab(req: VocabAddRequest, db: Session = Depends(get_db)):
+    meaning = req.meaning_vi or ""
+    ipa = req.ipa or ""
+    pos = req.part_of_speech or ""
+    ex_en = req.example_en or ""
+    ex_vi = req.example_vi or ""
+    
+    if not meaning:
+        current_key = get_api_key(req.api_key)
+        if current_key:
+            try:
+                config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite", response_schema=WritingWordSchema, capabilities=FAST_CAPS)
+                prompt = f"Provide phonetic transcription (ipa), part of speech (part_of_speech), Vietnamese meaning (meaning_vi), and one English example sentence (example_en) with Vietnamese translation (example_vi) for the word: '{req.word}'."
+                data = await agent_run(config, prompt)
+                if data:
+                    meaning = data.get("meaning_vi", meaning)
+                    ipa = data.get("ipa", ipa)
+                    pos = data.get("part_of_speech", pos)
+                    ex_en = data.get("example_en", ex_en)
+                    ex_vi = data.get("example_vi", ex_vi)
+            except Exception as e:
+                print(f"[vocab] AI autofill failed, falling back: {e}")
+                from nlp import writing as writing_engine
+                try:
+                    data = writing_engine.lookup_word(req.word)
+                    if data:
+                        meaning = data.get("meaning_vi", meaning)
+                        ipa = data.get("ipa", ipa)
+                        pos = data.get("part_of_speech", pos)
+                        ex_en = data.get("example_en", ex_en)
+                        ex_vi = data.get("example_vi", ex_vi)
+                except Exception:
+                    pass
+        else:
+            from nlp import writing as writing_engine
+            try:
+                data = writing_engine.lookup_word(req.word)
+                if data:
+                    meaning = data.get("meaning_vi", meaning)
+                    ipa = data.get("ipa", ipa)
+                    pos = data.get("part_of_speech", pos)
+                    ex_en = data.get("example_en", ex_en)
+                    ex_vi = data.get("example_vi", ex_vi)
+            except Exception:
+                pass
+
+    new_word = models.VocabWord(
+        word=req.word,
+        meaning_vi=meaning,
+        ipa=ipa,
+        part_of_speech=pos,
+        example_en=ex_en,
+        example_vi=ex_vi,
+        owner_email=req.owner_email,
+        due_date=datetime.date.today()
+    )
+    db.add(new_word)
+    db.commit()
+    db.refresh(new_word)
+    return {
+        "id": new_word.id, "word": new_word.word, "meaning_vi": new_word.meaning_vi,
+        "ipa": new_word.ipa, "part_of_speech": new_word.part_of_speech,
+        "example_en": new_word.example_en, "example_vi": new_word.example_vi,
+        "learned": new_word.learned, "correct_count": new_word.correct_count,
+        "wrong_count": new_word.wrong_count
+    }
+
+from nlp.vocab_bank import VOCAB_BANK
+
+@app.get("/api/vocabulary/bank")
+def get_vocab_bank_topics():
+    topics = list(VOCAB_BANK.keys())
+    levels = ["b", "i", "a"]
+    return {"topics": topics, "levels": levels}
+
+@app.get("/api/vocabulary/bank/words")
+def get_vocab_bank_words(topic: str, level: str):
+    if topic in VOCAB_BANK and level in VOCAB_BANK[topic]:
+        return {"words": VOCAB_BANK[topic][level]}
+    return {"words": []}
+
+
+class VocabGenerateRequest(BaseModel):
+    prompt: str
+    owner_email: str | None = None
+    api_key: str | None = None
+
+class VocabListSchema(BaseModel):
+    words: list[WritingWordSchema]
+
+@app.post("/api/vocabulary/generate")
+async def generate_vocab(req: VocabGenerateRequest, db: Session = Depends(get_db)):
+    current_key = get_api_key(req.api_key)
+    if not current_key:
+        raise HTTPException(status_code=400, detail="Vui lòng cung cấp Gemini API Key để tạo từ vựng bằng AI.")
+        
+    try:
+        from core.agent import LocalAgentConfig, agent_run, FAST_CAPS
+        config = LocalAgentConfig(
+            api_key=current_key, 
+            model="gemini-3.1-flash", 
+            response_schema=VocabListSchema, 
+            capabilities=FAST_CAPS
+        )
+        prompt = f"Generate a list of exactly 5 useful vocabulary words related to the topic: '{req.prompt}'. For each word, provide its phonetic transcription (ipa), part of speech (part_of_speech), Vietnamese meaning (meaning_vi), one English example sentence (example_en), and its Vietnamese translation (example_vi)."
+        
+        data = await agent_run(config, prompt)
+        
+        if not data or "words" not in data:
+            return {"words": [], "added": 0}
+            
+        words = data["words"]
+        added_count = 0
+        
+        # Query existing words
+        query = db.query(models.VocabWord)
+        if req.owner_email:
+            query = query.filter(models.VocabWord.owner_email == req.owner_email)
+        else:
+            query = query.filter(models.VocabWord.owner_email.is_(None))
+        existing_words = {w.word.lower(): w for w in query.all()}
+        
+        for w in words:
+            w_lower = w["word"].strip().lower()
+            if not w_lower: continue
+            
+            if w_lower not in existing_words:
+                new_word = models.VocabWord(
+                    word=w_lower,
+                    meaning_vi=w.get("meaning_vi", ""),
+                    ipa=w.get("ipa", ""),
+                    part_of_speech=w.get("part_of_speech", ""),
+                    example_en=w.get("example_en", ""),
+                    example_vi=w.get("example_vi", ""),
+                    owner_email=req.owner_email,
+                    learned=0,
+                    correct_count=0,
+                    wrong_count=0,
+                    interval=0,
+                    ease=2.5,
+                    repetitions=0,
+                    due_date=datetime.date.today()
+                )
+                db.add(new_word)
+                added_count += 1
+                
+        db.commit()
+        return {"added": added_count, "words": words}
+        
+    except Exception as e:
+        print(f"Generate vocab error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+class VocabImportRequest(BaseModel):
+    topic: str
+    level: str
+    owner_email: str | None = None
+
+@app.post("/api/vocabulary/bank/import")
+def import_vocab_bank(req: VocabImportRequest, db: Session = Depends(get_db)):
+    if req.topic not in VOCAB_BANK or req.level not in VOCAB_BANK[req.topic]:
+        raise HTTPException(status_code=404, detail="Topic or level not found in bank")
+        
+    words_to_add = VOCAB_BANK[req.topic][req.level]
+    existing_words = db.query(models.VocabWord).filter(
+        models.VocabWord.owner_email == req.owner_email
+    ).all()
+    existing_dict = {w.word.lower(): w for w in existing_words}
+    
+    added_count = 0
+    updated_count = 0
+    skipped_count = 0
+    for w in words_to_add:
+        w_lower = w["word"].lower()
+        if w_lower not in existing_dict:
+            new_word = models.VocabWord(
+                word=w["word"],
+                meaning_vi=w.get("meaning_vi", ""),
+                ipa=w.get("ipa", ""),
+                part_of_speech=w.get("part_of_speech", ""),
+                example_en=w.get("example_en", ""),
+                example_vi=w.get("example_vi", ""),
+                owner_email=req.owner_email,
+                learned=0,
+                correct_count=0,
+                wrong_count=0,
+                interval=0,
+                ease=2.5,
+                repetitions=0,
+                due_date=datetime.date.today()
+            )
+            db.add(new_word)
+            added_count += 1
+        else:
+            existing_word = existing_dict[w_lower]
+            # Update missing details if any
+            if not existing_word.meaning_vi:
+                existing_word.meaning_vi = w.get("meaning_vi", "")
+                existing_word.ipa = existing_word.ipa or w.get("ipa", "")
+                existing_word.part_of_speech = existing_word.part_of_speech or w.get("part_of_speech", "")
+                existing_word.example_en = existing_word.example_en or w.get("example_en", "")
+                existing_word.example_vi = existing_word.example_vi or w.get("example_vi", "")
+                updated_count += 1
+            else:
+                skipped_count += 1
+            
+    db.commit()
+    return {"added": added_count, "updated": updated_count, "skipped": skipped_count}
+
+@app.get("/api/vocabulary/list")
+def list_vocab(email: str | None = None, q: str | None = None, db: Session = Depends(get_db)):
+    query = db.query(models.VocabWord)
+    if email:
+        query = query.filter(models.VocabWord.owner_email == email)
+    else:
+        query = query.filter(models.VocabWord.owner_email.is_(None))
+    
+    words = query.order_by(models.VocabWord.id.desc()).all()
+    suggestions = []
+    
+    if q:
+        q_lower = q.lower()
+        
+        # Generate synonyms for the query
+        syns = set()
+        for syn in wn.synsets(q_lower):
+            for l in syn.lemmas():
+                name = l.name().replace('_', ' ').lower()
+                if name != q_lower:
+                    syns.add(name)
+        suggestions = list(syns)[:10]
+        
+        # Filter words matching query OR matching any synonym
+        filtered_words = []
+        for w in words:
+            w_word = (w.word or "").lower()
+            w_mean = (w.meaning_vi or "").lower()
+            if q_lower in w_word or q_lower in w_mean:
+                filtered_words.append(w)
+            elif any(syn in w_word for syn in syns):
+                filtered_words.append(w)
+        words = filtered_words
+        
+        # If no words and no synonyms found, it might be a typo, suggest correct spellings
+        if not suggestions and not words:
+            if 'ALL_LEMMAS' in globals() and ALL_LEMMAS:
+                suggestions = difflib.get_close_matches(q_lower, ALL_LEMMAS, n=5, cutoff=0.7)
+        
+    return {
+        "words": [{
+            "id": w.id, "word": w.word, "meaning_vi": w.meaning_vi,
+            "ipa": w.ipa, "part_of_speech": w.part_of_speech,
+            "example_en": w.example_en, "example_vi": w.example_vi,
+            "learned": w.learned, "correct_count": w.correct_count,
+            "wrong_count": w.wrong_count, "due_date": w.due_date.isoformat() if w.due_date else None
+        } for w in words],
+        "suggestions": suggestions
+    }
+
+@app.get("/api/vocabulary/lookup")
+def lookup_dictionary(word: str):
+    import requests
+    try:
+        from deep_translator import GoogleTranslator
+        translator = GoogleTranslator(source='en', target='vi')
+    except ImportError:
+        translator = None
+
+    try:
+        r = requests.get(f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}", timeout=5)
+        if r.status_code == 200:
+            json_data = r.json()
+            
+            # Aggregate synonyms from all objects
+            all_synonyms = []
+            for item in json_data:
+                for m in item.get("meanings", []):
+                    all_synonyms.extend(m.get("synonyms", []))
+                    for d in m.get("definitions", []):
+                        all_synonyms.extend(d.get("synonyms", []))
+            
+            # Use the first object for core details
+            data = json_data[0]
+            ipa = data.get("phonetic") or (data.get("phonetics") and len(data["phonetics"]) > 0 and data["phonetics"][0].get("text")) or ""
+            meanings = data.get("meanings", [])
+            pos = meanings[0].get("partOfSpeech", "") if meanings else ""
+            
+            definition = ""
+            example_en = ""
+            grammar_tag = ""
+            
+            if meanings and meanings[0].get("definitions"):
+                definition = meanings[0]["definitions"][0].get("definition", "")
+                example_en = meanings[0]["definitions"][0].get("example", "")
+                
+                # Extract grammar tags robustly
+                def_lower = definition.lower()
+                tags = []
+                
+                if "plural" in def_lower and "plurality" not in def_lower:
+                    tags.append("số nhiều")
+                elif "singular" in def_lower and "singularity" not in def_lower:
+                    tags.append("số ít")
+                    
+                if "uncountable" in def_lower:
+                    tags.append("không đếm được")
+                elif "countable" in def_lower:
+                    tags.append("đếm được")
+                    
+                if tags:
+                    grammar_tag = ", ".join(tags)
+                    if pos == "noun":
+                        grammar_tag = "danh từ " + grammar_tag
+            
+            meaning_vi = ""
+            example_vi = ""
+            
+            if translator:
+                short_meaning = ""
+                long_meaning = ""
+                try: short_meaning = translator.translate(word)
+                except: pass
+                
+                if definition:
+                    try: long_meaning = translator.translate(definition)
+                    except: long_meaning = definition
+                
+                if short_meaning and long_meaning and short_meaning.lower() != word.lower():
+                    meaning_vi = f"{short_meaning} - {long_meaning}"
+                else:
+                    meaning_vi = long_meaning or short_meaning
+
+                if example_en:
+                    try: example_vi = translator.translate(example_en)
+                    except: example_vi = example_en
+            else:
+                meaning_vi = definition
+                example_vi = example_en
+                
+            return {
+                "word": word,
+                "ipa": ipa,
+                "part_of_speech": pos,
+                "grammar": grammar_tag,
+                "meaning_vi": meaning_vi,
+                "example_en": example_en,
+                "example_vi": example_vi,
+                "synonyms": list(set(all_synonyms))[:8]
+            }
+    except Exception as e:
+        print("Dictionary lookup error:", e)
+    return None
+
+@app.delete("/api/vocabulary/{word_id}")
+def delete_vocab(word_id: int, db: Session = Depends(get_db)):
+    db.query(models.VocabReview).filter(models.VocabReview.vocab_id == word_id).delete()
+    db.query(models.VocabWord).filter(models.VocabWord.id == word_id).delete()
+    db.commit()
+    return {"ok": True}
+
+@app.get("/api/vocabulary/review")
+def get_vocab_review(email: str | None = None, type: str = "new_words", limit: int = 10, db: Session = Depends(get_db)):
+    limit = max(1, min(limit, 50))
+    query = db.query(models.VocabWord)
+    if email:
+        query = query.filter(models.VocabWord.owner_email == email)
+    else:
+        query = query.filter(models.VocabWord.owner_email.is_(None))
+        
+    if type == "new_words":
+        # Always fetch unlearned words, prioritize by due_date so due words come first
+        query = query.filter(models.VocabWord.learned == 0)
+        query = query.order_by(models.VocabWord.due_date.asc())
+    else:
+        query = query.filter(models.VocabWord.learned == 1)
+        query = query.filter(models.VocabWord.due_date <= datetime.date.today())
+        query = query.order_by(models.VocabWord.due_date.asc())
+        
+    words = query.limit(limit).all()
+    
+    if type == "new_words" and len(words) < limit:
+        # Automatically pull completely new words from the global dictionary
+        import random
+        from nlp.vocab_bank import VOCAB_BANK
+        
+        # Get all existing word strings for this user
+        existing_query = db.query(models.VocabWord.word)
+        if email:
+            existing_query = existing_query.filter(models.VocabWord.owner_email == email)
+        else:
+            existing_query = existing_query.filter(models.VocabWord.owner_email.is_(None))
+        existing_words = {r[0].lower() for r in existing_query.all()}
+        
+        # Flatten all bank words
+        all_bank_words = []
+        for topic, levels in VOCAB_BANK.items():
+            for lvl, wlist in levels.items():
+                all_bank_words.extend(wlist)
+                
+        # Filter available words
+        available_words = [w for w in all_bank_words if w["word"].lower() not in existing_words]
+        
+        needed = limit - len(words)
+        if available_words:
+            chosen = random.sample(available_words, min(needed, len(available_words)))
+            for w in chosen:
+                new_word = models.VocabWord(
+                    word=w["word"].lower(),
+                    meaning_vi=w.get("meaning_vi", ""),
+                    ipa=w.get("ipa", ""),
+                    part_of_speech=w.get("part_of_speech", ""),
+                    example_en=w.get("example_en", ""),
+                    example_vi=w.get("example_vi", ""),
+                    owner_email=email,
+                    learned=0,
+                    correct_count=0,
+                    wrong_count=0,
+                    interval=0,
+                    ease=2.5,
+                    repetitions=0,
+                    due_date=datetime.date.today()
+                )
+                db.add(new_word)
+                words.append(new_word)
+            
+            db.commit()
+    return {"words": [{
+        "id": w.id, "word": w.word, "meaning_vi": w.meaning_vi,
+        "ipa": w.ipa, "part_of_speech": w.part_of_speech,
+        "example_en": w.example_en, "example_vi": w.example_vi
+    } for w in words]}
+
+@app.post("/api/vocabulary/grade")
+def grade_vocab(req: VocabGradeRequest, db: Session = Depends(get_db)):
+    query = db.query(models.VocabWord).filter(models.VocabWord.id == req.id)
+    if req.owner_email:
+        query = query.filter(models.VocabWord.owner_email == req.owner_email)
+    word = query.first()
+    if not word:
+        raise HTTPException(status_code=404, detail="Vocab not found")
+        
+    if req.correct:
+        word.repetitions += 1
+        word.correct_count += 1
+        if word.repetitions == 1:
+            word.interval = 1
+        elif word.repetitions == 2:
+            word.interval = 2
+        else:
+            word.interval = round(word.interval * word.ease)
+        word.ease = min(3.0, word.ease + 0.1)
+        points = 10
+        if word.repetitions >= 3:
+            word.learned = 1
+    else:
+        word.wrong_count += 1
+        word.repetitions = 0
+        word.interval = 1
+        word.ease = max(1.3, word.ease - 0.2)
+        points = 2
+        
+    word.due_date = datetime.date.today() + datetime.timedelta(days=word.interval)
+    word.last_reviewed = datetime.datetime.utcnow()
+    
+    review = models.VocabReview(
+        owner_email=req.owner_email,
+        vocab_id=req.id,
+        correct=1 if req.correct else 0,
+        points=points
+    )
+    db.add(review)
+    db.commit()
+    return {"id": word.id, "learned": word.learned, "points_delta": points, "repetitions": word.repetitions}
+
+@app.get("/api/vocabulary/stats")
+def get_vocab_stats(email: str | None = None, db: Session = Depends(get_db)):
+    from sqlalchemy import func
+    
+    word_query = db.query(models.VocabWord)
+    if email:
+        word_query = word_query.filter(models.VocabWord.owner_email == email)
+    else:
+        word_query = word_query.filter(models.VocabWord.owner_email.is_(None))
+        
+    total = word_query.count()
+    learned = word_query.filter(models.VocabWord.learned == 1).count()
+    completion = round(learned / total * 100) if total > 0 else 0
+    
+    review_query = db.query(models.VocabReview)
+    if email:
+        review_query = review_query.filter(models.VocabReview.owner_email == email)
+    else:
+        review_query = review_query.filter(models.VocabReview.owner_email.is_(None))
+        
+    points = db.query(func.sum(models.VocabReview.points)).filter(
+        models.VocabReview.owner_email == email if email else models.VocabReview.owner_email.is_(None)
+    ).scalar() or 0
+    
+    # Streak calculation
+    dates = db.query(func.date(models.VocabReview.created_at)).filter(
+        models.VocabReview.owner_email == email if email else models.VocabReview.owner_email.is_(None)
+    ).distinct().order_by(func.date(models.VocabReview.created_at).desc()).all()
+    
+    streak = 0
+    today = datetime.date.today()
+    yesterday = today - datetime.timedelta(days=1)
+    
+    if dates:
+        # SQLite func.date() returns ISO strings ('2026-07-05'); coerce to date objects
+        # so membership tests against `today`/`yesterday` (datetime.date) actually match.
+        date_set = set()
+        for d in dates:
+            v = d[0]
+            if not v:
+                continue
+            if isinstance(v, str):
+                try:
+                    v = datetime.date.fromisoformat(v[:10])
+                except ValueError:
+                    continue
+            date_set.add(v)
+        if today in date_set or yesterday in date_set:
+            curr = today if today in date_set else yesterday
+            while curr in date_set:
+                streak += 1
+                curr -= datetime.timedelta(days=1)
+                
+    achievements = [
+        {"id": "first_word", "title_vi": "Bước khởi đầu", "desc_vi": "Thêm từ vựng đầu tiên", "unlocked": total >= 1},
+        {"id": "quick_learner", "title_vi": "Học nhanh", "desc_vi": "Thuộc 5 từ vựng", "unlocked": learned >= 5},
+        {"id": "word_master", "title_vi": "Bậc thầy từ vựng", "desc_vi": "Thuộc 50 từ vựng", "unlocked": learned >= 50},
+        {"id": "streak_7", "title_vi": "Kiên trì", "desc_vi": "Duy trì chuỗi 7 ngày", "unlocked": streak >= 7},
+        {"id": "centurion", "title_vi": "Trăm điểm", "desc_vi": "Đạt 100 điểm từ vựng", "unlocked": points >= 100}
+    ]
+    
+    return {
+        "total": total, "learned": learned, "completion": completion,
+        "points": points, "streak": streak, "achievements": achievements
+    }
+
+
+def _writing_points(mode: str, score: float, num_items: int) -> int:
+    """Points reward accuracy and effort. Sentence/paragraph: score(/10) x items.
+    IELTS: band(/9) scaled up so a full essay is worth a meaningful chunk."""
+    if mode == "ielts":
+        return int(round(score * 20))          # band 7.0 -> 140 pts
+    return int(round(score * max(1, num_items)))  # avg 8.0 over 10 -> 80 pts
+
+
+@app.post("/api/writing/attempts")
+def writing_log_attempt(req: WritingAttemptRequest, db=Depends(get_db)):
+    points = _writing_points(req.mode, req.score, req.num_items)
+    attempt = models.WritingAttempt(
+        owner_email=req.owner_email, mode=req.mode, level=req.level,
+        category=req.category, task=req.task, score=req.score,
+        points=points, num_items=req.num_items,
+    )
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+    return {"id": attempt.id, "points_earned": points}
+
+
+@app.get("/api/writing/progress")
+def writing_progress(email: str | None = None, db=Depends(get_db)):
+    q = db.query(models.WritingAttempt)
+    if email:
+        q = q.filter(models.WritingAttempt.owner_email == email)
+    rows = q.order_by(models.WritingAttempt.created_at.desc()).all()
+
+    total_points = sum(r.points or 0 for r in rows)
+    sessions = len(rows)
+    avg_score = round(sum(r.score or 0 for r in rows) / sessions, 1) if sessions else 0.0
+
+    # Per-category accuracy (sentence/paragraph modes) — surfaces weak areas.
+    by_cat = {}
+    for r in rows:
+        key = r.category or (r.task if r.mode == "ielts" else "Khác")
+        if not key:
+            continue
+        acc = by_cat.setdefault(key, {"category": key, "sessions": 0, "avg_score": 0.0, "_sum": 0.0})
+        acc["sessions"] += 1
+        acc["_sum"] += (r.score or 0)
+    categories = []
+    for acc in by_cat.values():
+        acc["avg_score"] = round(acc["_sum"] / acc["sessions"], 1) if acc["sessions"] else 0.0
+        acc.pop("_sum", None)
+        categories.append(acc)
+    categories.sort(key=lambda c: c["avg_score"])   # weakest first
+
+    # Streak: consecutive days (up to today) with at least one attempt.
+    import datetime as _dt
+    days = {r.created_at.date() for r in rows if r.created_at}
+    streak = 0
+    day = _dt.date.today()
+    while day in days:
+        streak += 1
+        day -= _dt.timedelta(days=1)
+
+    recent = [
+        {"mode": r.mode, "level": r.level, "category": r.category, "task": r.task,
+         "score": r.score, "points": r.points,
+         "created_at": r.created_at.isoformat() if r.created_at else None}
+        for r in rows[:8]
+    ]
+
+    return {
+        "total_points": total_points, "sessions": sessions, "avg_score": avg_score,
+        "streak": streak, "categories": categories, "recent": recent,
+    }
+
+
+@app.post("/api/teachback/start")
+async def teachback_start(req: TeachBackStartRequest, db: Session = Depends(get_db)):
+    from nlp import teachback as tb_engine
+    
+    context = req.context or ""
+    if not context:
+        if req.project_id:
+            project = crud.get_project(db, req.project_id)
+            if project:
+                sources = [doc.content for doc in project.documents if doc.content]
+                context = "\n\n---\n\n".join(sources)[:30000]
+        elif req.document_id:
+            doc = db.query(models.Document).filter(models.Document.id == req.document_id).first()
+            if doc and doc.content:
+                context = doc.content[:30000]
+
+    data = None
+    current_key = get_api_key(req.api_key)
+    if current_key:
+        try:
+            prompt = (
+                f"Bạn là giáo viên. Chọn MỘT chủ đề rõ ràng từ topic '{req.topic}' hoặc đoạn văn bản sau, "
+                f"sau đó liệt kê 3-6 điểm chính (key_points) mà một lời giải thích tốt cần phải bao hàm. "
+                f"Cuối cùng, hãy viết một câu hỏi (question_vi) bằng tiếng Việt yêu cầu người học giải thích lại chủ đề đó bằng lời của họ theo kỹ thuật Feynman.\n\n"
+                f"Context: {context}"
+            )
+            config = LocalAgentConfig(
+                api_key=current_key, model="gemini-3.1-flash-lite",
+                response_schema=TeachBackPromptSchema, capabilities=FAST_CAPS,
+            )
+            result = await agent_run(config, prompt, structured=True, timeout=30)
+            if result and result.get("concept"):
+                data = result
+        except Exception as e:
+            print(f"[teachback start AI failed] {e}")
+
+    if not data:
+        data = tb_engine.make_prompt(req.topic, context, req.level or "")
+
+    return data
+
+
+@app.post("/api/teachback/evaluate")
+async def teachback_evaluate(req: TeachBackEvalRequest):
+    from nlp import teachback as tb_engine
+
+    data = None
+    current_key = get_api_key(req.api_key)
+    if current_key:
+        try:
+            prompt = (
+                f"Bạn là một gia sư áp dụng kỹ thuật Feynman. Hãy đánh giá lời giải thích của người học về khái niệm '{req.concept}'.\n"
+                f"Các điểm cần có: {', '.join(req.key_points)}\n"
+                f"Tài liệu tham khảo: {req.context or 'Không có'}\n"
+                f"Lời giải thích của người học: {req.explanation}\n\n"
+                "Trả về:\n"
+                "- understanding_score: 0-100 (tỷ lệ hiểu/ghi nhớ)\n"
+                "- covered: danh sách các điểm đã được giải thích tốt\n"
+                "- gaps: danh sách các điểm quan trọng còn thiếu\n"
+                "- misconceptions: danh sách các hiểu lầm (claim: người học nói gì, correction: sửa lại cho đúng)\n"
+                "- followup_question: câu hỏi bằng tiếng Việt để đào sâu\n"
+                "- feedback_vi: nhận xét chung, cụ thể, khích lệ (tiếng Việt)."
+            )
+            config = LocalAgentConfig(
+                api_key=current_key, model="gemini-3.1-flash-lite",
+                response_schema=TeachBackEvalSchema, capabilities=FAST_CAPS,
+            )
+            result = await agent_run(config, prompt, structured=True, timeout=30)
+            if result and "understanding_score" in result:
+                data = result
+        except Exception as e:
+            print(f"[teachback evaluate AI failed] {e}")
+
+    if not data:
+        data = tb_engine.evaluate(req.concept, req.key_points, req.explanation, req.context or "")
+
+    return data
+
+
+@app.post("/api/share")
+def share_artifact(req: ShareRequest, db=Depends(get_db)):
+    if req.artifact_id is None and req.drive_file_id is None:
+        raise HTTPException(status_code=400, detail="Cần artifact_id hoặc drive_file_id")
+    if req.artifact_id is not None:
+        exists = db.query(models.Artifact).filter(models.Artifact.id == req.artifact_id).first()
+        if not exists:
+            raise HTTPException(status_code=404, detail="Artifact không tìm thấy")
+    share = models.Share(
+        artifact_id=req.artifact_id,
+        drive_file_id=req.drive_file_id,
+        drive_file_name=req.drive_file_name,
+        owner_email=req.owner_email,
+        shared_with_email=req.to_email,
+    )
+    db.add(share)
+    db.commit()
+    db.refresh(share)
+    return {"success": True, "id": share.id}
+
+
+@app.get("/api/studio/overview")
+def studio_overview(email: str | None = None, db=Depends(get_db)):
+    q = db.query(models.Artifact).filter(models.Artifact.type.in_(["exam", "examdoc"]))
+    if email:
+        q = q.filter(
+            (models.Artifact.owner_email == email) | (models.Artifact.owner_email == None)
+        )
+    else:
+        q = q.filter(models.Artifact.owner_email == None)
+    mine_rows = q.order_by(models.Artifact.created_at.desc()).limit(20).all()
+    mine = [
+        {"id": a.id, "type": a.type, "title": a.title,
+         "created_at": a.created_at.isoformat() if a.created_at else None}
+        for a in mine_rows
+    ]
+
+    shared_exams, shared_examdocs, shared_library = [], [], []
+    if email:
+        shares = db.query(models.Share).filter(models.Share.shared_with_email == email).all()
+        for s in shares:
+            if s.drive_file_id and not s.artifact_id:
+                shared_library.append({
+                    "drive_file_id": s.drive_file_id,
+                    "name": s.drive_file_name,
+                    "from": s.owner_email,
+                    "created_at": s.created_at.isoformat() if s.created_at else None,
+                })
+            elif s.artifact_id:
+                art = db.query(models.Artifact).filter(models.Artifact.id == s.artifact_id).first()
+                if not art:
+                    continue
+                entry = {
+                    "id": art.id, "type": art.type, "title": art.title,
+                    "created_at": art.created_at.isoformat() if art.created_at else None,
+                    "from": s.owner_email,
+                }
+                if art.type == "exam":
+                    shared_exams.append(entry)
+                elif art.type == "examdoc":
+                    shared_examdocs.append(entry)
+
+    return {
+        "mine": mine,
+        "shared_exams": shared_exams,
+        "shared_examdocs": shared_examdocs,
+        "shared_library": shared_library,
+    }
+
+
+@app.post("/api/extract_text")
+async def extract_text(file: UploadFile = File(...)):
+    filename = file.filename or "upload"
+    suffix = os.path.splitext(filename)[-1].lower()
+    try:
+        raw = await file.read()
+        if suffix == ".pdf":
+            import pdfplumber
+            tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+            try:
+                tmp.write(raw)
+                tmp.close()
+                with pdfplumber.open(tmp.name) as pdf:
+                    text = "\n".join(p.extract_text() or "" for p in pdf.pages)
+            finally:
+                os.unlink(tmp.name)
+        elif suffix == ".docx":
+            import docx
+            tmp = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
+            try:
+                tmp.write(raw)
+                tmp.close()
+                d = docx.Document(tmp.name)
+                text = "\n".join(p.text for p in d.paragraphs)
+            finally:
+                os.unlink(tmp.name)
+        else:
+            text = raw.decode("utf-8", errors="ignore")
+        return {"filename": filename, "text": text, "chars": len(text)}
+    except Exception as e:
+        return {"filename": filename, "text": "", "error": str(e)}
+# ── Team chat: human-to-human realtime-ish project group chat (drafted via 9Router) ──
+from typing import Optional
+
+class TeamMessageIn(BaseModel):
+    author_email: Optional[str] = None
+    author_name: str = "Ẩn danh"
+    content: str
+
+def _msg_dict(m):
+    return {
+        "id": m.id,
+        "author_email": m.author_email,
+        "author_name": m.author_name,
+        "content": m.content,
+        "created_at": m.created_at.isoformat() if m.created_at else None,
+    }
+
+@app.get("/api/projects/{project_id}/team_messages")
+def get_team_messages(project_id: int, after_id: int = 0, db=Depends(get_db)):
+    msgs = (
+        db.query(models.TeamMessage)
+        .filter(models.TeamMessage.project_id == project_id, models.TeamMessage.id > after_id)
+        .order_by(models.TeamMessage.id.asc())
+        .limit(200)
+        .all()
+    )
+    return {"messages": [_msg_dict(m) for m in msgs]}
+
+@app.post("/api/projects/{project_id}/team_messages")
+def post_team_message(project_id: int, body: TeamMessageIn, db=Depends(get_db)):
+    if not body.content or not body.content.strip():
+        raise HTTPException(status_code=400, detail="content must not be empty")
+    msg = models.TeamMessage(
+        project_id=project_id,
+        author_email=body.author_email,
+        author_name=body.author_name,
+        content=body.content.strip(),
+        created_at=datetime.datetime.utcnow(),
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+    return _msg_dict(msg)

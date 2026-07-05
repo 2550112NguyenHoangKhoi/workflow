@@ -113,13 +113,13 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
         boxShadow: '0 24px 48px rgba(0,0,0,0.2)'
       }}>
         {/* Header */}
-        <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', backgroundColor: 'white' }}>
+        <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ backgroundColor: '#1B2A4E', padding: '10px', borderRadius: '12px' }}>
+            <div style={{ backgroundColor: 'var(--btn-navy)', padding: '10px', borderRadius: '12px' }}>
               <FileText color="white" size={24} />
             </div>
             <div>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1B2A4E', margin: 0 }}>Smart Notes</h2>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-navy)', margin: 0 }}>Smart Notes</h2>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: 0 }}>
                 {activeDoc ? `Algorithmically Extracted from ${activeDoc.filename}` : 'TextRank Extraction'}
               </p>
@@ -148,7 +148,7 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
             <div style={{ color: 'red', textAlign: 'center', fontWeight: 600 }}>{error}</div>
           ) : (
             <div style={{ 
-              backgroundColor: 'white', padding: '32px', borderRadius: '16px', 
+              backgroundColor: 'var(--bg-tertiary)', padding: '32px', borderRadius: '16px', 
               boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '1px solid var(--border-light)',
               color: '#333', lineHeight: '1.6'
             }}>

@@ -56,13 +56,13 @@ const ExamViewer = () => {
     const showReveal = isSubmitted || (isInstantReveal && isSelected);
     
     if (!showReveal) {
-      if (isSelected) return { backgroundColor: '#F3EAE3', border: '1px solid #8A334B', color: '#1B2A4E' };
-      return { backgroundColor: 'white', border: '1px solid var(--border-medium)', color: 'var(--text-primary)' };
+      if (isSelected) return { backgroundColor: '#F3EAE3', border: '1px solid #8A334B', color: 'var(--text-navy)' };
+      return { backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', color: 'var(--text-primary)' };
     }
 
-    if (isCorrect) return { backgroundColor: '#E8F5E9', border: '1px solid #4CAF50', color: '#1B2A4E' };
+    if (isCorrect) return { backgroundColor: '#E8F5E9', border: '1px solid #4CAF50', color: 'var(--text-navy)' };
     if (isSelected && !isCorrect) return { backgroundColor: '#FDF2F2', border: '1px solid #FCA5A5', color: '#991B1B' };
-    return { backgroundColor: 'white', border: '1px solid var(--border-medium)', color: 'var(--text-muted)' };
+    return { backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', color: 'var(--text-muted)' };
   };
 
   return (
@@ -71,11 +71,11 @@ const ExamViewer = () => {
       {/* Top Header */}
       <div style={{ height: '72px', backgroundColor: '#E2F0D9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', borderBottom: '1px solid var(--border-light)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <button onClick={() => navigate(-1)} style={{ backgroundColor: 'white', border: 'none', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'var(--shadow-sm)' }}>
+          <button onClick={() => navigate(-1)} style={{ backgroundColor: 'var(--bg-tertiary)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'var(--shadow-sm)' }}>
             <ArrowLeft size={20} color="#8A334B" />
           </button>
           <div>
-            <h1 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1B2A4E', margin: 0, letterSpacing: '0.02em' }}>Đề thi ôn tập 19/6/2026 SHPT</h1>
+            <h1 style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-navy)', margin: 0, letterSpacing: '0.02em' }}>Đề thi ôn tập 19/6/2026 SHPT</h1>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Đề thi học thuật</div>
           </div>
         </div>
@@ -84,7 +84,7 @@ const ExamViewer = () => {
           <button style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#3B6B59', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '20px', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
             <Download size={16} /> Tải PDF
           </button>
-          <button style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'white', color: 'var(--text-secondary)', border: '1px solid var(--border-medium)', padding: '8px 16px', borderRadius: '20px', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
+          <button style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border-medium)', padding: '8px 16px', borderRadius: '20px', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
             <FileText size={16} /> Tải JSON
           </button>
           <button onClick={() => navigate(-1)} style={{ backgroundColor: '#F3EAE3', border: 'none', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#8A334B' }}>
@@ -105,7 +105,7 @@ const ExamViewer = () => {
             const showReveal = isSubmitted || (isInstantReveal && hasAnswered);
 
             return (
-              <div key={q.id} style={{ backgroundColor: 'white', borderRadius: '24px', padding: '32px', marginBottom: '24px', boxShadow: 'var(--shadow-sm)' }}>
+              <div key={q.id} style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '24px', padding: '32px', marginBottom: '24px', boxShadow: 'var(--shadow-sm)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <div style={{ backgroundColor: '#F8EFEA', color: '#8A334B', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 800 }}>
                     CÂU {q.id} - {q.type}
@@ -114,7 +114,7 @@ const ExamViewer = () => {
                   {showReveal && isCorrect && <div style={{ color: '#3B6B59', fontSize: '0.875rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}><Check size={16} /> Đúng</div>}
                 </div>
 
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1B2A4E', marginBottom: '24px', lineHeight: '1.5' }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-navy)', marginBottom: '24px', lineHeight: '1.5' }}>
                   {q.title}
                 </h3>
 
@@ -159,7 +159,7 @@ const ExamViewer = () => {
                 {showReveal && (
                   <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '2px solid var(--brand-primary)' }}>
                     <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>Giải thích chi tiết:</div>
-                    <div style={{ fontSize: '0.95rem', color: '#1B2A4E', lineHeight: '1.6' }}>
+                    <div style={{ fontSize: '0.95rem', color: 'var(--text-navy)', lineHeight: '1.6' }}>
                       {q.explanation}
                     </div>
                   </div>
@@ -170,13 +170,13 @@ const ExamViewer = () => {
         </div>
 
         {/* Middle Column: Control Panel */}
-        <div style={{ backgroundColor: 'white', borderLeft: '1px solid var(--border-light)', borderRight: '1px solid var(--border-light)', padding: '32px 24px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ backgroundColor: 'var(--bg-tertiary)', borderLeft: '1px solid var(--border-light)', borderRight: '1px solid var(--border-light)', padding: '32px 24px', display: 'flex', flexDirection: 'column' }}>
           <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-secondary)', letterSpacing: '0.05em', marginBottom: '24px' }}>BẢNG ĐIỀU KHIỂN</h3>
           
           <div style={{ border: '1px solid var(--border-light)', borderRadius: '24px', padding: '32px 24px', textAlign: 'center', marginBottom: '16px', boxShadow: 'var(--shadow-sm)' }}>
             <Clock size={24} color="#8A334B" style={{ margin: '0 auto 12px' }} />
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Thời gian làm bài</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#1B2A4E' }}>45 phút</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-navy)' }}>45 phút</div>
           </div>
 
           {!isSubmitted ? (
@@ -193,7 +193,7 @@ const ExamViewer = () => {
               <div style={{ backgroundColor: '#E8F5E9', borderRadius: '24px', padding: '32px 24px', textAlign: 'center', marginBottom: '24px' }}>
                 <Trophy size={32} color="#3B6B59" style={{ margin: '0 auto 16px' }} />
                 <div style={{ fontSize: '0.85rem', color: '#3B6B59', fontWeight: 700, marginBottom: '8px' }}>Kết quả làm bài</div>
-                <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#1B2A4E', marginBottom: '4px' }}>48 / 50</div>
+                <div style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '4px' }}>48 / 50</div>
                 <div style={{ fontSize: '0.9rem', color: '#3B6B59', fontWeight: 700 }}>Đúng 96%</div>
               </div>
               <button onClick={() => { setIsSubmitted(false); setSelectedAnswers({}); }} style={{ backgroundColor: '#8A334B', color: 'white', border: 'none', padding: '16px', borderRadius: '16px', fontWeight: 700, fontSize: '1rem', cursor: 'pointer', marginBottom: '16px', boxShadow: '0 4px 12px rgba(138, 51, 75, 0.3)' }}>
@@ -209,12 +209,12 @@ const ExamViewer = () => {
               onChange={(e) => setIsInstantReveal(e.target.checked)}
               style={{ width: '18px', height: '18px', accentColor: '#8A334B' }} 
             />
-            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1B2A4E' }}>Hiện đáp án & Giải thích luôn</span>
+            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-navy)' }}>Hiện đáp án & Giải thích luôn</span>
           </label>
         </div>
 
         {/* Right Column: Source Document */}
-        <div style={{ backgroundColor: 'white', padding: '32px 24px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ backgroundColor: 'var(--bg-tertiary)', padding: '32px 24px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
             <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>NGUỒN: TÀI LIỆU ĐỐI CHIẾU</h3>
             <X size={16} color="var(--text-muted)" style={{ cursor: 'pointer' }} />
@@ -222,23 +222,23 @@ const ExamViewer = () => {
 
           <div style={{ border: '2px solid var(--brand-primary)', borderRadius: '16px', padding: '24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1B2A4E', marginBottom: '4px' }}>Tài liệu đối chiếu</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-navy)', marginBottom: '4px' }}>Tài liệu đối chiếu</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Trang 9 / 35</div>
             </div>
 
             <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-              <button style={{ flex: 1, backgroundColor: 'white', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '6px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Zoom -</button>
-              <button style={{ flex: 1, backgroundColor: 'white', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '6px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Zoom +</button>
-              <button style={{ flex: 1, backgroundColor: 'white', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '6px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Trang trước</button>
-              <button style={{ flex: 1, backgroundColor: 'white', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '6px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Trang sau</button>
+              <button style={{ flex: 1, backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '6px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Zoom -</button>
+              <button style={{ flex: 1, backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '6px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Zoom +</button>
+              <button style={{ flex: 1, backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '6px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Trang trước</button>
+              <button style={{ flex: 1, backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '6px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Trang sau</button>
               <button style={{ flex: 1, backgroundColor: '#F8EFEA', border: 'none', borderRadius: '8px', padding: '6px', fontSize: '0.75rem', fontWeight: 700, color: '#8A334B' }}>Mở tab mới</button>
             </div>
 
             {/* Real PDF Render */}
-            <div style={{ flex: 1, backgroundColor: 'white', border: '1px solid var(--border-light)', padding: '24px', overflowY: 'auto', color: '#1B2A4E', fontSize: '1rem', lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>
+            <div style={{ flex: 1, backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', padding: '24px', overflowY: 'auto', color: 'var(--text-navy)', fontSize: '1rem', lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>
               {activeDoc ? (
                 <>
-                  <h2 style={{ color: '#1B2A4E', fontSize: '1.25rem', fontWeight: 800, marginBottom: '16px' }}>{activeDoc.filename}</h2>
+                  <h2 style={{ color: 'var(--text-navy)', fontSize: '1.25rem', fontWeight: 800, marginBottom: '16px' }}>{activeDoc.filename}</h2>
                   <div style={{ marginBottom: '16px' }}>
                     {activeDoc.content}
                   </div>

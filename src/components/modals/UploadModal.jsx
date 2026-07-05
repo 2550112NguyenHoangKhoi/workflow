@@ -74,7 +74,7 @@ const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
         <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-light)' }}>
           <div>
             <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#B45309', letterSpacing: '0.05em', marginBottom: '4px' }}>ĐÓNG GÓP TÀI LIỆU</div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1B2A4E' }}>Thông tin phân loại tài liệu</h2>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-navy)' }}>Thông tin phân loại tài liệu</h2>
             {file && <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>1 file - {(file.size / 1024).toFixed(1)} KB</div>}
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: '1px solid var(--border-medium)', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-secondary)' }}>
@@ -92,7 +92,7 @@ const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
               <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>1 file</span>
             </div>
             {file ? (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-tertiary)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
                 <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{file.name}</span>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{(file.size / 1024).toFixed(1)} KB</span>
               </div>
@@ -107,7 +107,7 @@ const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
               <select 
                 value={school}
                 onChange={(e) => setSchool(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem' }}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-tertiary)', fontSize: '0.9rem' }}
               >
                 <option>ĐHBK-HCM</option>
                 <option>HCMUS</option>
@@ -120,7 +120,7 @@ const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
               <select 
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem' }}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-tertiary)', fontSize: '0.9rem' }}
               >
                 <option>Khoa học máy tính</option>
                 <option>Kỹ thuật phần mềm</option>
@@ -135,7 +135,7 @@ const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
               <select 
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem', marginBottom: '8px' }}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-tertiary)', fontSize: '0.9rem', marginBottom: '8px' }}
               >
                 <option>Khác</option>
                 <option>Cơ sở dữ liệu</option>
@@ -170,7 +170,7 @@ const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
               <select 
                 value={docType}
                 onChange={(e) => setDocType(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem' }}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-tertiary)', fontSize: '0.9rem' }}
               >
                 <option>Chọn loại</option>
                 <option>Slide / bài giảng</option>
@@ -184,7 +184,7 @@ const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
               <select 
                 value={academicYear}
                 onChange={(e) => setAcademicYear(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'white', fontSize: '0.9rem' }}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-tertiary)', fontSize: '0.9rem' }}
               >
                 <option>Chọn năm học</option>
                 <option>2025-2026</option>
@@ -219,8 +219,8 @@ const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '24px', backgroundColor: 'white', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end', gap: '12px', borderBottomLeftRadius: '24px', borderBottomRightRadius: '24px' }}>
-          <button onClick={onClose} style={{ padding: '12px 24px', backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '12px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+        <div style={{ padding: '24px', backgroundColor: 'var(--bg-tertiary)', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end', gap: '12px', borderBottomLeftRadius: '24px', borderBottomRightRadius: '24px' }}>
+          <button onClick={onClose} style={{ padding: '12px 24px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '12px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
             Hủy
           </button>
           <button onClick={handleSubmit} disabled={isUploading || !file} style={{ flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: file ? '#1B2A4E' : '#E2E8F0', color: file ? 'white' : '#64748B', fontWeight: 700, border: 'none', cursor: file ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>

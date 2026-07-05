@@ -8,6 +8,7 @@ import ConceptMapModal from '../modals/ConceptMapModal';
 import FlashcardReviewModal from '../modals/FlashcardReviewModal';
 import StudyPlanModal from '../modals/StudyPlanModal';
 import CreateLessonPlanModal from '../modals/CreateLessonPlanModal';
+import ArtifactViewerModal from '../modals/ArtifactViewerModal';
 
 const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
   const { id } = useParams();
@@ -21,7 +22,8 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
   const [isFlashcardOpen, setIsFlashcardOpen] = useState(false);
   const [isStudyPlanOpen, setIsStudyPlanOpen] = useState(false);
   const [isCreateLessonPlanOpen, setIsCreateLessonPlanOpen] = useState(false);
-  
+  const [viewArtifactId, setViewArtifactId] = useState(null);
+
   const [roadmapItems, setRoadmapItems] = useState([]);
   const [isGeneratingRoadmap, setIsGeneratingRoadmap] = useState(false);
   const [artifacts, setArtifacts] = useState([]);
@@ -173,12 +175,12 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {documents.length === 0 ? (
-              <div style={{ backgroundColor: 'white', border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+              <div style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
                 Uploaded files and links will appear here while AI processes them.
               </div>
             ) : (
               documents.map(doc => (
-                <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-light)', backgroundColor: 'white' }}>
+                <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)' }}>
                   <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <FileText size={16} color="var(--text-secondary)" />
                   </div>
@@ -246,9 +248,9 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
             {roadmapItems.length === 0 ? (
-              <div style={{ backgroundColor: 'white', border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px' }}>
+              <div style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px' }}>
                 <div style={{ marginBottom: '12px' }}>
-                  <span style={{ backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '16px', padding: '4px 12px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Chưa tạo</span>
+                  <span style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '16px', padding: '4px 12px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Chưa tạo</span>
                 </div>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 16px' }}>
                   Bấm tạo giáo án để Workflow kiểm tra tài liệu, tạo roadmap mặc định và bắt đầu theo dõi mục tiêu học.
@@ -263,7 +265,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                   <button 
                     onClick={generateRoadmap}
                     disabled={isGeneratingRoadmap}
-                    style={{ flex: 1, backgroundColor: 'white', color: '#8A334C', border: '1px solid var(--border-medium)', padding: '10px 16px', borderRadius: '12px', fontWeight: 700, fontSize: '0.8rem', cursor: isGeneratingRoadmap ? 'not-allowed' : 'pointer', opacity: isGeneratingRoadmap ? 0.7 : 1 }}
+                    style={{ flex: 1, backgroundColor: 'var(--bg-tertiary)', color: '#8A334C', border: '1px solid var(--border-medium)', padding: '10px 16px', borderRadius: '12px', fontWeight: 700, fontSize: '0.8rem', cursor: isGeneratingRoadmap ? 'not-allowed' : 'pointer', opacity: isGeneratingRoadmap ? 0.7 : 1 }}
                   >
                     {isGeneratingRoadmap ? 'Đang tạo...' : 'Dùng LLM'}
                   </button>
@@ -364,8 +366,10 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                 );
               })
             )}
+            {/* Regenerate row — only when a roadmap already exists (the empty-state card has its own buttons) */}
+            {roadmapItems.length > 0 && (
             <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-              <button 
+              <button
                 onClick={() => setIsCreateLessonPlanOpen(true)}
                 style={{
                   flex: 1,
@@ -402,6 +406,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                 {isGeneratingRoadmap ? 'Đang tạo...' : 'Dùng LLM'}
               </button>
             </div>
+            )}
           </div>
         </div>
 
@@ -413,12 +418,12 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {artifacts.length === 0 ? (
-              <div style={{ backgroundColor: 'white', border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+              <div style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
                 Create a roadmap or plan to see it here.
               </div>
             ) : (
               artifacts.map(artifact => (
-                <div key={artifact.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-light)', backgroundColor: 'white', cursor: 'pointer' }}>
+                <div key={artifact.id} onClick={() => setViewArtifactId(artifact.id)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)', cursor: 'pointer' }}>
                   <div style={{ 
                     width: '32px', height: '32px', borderRadius: '8px', 
                     backgroundColor: artifact.type === 'quiz' ? '#FEF3C7' : artifact.type === 'notes' ? '#E0E7FF' : '#E6F0EC', 
@@ -447,6 +452,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
     <FlashcardReviewModal isOpen={isFlashcardOpen} onClose={() => setIsFlashcardOpen(false)} projectId={projectId} documentId={isProject ? null : id} />
     <StudyPlanModal isOpen={isStudyPlanOpen} onClose={() => setIsStudyPlanOpen(false)} />
     <CreateLessonPlanModal isOpen={isCreateLessonPlanOpen} onClose={() => setIsCreateLessonPlanOpen(false)} projectId={projectId} documentId={isProject ? null : id} onSuccess={fetchData} />
+    <ArtifactViewerModal isOpen={viewArtifactId !== null} artifactId={viewArtifactId} onClose={() => setViewArtifactId(null)} />
     </>
   );
 };

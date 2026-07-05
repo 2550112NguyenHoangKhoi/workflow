@@ -35,26 +35,28 @@ def _get(path: str, timeout: float):
         return json.loads(r.read().decode())
 
 
-def status() -> dict:
+def status(model_name: str | None = None) -> dict:
     """Report local-model availability — used by the Settings 'Check' button."""
+    target_model = model_name or OLLAMA_MODEL
     try:
         data = _get("/api/tags", timeout=3)
         names = [m.get("name", "") for m in data.get("models", [])]
-        pulled = any(n == OLLAMA_MODEL or n.startswith(OLLAMA_MODEL + ":") for n in names)
-        return {"available": True, "url": OLLAMA_URL, "model": OLLAMA_MODEL,
+        pulled = any(n == target_model or n.startswith(target_model + ":") for n in names)
+        return {"available": True, "url": OLLAMA_URL, "model": target_model,
                 "model_pulled": pulled, "models": names}
     except Exception as e:
-        return {"available": False, "url": OLLAMA_URL, "model": OLLAMA_MODEL, "error": str(e)}
+        return {"available": False, "url": OLLAMA_URL, "model": target_model, "error": str(e)}
 
 
-def _generate_sync(prompt: str, json_mode: bool, timeout: float) -> str:
-    payload = {"model": OLLAMA_MODEL, "prompt": prompt, "stream": False}
+def _generate_sync(prompt: str, json_mode: bool, timeout: float, model_name: str | None = None) -> str:
+    target_model = model_name or OLLAMA_MODEL
+    payload = {"model": target_model, "prompt": prompt, "stream": False}
     if json_mode:
         payload["format"] = "json"
     return _post("/api/generate", payload, timeout).get("response", "")
 
 
-async def local_generate(prompt: str, structured: bool = True, schema=None, timeout: float = 120):
+async def local_generate(prompt: str, structured: bool = True, schema=None, model_name: str | None = None, timeout: float = 120):
     """Generate with the local model. Structured calls return a parsed dict; raises on failure
     so the caller can fall back to the offline NLP engine."""
     json_mode = structured or schema is not None
@@ -68,7 +70,7 @@ async def local_generate(prompt: str, structured: bool = True, schema=None, time
             + (f" matching this JSON schema:\n{schema_json}" if schema_json else "")
             + "\nNo markdown fences, no commentary."
         )
-    text = await asyncio.to_thread(_generate_sync, prompt, json_mode, timeout)
+    text = await asyncio.to_thread(_generate_sync, prompt, json_mode, timeout, model_name)
     if not (structured or schema is not None):
         return text
     s = text.strip()

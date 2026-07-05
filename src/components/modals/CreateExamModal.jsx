@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
-import { X, UploadCloud, Sparkles, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { X, UploadCloud, Sparkles, CheckCircle2, XCircle, RotateCcw, FileText } from 'lucide-react';
+import { getSelectedSources, extractFileText, getOwnerEmail } from '../../utils/examSources';
+import ArtifactViewerModal from './ArtifactViewerModal';
 
 const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) => {
+  const navigate = useNavigate();
   const activeDocId = documentId || (() => { const match = window.location.hash.match(/#\/document\/([^/]+)/); return match ? parseInt(match[1], 10) : null; })();
-  const [title, setTitle] = useState("Đề thi ôn tập 26/6/2026");
+  const [title, setTitle] = useState(`Đề thi ôn tập ${new Date().toLocaleDateString('vi-VN')}`);
   const [description, setDescription] = useState("");
   const [time, setTime] = useState("45 phút");
   const [questionCount, setQuestionCount] = useState("10 câu");
@@ -18,6 +22,9 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
   const [withExplanation, setWithExplanation] = useState(true);
   const [text, setText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadedSources, setUploadedSources] = useState([]); // [{name, text}]
+  const fileInputRef = useRef(null);
+  const librarySources = isOpen ? getSelectedSources() : [];
 
   // Result view state
   const [viewMode, setViewMode] = useState('form'); // 'form' | 'result'
@@ -27,30 +34,64 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
 
   if (!isOpen) return null;
 
+  const handleFiles = async (fileList) => {
+    for (const file of Array.from(fileList)) {
+      try {
+        const src = await extractFileText(file);
+        setUploadedSources(prev => [...prev, src]);
+      } catch (e) {
+        alert(`${file.name}: ${e.message || e}`);
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       setIsSubmitting(true);
+      const sources = [];
+      if (text.trim()) sources.push({ type: 'text', value: text, name: 'Nội dung dán trực tiếp' });
+      uploadedSources.forEach(s => sources.push({ type: 'text', value: s.text, name: s.name }));
+      librarySources.forEach(s => sources.push({ type: s.type, value: String(s.value), name: s.name }));
       const payload = {
-        topic_or_text: text || `Đề thi ôn tập: ${title}. Mô tả: ${description}. Thời gian: ${time}. Độ khó: ${difficulty}.`,
-        api_key: localStorage.getItem('workflow_gemini_key') || localStorage.getItem('workflow_api_key') || '',
+        title,
+        description,
+        duration_minutes: parseInt(time) || 45,
+        num_questions: parseInt(questionCount) || 10,
+        difficulty,
+        language,
+        question_types: [
+          questionTypes.mcq && 'mcq',
+          questionTypes.shortAnswer && 'short_answer',
+          questionTypes.trueFalse && 'true_false',
+          questionTypes.essay && 'essay',
+        ].filter(Boolean),
+        with_explanation: withExplanation,
+        sources,
+        api_key: localStorage.getItem('workflow_api_key') || localStorage.getItem('workflow_gemini_key') || '',
         project_id: projectId ? parseInt(projectId) : null,
         document_id: activeDocId ? parseInt(activeDocId) : null,
-        page_ranges: [1],
+        owner_email: getOwnerEmail(),
       };
-      
-      const res = await fetch('http://127.0.0.1:8000/api/generate_quiz', {
+
+      const res = await fetch('http://127.0.0.1:8000/api/exams/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      
+
       if (res.ok) {
         const data = await res.json();
-        setQuizData(data);
-        setSelectedAnswers({});
-        setCheckedQuestions({});
-        setViewMode('result');
-        if (onSuccess) onSuccess();
+        if (onSuccess) onSuccess(data);
+        if (data.id) {
+          // Persisted exams open in the full-page taker (timer, Nộp bài, PDF/JSON export).
+          handleClose();
+          navigate(`/exam-take/${data.id}`);
+        } else {
+          setQuizData(data);
+          setSelectedAnswers({});
+          setCheckedQuestions({});
+          setViewMode('result');
+        }
       } else {
         alert("Tạo đề thi thất bại.");
       }
@@ -88,6 +129,11 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
   };
 
   // ─── Result View ───
+  // Persisted exams (with an artifact id) open in the shared viewer, which renders every
+  // question type (trắc nghiệm, đúng/sai, trả lời ngắn, tự luận).
+  if (viewMode === 'result' && quizData?.id) {
+    return <ArtifactViewerModal isOpen artifactId={quizData.id} onClose={handleClose} />;
+  }
   if (viewMode === 'result' && quizData) {
     const questions = quizData.questions || [];
     return (
@@ -104,7 +150,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
           <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', backgroundColor: '#FCFAF8', borderRadius: '24px 24px 0 0', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Sparkles size={20} color="#8A334C" />
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1B2A4E', margin: 0 }}>{quizData.title || title}</h2>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-navy)', margin: 0 }}>{quizData.title || title}</h2>
             </div>
             <button onClick={handleClose} style={{ background: 'transparent', border: '1px solid var(--border-medium)', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-secondary)' }}>
               <X size={16} />
@@ -126,11 +172,11 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
 
               return (
                 <div key={idx} style={{
-                  marginBottom: '20px', padding: '20px', backgroundColor: 'white',
+                  marginBottom: '20px', padding: '20px', backgroundColor: 'var(--bg-tertiary)',
                   borderRadius: '16px', border: isChecked ? (isCorrect ? '2px solid #22C55E' : '2px solid #EF4444') : '1px solid var(--border-light)',
                   transition: 'border-color 0.2s'
                 }}>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1B2A4E', marginBottom: '14px' }}>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-navy)', marginBottom: '14px' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#8A334C', color: 'white', fontSize: '0.8rem', fontWeight: 800, marginRight: '10px' }}>{idx + 1}</span>
                     {q.question}
                   </div>
@@ -162,7 +208,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
                             readOnly
                             style={{ accentColor: '#8A334C', width: '16px', height: '16px' }}
                           />
-                          <span style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1B2A4E' }}>{opt.text || opt}</span>
+                          <span style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-navy)' }}>{opt.text || opt}</span>
                           {isChecked && isCorrectOption && <CheckCircle2 size={18} color="#22C55E" style={{ marginLeft: 'auto' }} />}
                           {isChecked && isSelected && !isCorrectOption && <XCircle size={18} color="#EF4444" style={{ marginLeft: 'auto' }} />}
                         </label>
@@ -204,8 +250,8 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
           </div>
 
           {/* Footer */}
-          <div style={{ padding: '20px 24px', backgroundColor: 'white', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'center', gap: '12px', borderRadius: '0 0 24px 24px', flexShrink: 0 }}>
-            <button onClick={handleRetry} style={{ padding: '12px 28px', backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '24px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ padding: '20px 24px', backgroundColor: 'var(--bg-tertiary)', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'center', gap: '12px', borderRadius: '0 0 24px 24px', flexShrink: 0 }}>
+            <button onClick={handleRetry} style={{ padding: '12px 28px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '24px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <RotateCcw size={15} /> Làm lại
             </button>
             <button onClick={handleClose} style={{ padding: '12px 28px', backgroundColor: '#8A334C', border: 'none', borderRadius: '24px', fontWeight: 600, color: 'white', cursor: 'pointer' }}>
@@ -232,7 +278,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
         <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', position: 'sticky', top: 0, backgroundColor: '#FCFAF8', zIndex: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Sparkles size={20} color="var(--brand-secondary)" />
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1B2A4E' }}>Cấu hình Tạo đề thi</h2>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-navy)' }}>Cấu hình Tạo đề thi</h2>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: '1px solid var(--border-medium)', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-secondary)' }}>
             <X size={16} />
@@ -324,7 +370,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>DẠNG CÂU HỎI</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', border: '1px solid var(--border-medium)', borderRadius: '12px', cursor: 'pointer', backgroundColor: 'white' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', border: '1px solid var(--border-medium)', borderRadius: '12px', cursor: 'pointer', backgroundColor: 'var(--bg-tertiary)' }}>
                 <input 
                   type="checkbox" 
                   checked={questionTypes.mcq} 
@@ -333,7 +379,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
                 />
                 <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>Trắc nghiệm (4 lựa chọn)</span>
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', border: '1px solid var(--border-medium)', borderRadius: '12px', cursor: 'pointer', backgroundColor: 'white' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', border: '1px solid var(--border-medium)', borderRadius: '12px', cursor: 'pointer', backgroundColor: 'var(--bg-tertiary)' }}>
                 <input 
                   type="checkbox" 
                   checked={questionTypes.shortAnswer}
@@ -342,7 +388,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
                 />
                 <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>Trả lời ngắn</span>
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', border: '1px solid var(--border-medium)', borderRadius: '12px', cursor: 'pointer', backgroundColor: 'white' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', border: '1px solid var(--border-medium)', borderRadius: '12px', cursor: 'pointer', backgroundColor: 'var(--bg-tertiary)' }}>
                 <input 
                   type="checkbox" 
                   checked={questionTypes.trueFalse}
@@ -351,7 +397,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
                 />
                 <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>Đúng / Sai</span>
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', border: '1px solid var(--border-medium)', borderRadius: '12px', cursor: 'pointer', backgroundColor: 'white' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', border: '1px solid var(--border-medium)', borderRadius: '12px', cursor: 'pointer', backgroundColor: 'var(--bg-tertiary)' }}>
                 <input 
                   type="checkbox" 
                   checked={questionTypes.essay}
@@ -363,7 +409,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
             </div>
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', border: '1px solid var(--border-medium)', borderRadius: '12px', cursor: 'pointer', backgroundColor: 'white' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', border: '1px solid var(--border-medium)', borderRadius: '12px', cursor: 'pointer', backgroundColor: 'var(--bg-tertiary)' }}>
             <input 
               type="checkbox" 
               checked={withExplanation} 
@@ -377,7 +423,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
           <div style={{ border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', backgroundColor: '#FDF8F5', marginTop: '8px' }}>
             <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em', marginBottom: '16px' }}>TÀI LIỆU LÀM NGUỒN DỮ LIỆU</div>
             
-            <div style={{ backgroundColor: 'white', borderRadius: '12px', border: '1px solid var(--border-light)', padding: '16px', marginBottom: '16px' }}>
+            <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '12px', border: '1px solid var(--border-light)', padding: '16px', marginBottom: '16px' }}>
                          <textarea 
                 placeholder="Dán đoạn văn, bài học, ghi chú hoặc nội dung cần tạo đề thi..." 
                 rows={5} 
@@ -391,23 +437,40 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
               </div>
             </div>
 
+            {(librarySources.length > 0 || uploadedSources.length > 0) && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
+                {librarySources.map((s, i) => (
+                  <span key={`lib-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--brand-primary)', borderRadius: '16px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--brand-primary)', maxWidth: '100%' }}>
+                    <FileText size={12} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }}>{s.name}</span>
+                  </span>
+                ))}
+                {uploadedSources.map((s, i) => (
+                  <span key={`up-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', backgroundColor: '#E8F5E9', border: '1px solid var(--brand-secondary)', borderRadius: '16px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--brand-secondary)', maxWidth: '100%' }}>
+                    <UploadCloud size={12} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>{s.name}</span>
+                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setUploadedSources(prev => prev.filter((_, j) => j !== i))} />
+                  </span>
+                ))}
+              </div>
+            )}
+
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <button style={{ backgroundColor: '#F3EAE3', color: 'var(--brand-primary)', border: 'none', padding: '10px 20px', borderRadius: '20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input ref={fileInputRef} type="file" multiple accept=".pdf,.docx,.txt,.md,.csv" style={{ display: 'none' }} onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }} />
+              <button onClick={() => fileInputRef.current?.click()} style={{ backgroundColor: '#F3EAE3', color: 'var(--brand-primary)', border: 'none', padding: '10px 20px', borderRadius: '20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                 <UploadCloud size={16} /> Tải lên file từ máy
               </button>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Hỗ trợ PDF, DOCX, TXT, PNG/JPG/WebP/TIFF. Tổng nguồn tối đa 20 MB.</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Hỗ trợ PDF, DOCX, TXT, MD. Chọn tài liệu thư viện bằng ô tick trên thẻ tài liệu.</span>
             </div>
 
-            <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'white', border: '1px solid var(--border-light)', borderRadius: '12px', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-              Tổng dung lượng nguồn: {(text.length / 1024).toFixed(1)} KB / 20 MB
+            <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', borderRadius: '12px', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+              Tổng dung lượng nguồn: {((text.length + uploadedSources.reduce((n, s) => n + s.text.length, 0)) / 1024).toFixed(1)} KB / 20 MB · {librarySources.length} tài liệu thư viện
             </div>
           </div>
 
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '24px', backgroundColor: 'white', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'center', gap: '12px', borderBottomLeftRadius: '24px', borderBottomRightRadius: '24px' }}>
-          <button onClick={onClose} style={{ padding: '12px 32px', backgroundColor: 'white', border: '1px solid var(--border-medium)', borderRadius: '24px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+        <div style={{ padding: '24px', backgroundColor: 'var(--bg-tertiary)', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'center', gap: '12px', borderBottomLeftRadius: '24px', borderBottomRightRadius: '24px' }}>
+          <button onClick={onClose} style={{ padding: '12px 32px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '24px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
             Hủy bộ
           </button>
           <button 

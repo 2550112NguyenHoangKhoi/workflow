@@ -91,12 +91,12 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
             <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--brand-primary)', letterSpacing: '0.05em', marginBottom: '4px' }}>
               PROJECT COLLABORATION
             </div>
-            <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, color: '#1B2A4E' }}>
+            <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-navy)' }}>
               Members and invites
             </h2>
           </div>
           <button onClick={onClose} style={{ 
-            background: 'white', border: '1px solid var(--border-light)', 
+            background: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', 
             borderRadius: '50%', width: '32px', height: '32px', 
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', color: 'var(--text-secondary)' 
@@ -111,7 +111,7 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
           {/* Invite Section */}
           <div style={{ 
             border: '1px solid #E5E7EB', borderRadius: '16px', padding: '20px', 
-            backgroundColor: 'white', marginBottom: '24px' 
+            backgroundColor: 'var(--bg-tertiary)', marginBottom: '24px' 
           }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4B5563', letterSpacing: '0.05em', marginBottom: '12px' }}>
               INVITE BY EMAIL
@@ -130,7 +130,7 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
                 <select
                   value={role}
                   onChange={e => setRole(e.target.value)}
-                  style={{ width: '100%', padding: '10px 32px 10px 16px', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.875rem', outline: 'none', appearance: 'none', backgroundColor: 'white', cursor: (!projectId && !documentId) ? 'not-allowed' : 'pointer', fontWeight: 600, color: '#374151' }}
+                  style={{ width: '100%', padding: '10px 32px 10px 16px', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.875rem', outline: 'none', appearance: 'none', backgroundColor: 'var(--bg-tertiary)', cursor: (!projectId && !documentId) ? 'not-allowed' : 'pointer', fontWeight: 600, color: '#374151' }}
                   disabled={!projectId && !documentId}
                 >
                   <option value="Viewer">Viewer</option>
@@ -162,7 +162,7 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
               ACTIVE MEMBERS
             </div>
             
-            <div style={{ border: '1px solid #E5E7EB', borderRadius: '16px', backgroundColor: 'white', overflow: 'hidden' }}>
+            <div style={{ border: '1px solid #E5E7EB', borderRadius: '16px', backgroundColor: 'var(--bg-tertiary)', overflow: 'hidden' }}>
               {loading ? (
                 <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}><Loader2 size={24} className="spin" /></div>
               ) : (() => {
@@ -188,9 +188,9 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
                     </div>
                     <div>
                       {currentUser?.email === member.email ? (
-                        <div style={{ fontWeight: 700, color: '#1B2A4E', fontSize: '0.95rem' }}>{currentUser.name}</div>
+                        <div style={{ fontWeight: 700, color: 'var(--text-navy)', fontSize: '0.95rem' }}>{currentUser.name}</div>
                       ) : (
-                        <div style={{ fontWeight: 700, color: '#1B2A4E', fontSize: '0.95rem' }}>{member.email.split('@')[0]}</div>
+                        <div style={{ fontWeight: 700, color: 'var(--text-navy)', fontSize: '0.95rem' }}>{member.email.split('@')[0]}</div>
                       )}
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{member.email}</div>
                     </div>
@@ -212,7 +212,7 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
               PENDING INVITES
             </div>
             
-            <div style={{ border: '1px dashed #D1D5DB', borderRadius: '16px', backgroundColor: 'white', padding: pendingInvites.length === 0 ? '24px' : '0', overflow: 'hidden' }}>
+            <div style={{ border: '1px dashed #D1D5DB', borderRadius: '16px', backgroundColor: 'var(--bg-tertiary)', padding: pendingInvites.length === 0 ? '24px' : '0', overflow: 'hidden' }}>
               {loading ? (
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}><Loader2 size={24} className="spin" /></div>
               ) : pendingInvites.length === 0 ? (
