@@ -52,7 +52,7 @@ jobs:
         run: |
           VERSION="${{ github.event.inputs.version }}"
           VERSION="${VERSION#v}"
-          npm version $VERSION --no-git-tag-version --allow-same-version
+          node -e "let pkg = require('./package.json'); pkg.version = '$VERSION'; require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
 
       - name: Build Electron App
         run: npm run electron:build
