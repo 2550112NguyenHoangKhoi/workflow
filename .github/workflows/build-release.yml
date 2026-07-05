@@ -1,4 +1,4 @@
-Name: Build Windows Release
+name: Build Windows Release
 
 on:
   workflow_dispatch:
