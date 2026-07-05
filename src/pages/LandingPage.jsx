@@ -17,6 +17,17 @@ const LandingPage = ({ onLoginSuccess }) => {
     onLoginSuccess(user);
     navigate('/documents');
   };
+  const handleBypassLogin = () => {
+    const dummyUser = {
+      name: "Local User",
+      email: "local@workflow.ai",
+      picture: "",
+      sub: "local_user_1"
+    };
+    localStorage.setItem('workflow_user', JSON.stringify(dummyUser));
+    onLoginSuccess(dummyUser);
+    navigate('/documents');
+  };
 
   return (
     <div style={{ backgroundColor: '#FAFAF9', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -29,7 +40,7 @@ const LandingPage = ({ onLoginSuccess }) => {
         </h1>
         <div style={{ display: 'flex', gap: '16px' }}>
           <button 
-            onClick={() => setShowLogin(true)}
+            onClick={handleBypassLogin}
             style={{ 
               padding: '10px 24px', borderRadius: '24px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-navy)', 
               border: '1px solid var(--border-medium)', fontWeight: 600, cursor: 'pointer' 
@@ -38,7 +49,7 @@ const LandingPage = ({ onLoginSuccess }) => {
             Sign In
           </button>
           <button 
-            onClick={() => setShowLogin(true)}
+            onClick={handleBypassLogin}
             style={{ 
               padding: '10px 24px', borderRadius: '24px', backgroundColor: 'var(--brand-primary)', color: 'white', 
               border: 'none', fontWeight: 600, cursor: 'pointer' 
@@ -61,7 +72,7 @@ const LandingPage = ({ onLoginSuccess }) => {
           Accelerate your learning curve with intelligent documents, interactive flashcards, and personalized roadmaps.
         </p>
         <button 
-          onClick={() => setShowLogin(true)}
+          onClick={handleBypassLogin}
           style={{ 
             padding: '16px 48px', borderRadius: '32px', backgroundColor: 'var(--brand-primary)', color: 'white', 
             border: 'none', fontWeight: 700, fontSize: '1.25rem', cursor: 'pointer', boxShadow: '0 8px 16px rgba(107, 45, 62, 0.2)' 
