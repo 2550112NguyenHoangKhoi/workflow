@@ -55,6 +55,6 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.version }}
           files: release/*.exe
-          overwrite_files: true # Added this back based on your previous error log
+          overwrite_files: true 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
