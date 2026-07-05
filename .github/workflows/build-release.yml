@@ -1,4 +1,4 @@
-name: Build Windows Release
+name: Build App Release
 
 on:
   workflow_dispatch:
@@ -10,9 +10,11 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [windows-latest, macos-14]
+    runs-on: ${{ matrix.os }}
     
-    # GRANT WRITE PERMISSIONS HERE
     permissions:
       contents: write
 
@@ -23,7 +25,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24 # Updated to 24 to fix the deprecation warning
+          node-version: 24
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -45,8 +47,8 @@ jobs:
       - name: Install Node dependencies
         run: npm install
 
-      - name: Build Electron App (Windows)
-        run: npm run electron:build --win
+      - name: Build Electron App
+        run: npm run electron:build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.VITE_GOOGLE_OAUTH_CLIENT_ID }}
@@ -56,7 +58,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.version }}
-          files: release/*.exe
+          files: |
+            release/*.exe
+            release/*.dmg
           overwrite_files: true 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
