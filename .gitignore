@@ -42,3 +42,22 @@ backend/*.spec
 backend/uploads/
 *.db
 *.db.bak
+
+# AI Contextual and test files
+.agents/
+.claude/
+ANTIGRAVITY_HANDOFF.md
+ORIGINAL_REQUEST.md
+PROJECT.md
+TEST_INFRA.md
+TEST_READY.md
+WRITING_PIPELINE.md
+progress.md
+fix_top.js
+inject_nlp.py
+run_e2e_tests.py
+stress_test_report.json
+test_api.py
+test_upload.py
+tests_result.xml
+verify_m4_bugs.py
