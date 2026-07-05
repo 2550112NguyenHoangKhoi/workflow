@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., v1.0.0)'
-        required: true
-        default: 'v1.0.0'
+        description: 'Version tag (optional, e.g., v1.0.0). If empty, auto-generates v1.0.X'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -51,8 +51,16 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ github.event.inputs.version }}"
-          VERSION="${VERSION#v}"
-          node -e "let pkg = require('./package.json'); pkg.version = '$VERSION'; require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
+          if [ -z "$VERSION" ]; then
+            VERSION="v1.0.${{ github.run_number }}"
+          fi
+          
+          # Clean version for npm package.json (no 'v')
+          CLEAN_VERSION="${VERSION#v}"
+          node -e "let pkg = require('./package.json'); pkg.version = '$CLEAN_VERSION'; require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
+          
+          # Export tag version for release step
+          echo "RELEASE_TAG=$VERSION" >> $GITHUB_ENV
 
       - name: Build Electron App
         run: npm run electron:build
@@ -64,7 +72,7 @@ jobs:
       - name: Upload Release Artifact
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.version }}
+          tag_name: ${{ env.RELEASE_TAG }}
           files: |
             release/*.exe
             release/*.dmg
