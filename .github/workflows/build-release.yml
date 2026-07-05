@@ -49,6 +49,8 @@ jobs:
         run: npm run electron:build --win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.VITE_GOOGLE_OAUTH_CLIENT_ID }}
+          VITE_GOOGLE_DRIVE_API_KEY: ${{ secrets.VITE_GOOGLE_DRIVE_API_KEY }}
 
       - name: Upload Release Artifact
         uses: softprops/action-gh-release@v2
