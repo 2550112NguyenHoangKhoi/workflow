@@ -5,7 +5,6 @@ import DocumentExplorer from './pages/DocumentExplorer';
 import DocumentViewer from './pages/DocumentViewer';
 import DriveViewer from './pages/DriveViewer';
 import ExamTaker from './pages/ExamTaker';
-import ExamViewer from './pages/ExamViewer';
 import Settings from './pages/Settings';
 import LandingPage from './pages/LandingPage';
 import WritingPractice from './pages/WritingPractice';
@@ -48,7 +47,6 @@ const App = () => {
           <Route path="vocabulary" element={<Vocabulary />} />
         </Route>
         
-        <Route path="exam/:id" element={<ExamViewer />} />
         <Route path="drive/:fileId" element={<DriveViewer />} />
         <Route path="exam-take/:artifactId" element={<ExamTaker />} />
       </Routes>

@@ -995,6 +995,30 @@ async def list_documents(project_id: int = None, db: Session = Depends(get_db)):
     return {"documents": [{"id": d.id, "filename": d.filename, "kind": d.kind, "upload_date": d.upload_date.isoformat(), "content": d.content,
                            "project_id": d.project_id, "has_file": has_file(d)} for d in docs]}
 
+@app.get("/api/documents/{document_id}")
+async def get_document(document_id: int, db: Session = Depends(get_db)):
+    """Single document with per-page text — powers the exam 'NGUỒN: TÀI LIỆU ĐỐI CHIẾU'
+    reference panel (page-by-page navigation)."""
+    doc = db.query(models.Document).filter(models.Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    pages = []
+    if doc.pages_data:
+        try:
+            pages = json.loads(doc.pages_data)
+        except Exception:
+            pages = []
+    if not pages and doc.content:
+        pages = [doc.content]
+    return {
+        "id": doc.id,
+        "filename": doc.filename,
+        "kind": doc.kind,
+        "page_count": doc.page_count or len(pages),
+        "content": doc.content,
+        "pages": pages,
+    }
+
 @app.get("/api/documents/{document_id}/file")
 async def get_document_file(document_id: int, db: Session = Depends(get_db)):
     doc = db.query(models.Document).filter(models.Document.id == document_id).first()
@@ -1469,6 +1493,10 @@ class ExamSource(_BaseModel):
     value: str
     name: str | None = None
 
+class ExamAddQuestionsRequest(_BaseModel):
+    count: int = 5
+    api_key: str | None = None
+
 class ExamGenRequest(_BaseModel):
     title: str = "Đề thi ôn tập"
     description: str = ""
@@ -1683,6 +1711,7 @@ class ExamQuestionSchema(_BaseModel):
     correct_option_id: str | None = None
     answer: str | None = None
     explanation: str | None = None
+    source_ref: str | None = None
 
 class ExamSchema(_BaseModel):
     title: str
@@ -1747,14 +1776,100 @@ def _assemble_source_text(db, sources: list, document_id=None) -> str:
             pass
     return "\n\n".join(filter(None, parts))[:60000]
 
+def _assemble_source_text_paged(db, sources: list, document_id=None) -> str:
+    """Like _assemble_source_text but, for `document` and top-level `document_id`
+    sources that have per-page text (Document.pages_data JSON array), interleaves
+    a `[Trang N]` marker before each page so the model can cite pages. Falls back
+    to the plain text for text/drive sources. Capped at 60000 chars."""
+    import json
+    parts = []
+    
+    def process_doc(doc_id):
+        try:
+            doc = db.query(models.Document).filter(models.Document.id == doc_id).first()
+            if doc and doc.pages_data:
+                pages = json.loads(doc.pages_data)
+                if isinstance(pages, list) and pages:
+                    return "\n\n".join([f"[Trang {i+1}]\n{page_text}" for i, page_text in enumerate(pages)])
+        except Exception:
+            pass
+        return None
+
+    for src in sources:
+        try:
+            if src.type == "text":
+                parts.append(src.value)
+            elif src.type == "document":
+                doc_id = int(src.value)
+                paged_text = process_doc(doc_id)
+                if paged_text:
+                    parts.append(paged_text)
+                else:
+                    parts.append(get_document_text(db, doc_id))
+            elif src.type == "drive":
+                parts.append(_fetch_drive_text(src.value))
+        except Exception:
+            pass
+    if document_id:
+        try:
+            paged_text = process_doc(document_id)
+            if paged_text:
+                parts.append(paged_text)
+            else:
+                parts.append(get_document_text(db, document_id))
+        except Exception:
+            pass
+    return "\n\n".join(filter(None, parts))[:60000]
+
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
+
+def _normalize_exam_questions(questions):
+    """Repair AI/offline exam output so the taker can grade + highlight the right answer.
+    The model is inconsistent: it sometimes puts the answer in `answer` ("A"/text) instead of
+    `correct_option_id`, emits option ids with trailing commas ("A,"), or leaves
+    correct_option_id null. Normalize option ids and always resolve a `correct_option_id`
+    that matches one of the option ids. Best-effort; leaves the question untouched on failure."""
+    def _clean(x):
+        return x.strip().strip(",").strip() if isinstance(x, str) else x
+    for q in (questions or []):
+        try:
+            opts = q.get("options")
+            if not opts:
+                continue
+            for o in opts:
+                if isinstance(o.get("id"), str):
+                    o["id"] = _clean(o["id"])
+            ids = [o.get("id") for o in opts]
+            cid = _clean(q.get("correct_option_id"))
+            if cid in ids:
+                q["correct_option_id"] = cid
+                continue
+            ans = _clean(q.get("answer"))
+            chosen = None
+            if isinstance(ans, str) and ans:
+                if ans in ids:
+                    chosen = ans
+                if chosen is None:  # answer given as the option's text
+                    for o in opts:
+                        if (o.get("text") or "").strip().lower() == ans.lower():
+                            chosen = o.get("id"); break
+                if chosen is None and len(ans) == 1 and ans.upper().isalpha():
+                    idx = ord(ans.upper()) - ord("A")  # bare letter → index
+                    if 0 <= idx < len(opts):
+                        chosen = opts[idx].get("id")
+            if chosen is not None:
+                q["correct_option_id"] = chosen
+        except Exception:
+            pass
+    return questions
+
 
 @app.post("/api/exams/generate")
 async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
     from nlp.exam import extract_exam
 
-    text = _assemble_source_text(db, req.sources, document_id=req.document_id)
+    text = _assemble_source_text_paged(db, req.sources, document_id=req.document_id)
     if not text.strip():
         text = f"{req.title}. {req.description}"
 
@@ -1765,9 +1880,18 @@ async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
             prompt_text = text[:30000]
             type_names = ", ".join(req.question_types)
             expl_instruction = "Có giải thích cho mỗi câu." if req.with_explanation else "Không cần giải thích."
+            if req.with_explanation:
+                expl_instruction += " Nội dung nguồn được đánh dấu ranh giới trang bằng [Trang N]. Với mỗi câu hỏi, phần giải thích phải bám sát nội dung nguồn và trích dẫn trang tương ứng; đặt số trang vào trường source_ref dưới dạng 'Trang N'."
+            mcq_rule = (
+                " Với câu trắc nghiệm: cung cấp đúng 4 phương án; KHÔNG thêm phương án "
+                "'Đáp án khác'/'Other'. Đáp án đúng PHẢI là một trong các phương án, và phải "
+                "đặt id của phương án đúng vào trường correct_option_id (khớp chính xác với "
+                "id của phương án đó). Kiểm tra lại phép tính để correct_option_id nhất quán "
+                "với phần giải thích."
+            )
             prompt = (
                 f"Tạo đề thi gồm {req.num_questions} câu hỏi ({type_names}), "
-                f"độ khó: {req.difficulty}, ngôn ngữ: {req.language}. {expl_instruction}\n\n"
+                f"độ khó: {req.difficulty}, ngôn ngữ: {req.language}. {expl_instruction}{mcq_rule}\n\n"
                 f"Nội dung:\n{prompt_text}"
             )
             config = LocalAgentConfig(
@@ -1789,6 +1913,8 @@ async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
             types=req.question_types,
             with_explanation=req.with_explanation,
         )
+
+    data["questions"] = _normalize_exam_questions(data.get("questions", []))
 
     cfg = {
         "duration_minutes": req.duration_minutes,
@@ -1818,6 +1944,64 @@ async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
         owner_email=req.owner_email,
     )
     return {"id": artifact.id, "title": artifact.title, "config": cfg, "questions": data["questions"]}
+
+
+@app.post("/api/exams/{artifact_id}/questions")
+async def add_exam_questions(artifact_id: int, req: ExamAddQuestionsRequest, db=Depends(get_db)):
+    from nlp.exam import extract_exam
+    artifact = db.query(models.Artifact).filter(
+        models.Artifact.id == artifact_id, models.Artifact.type == "exam").first()
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Đề thi không tìm thấy")
+    try:
+        content = json.loads(artifact.content)
+    except Exception:
+        content = {}
+    cfg = content.get("config", {})
+    existing = content.get("questions", [])
+    count = max(1, min(int(req.count or 5), 20))
+    q_types = cfg.get("question_types") or ["mcq"]
+    with_expl = cfg.get("with_explanation", True)
+
+    # Source text: prefer the exam's linked document (paged, so source_ref works);
+    # otherwise extend from the existing question texts so the AI stays on-topic.
+    text = ""
+    if artifact.document_id:
+        text = _assemble_source_text_paged(db, [], document_id=artifact.document_id)
+    if not text.strip():
+        text = "\n".join((q.get("question") or "") for q in existing)
+
+    new_qs = None
+    current_key = get_api_key(req.api_key)
+    if current_key and text.strip():
+        try:
+            type_names = ", ".join(q_types)
+            avoid = " / ".join((q.get("question") or "")[:80] for q in existing[:12])
+            expl_instruction = ("Có giải thích cho mỗi câu. Nội dung nguồn được đánh dấu "
+                "ranh giới trang bằng [Trang N]; mỗi giải thích phải trích dẫn trang tương "
+                "ứng và đặt số trang vào trường source_ref dạng 'Trang N'.") if with_expl else "Không cần giải thích."
+            prompt = (
+                f"Tạo thêm {count} câu hỏi MỚI ({type_names}) cho đề thi, KHÁC hoàn toàn với "
+                f"các câu đã có sau đây: {avoid}. {expl_instruction}\n\nNội dung:\n{text[:30000]}"
+            )
+            config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite",
+                                      response_schema=ExamSchema, capabilities=FAST_CAPS)
+            result = await agent_run(config, prompt, structured=True, timeout=30)
+            if result and result.get("questions"):
+                new_qs = result["questions"][:count]
+        except Exception as e:
+            print(f"[exam add AI failed] {e}")
+
+    if not new_qs:
+        data = extract_exam(text, num_questions=count, types=q_types, with_explanation=with_expl)
+        new_qs = data.get("questions", [])
+
+    merged = _normalize_exam_questions(existing + (new_qs or []))
+    content["questions"] = merged
+    artifact.content = json.dumps(content, ensure_ascii=False)
+    db.commit()
+    return {"id": artifact.id, "title": artifact.title, "config": cfg,
+            "questions": merged, "added": len(new_qs or [])}
 
 
 @app.post("/api/examdocs/generate")
@@ -1882,11 +2066,17 @@ def get_artifact(artifact_id: int, db=Depends(get_db)):
         content = json.loads(artifact.content)
     except Exception:
         content = artifact.content
+    # Repair legacy/AI exam payloads on read (correct_option_id missing / option ids with
+    # stray commas) so older exams grade + highlight correctly without regenerating.
+    if artifact.type == "exam" and isinstance(content, dict) and content.get("questions"):
+        content["questions"] = _normalize_exam_questions(content["questions"])
     return {
         "id": artifact.id,
         "type": artifact.type,
         "title": artifact.title,
         "content": content,
+        "document_id": artifact.document_id,
+        "project_id": artifact.project_id,
         "created_at": artifact.created_at.isoformat() if artifact.created_at else None,
         "owner_email": artifact.owner_email,
     }
@@ -2011,8 +2201,9 @@ async def writing_grade(req: WritingGradeRequest):
                 "corrected (phiên bản đã sửa/tốt hơn), "
                 "suggestion (câu đã sửa/câu tham khảo nếu chưa tốt, ngược lại rỗng), "
                 "errors[{type, vi_explanation}], "
-                "improvements (2-4 gạch đầu dòng ngắn gọn bằng tiếng Việt chỉ ra điểm cần sửa: thiếu ý, sai cấu trúc, sai thì...), "
-                "tip_vi (1 câu khen ngợi nếu tốt, hoặc 1 câu khuyên nhủ/nhắc nhở từ khoá cần dùng nếu chưa tốt)."
+                "improvements (2-4 gạch đầu dòng ngắn gọn bằng tiếng Việt chỉ ra điểm cần sửa: thiếu ý, sai cấu trúc, sai thì...; "
+                "BỌC các từ/cụm tiếng Anh quan trọng trong dấu **...** để làm nổi bật, ví dụ: 'nên dùng **mixed chart** thay vì **chaotic graph**'), "
+                "tip_vi (1 câu khen ngợi nếu tốt, hoặc 1 câu khuyên nhủ/nhắc nhở từ khoá cần dùng nếu chưa tốt; cũng bọc từ khoá tiếng Anh trong **...**)."
             )
             config = LocalAgentConfig(
                 api_key=current_key, model="gemini-3.1-flash-lite",
@@ -2097,34 +2288,82 @@ async def writing_word_lookup(req: WritingWordRequest):
 @app.post("/api/writing/vocab_bank")
 async def writing_vocab_bank(req: WritingVocabBankRequest):
     from nlp import writing as writing_engine
+    words = None
     current_key = get_api_key(req.api_key)
     if current_key and req.text.strip():
         try:
             config = LocalAgentConfig(
-                response_schema=WritingVocabBankSchema, 
+                response_schema=WritingVocabBankSchema,
                 model="gemini-3.1-flash-lite",
                 capabilities=FAST_CAPS,
                 api_key=current_key
             )
-            prompt = "Trích tối đa 12 từ/cụm từ vựng quan trọng trong đoạn văn tiếng Anh sau. Với mỗi từ trả về word, ipa, part_of_speech, meaning_vi, example_en.\n\n" + req.text
+            prompt = (
+                "Bạn là trợ lý từ vựng IELTS. Cho ĐOẠN VĂN tiếng Anh dưới đây, trích tối đa 12 "
+                "từ/cụm từ quan trọng người học nên ghi nhớ. Với MỖI từ trả về: word; ipa (phiên "
+                "âm); part_of_speech (từ loại); meaning_vi = nghĩa tiếng Việt ĐÚNG THEO NGỮ CẢNH "
+                "của từ TRONG đoạn văn này — chọn đúng nét nghĩa đang được dùng, TUYỆT ĐỐI không "
+                "đưa nghĩa chung chung hay nét nghĩa khác không xuất hiện ở đây; example_en = trích "
+                "NGUYÊN VĂN câu trong đoạn văn có chứa từ đó.\n\nĐoạn văn:\n" + req.text
+            )
             result = await agent_run(config, prompt, structured=True, timeout=20)
             if result and result.get("words"):
-                return result
+                words = result["words"]
         except Exception as e:
             print(f"[vocab bank AI failed] {e}")
 
-    return {"words": writing_engine.vocab_bank(req.text)}
+    # Offline extraction (TextRank/keywords) picks the words; the Dictionary API then fills
+    # real details so definitions show even without an AI key (a general, not contextual, sense).
+    if words is None:
+        words = writing_engine.vocab_bank(req.text)
+    words = await _enrich_words(words, context=req.text)
+    # Contextual example: prefer the actual sentence from the learner's passage that contains
+    # the word, so a saved word carries the example of what they were writing (not a generic one).
+    for w in (words or []):
+        try:
+            ex = _passage_example(w.get("word"), req.text)
+            if ex:
+                w["example_en"] = ex
+        except Exception:
+            pass
+    return {"words": words}
 
 
 # End of writing endpoints, append vocab endpoints here
+def _vocab_status(w) -> str:
+    """datpmt-style status: a saved-but-unmastered word is 'learning' (Đang học);
+    once repetitions>=3 it flips to learned → 'learned' (Đã thuộc)."""
+    return "learned" if (w.learned or (w.repetitions or 0) >= 3) else "learning"
+
+
 @app.post("/api/vocabulary/add")
 async def add_vocab(req: VocabAddRequest, db: Session = Depends(get_db)):
+    # Dedup: if this owner already saved this word, return the existing entry (and its
+    # status) instead of creating a duplicate — this is what wires the writing Dictionary
+    # to the Vocabulary trainer (re-saving a word is a no-op that reports its status).
+    from sqlalchemy import func
+    wlow = (req.word or "").strip().lower()
+    if wlow:
+        dq = db.query(models.VocabWord).filter(func.lower(models.VocabWord.word) == wlow)
+        dq = dq.filter(models.VocabWord.owner_email == req.owner_email) if req.owner_email \
+            else dq.filter(models.VocabWord.owner_email.is_(None))
+        existing = dq.first()
+        if existing:
+            return {
+                "id": existing.id, "word": existing.word, "meaning_vi": existing.meaning_vi,
+                "ipa": existing.ipa, "part_of_speech": existing.part_of_speech,
+                "example_en": existing.example_en, "example_vi": existing.example_vi,
+                "learned": existing.learned, "correct_count": existing.correct_count,
+                "wrong_count": existing.wrong_count,
+                "already": True, "status": _vocab_status(existing),
+            }
+
     meaning = req.meaning_vi or ""
     ipa = req.ipa or ""
     pos = req.part_of_speech or ""
     ex_en = req.example_en or ""
     ex_vi = req.example_vi or ""
-    
+
     if not meaning:
         current_key = get_api_key(req.api_key)
         if current_key:
@@ -2182,7 +2421,8 @@ async def add_vocab(req: VocabAddRequest, db: Session = Depends(get_db)):
         "ipa": new_word.ipa, "part_of_speech": new_word.part_of_speech,
         "example_en": new_word.example_en, "example_vi": new_word.example_vi,
         "learned": new_word.learned, "correct_count": new_word.correct_count,
-        "wrong_count": new_word.wrong_count
+        "wrong_count": new_word.wrong_count,
+        "already": False, "status": _vocab_status(new_word)
     }
 
 from nlp.vocab_bank import VOCAB_BANK
@@ -2379,9 +2619,13 @@ def list_vocab(email: str | None = None, q: str | None = None, db: Session = Dep
         "suggestions": suggestions
     }
 
-@app.get("/api/vocabulary/lookup")
-def lookup_dictionary(word: str):
-    import requests
+def _dictionary_lookup(word: str, context: str = ""):
+    """Fetch real word details from the free Dictionary API (api.dictionaryapi.dev):
+    IPA, part of speech, English definition + example, then translate meaning/example to
+    Vietnamese via GoogleTranslator. When `context` (the passage the word appears in) is given,
+    pick the SENSE whose definition overlaps the context most — so 'media' in a communication
+    passage resolves to the mass-media sense, not the anatomical one. Returns None on failure."""
+    import requests, re
     try:
         from deep_translator import GoogleTranslator
         translator = GoogleTranslator(source='en', target='vi')
@@ -2401,20 +2645,34 @@ def lookup_dictionary(word: str):
                     for d in m.get("definitions", []):
                         all_synonyms.extend(d.get("synonyms", []))
             
-            # Use the first object for core details
+            # IPA from the first object.
             data = json_data[0]
             ipa = data.get("phonetic") or (data.get("phonetics") and len(data["phonetics"]) > 0 and data["phonetics"][0].get("text")) or ""
-            meanings = data.get("meanings", [])
-            pos = meanings[0].get("partOfSpeech", "") if meanings else ""
-            
-            definition = ""
-            example_en = ""
-            grammar_tag = ""
-            
-            if meanings and meanings[0].get("definitions"):
-                definition = meanings[0]["definitions"][0].get("definition", "")
-                example_en = meanings[0]["definitions"][0].get("example", "")
-                
+
+            # Collect every sense (pos + definition + example) across all objects, then pick the
+            # one whose definition shares the most content words with the passage context.
+            candidates = []
+            for item in json_data:
+                for m in item.get("meanings", []):
+                    mpos = m.get("partOfSpeech", "")
+                    for dfn in m.get("definitions", []):
+                        candidates.append((mpos, dfn.get("definition", ""), dfn.get("example", "")))
+
+            pos, definition, example_en, grammar_tag = "", "", "", ""
+            if candidates:
+                best = candidates[0]
+                ctx_words = set(re.findall(r'[a-z]{4,}', (context or "").lower()))
+                if ctx_words:
+                    def _score(c):
+                        dwords = set(re.findall(r'[a-z]{4,}', (c[1] or "").lower()))
+                        return len(dwords & ctx_words)
+                    scored = max(candidates, key=_score)
+                    if _score(scored) > 0:
+                        best = scored
+                pos, definition, example_en = best[0], best[1], best[2]
+
+            if definition:
+
                 # Extract grammar tags robustly
                 def_lower = definition.lower()
                 tags = []
@@ -2472,6 +2730,60 @@ def lookup_dictionary(word: str):
     except Exception as e:
         print("Dictionary lookup error:", e)
     return None
+
+
+@app.get("/api/vocabulary/lookup")
+def lookup_dictionary(word: str):
+    return _dictionary_lookup(word)
+
+
+def _passage_example(word, text) -> str:
+    """Return the sentence from the learner's passage that contains `word` (case-insensitive,
+    whole-word preferred), so a Dictionary word carries the example of what they were actually
+    writing. Empty string if the word doesn't appear verbatim (e.g. a lemma)."""
+    if not word or not text:
+        return ""
+    import re
+    wl = str(word).lower().strip()
+    if not wl:
+        return ""
+    sentences = re.split(r'(?<=[.!?])\s+', str(text))
+    # whole-word match first, then loose substring
+    for pat in (r'\b' + re.escape(wl) + r'\b', re.escape(wl)):
+        for s in sentences:
+            if re.search(pat, s.lower()):
+                s = s.strip()
+                if s:
+                    return s
+    return ""
+
+
+async def _enrich_words(words: list, context: str = "") -> list:
+    """Fill in missing word details (ipa/part_of_speech/meaning_vi/example_en) from the
+    Dictionary API — used so the Writing Dictionary shows real definitions even without an
+    AI key. Only words lacking a Vietnamese meaning are looked up; the passage `context` steers
+    the Dictionary API toward the right sense. Runs concurrently, fully best-effort."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+
+    async def enrich(w):
+        try:
+            if not isinstance(w, dict) or not w.get("word"):
+                return w
+            if (w.get("ipa") or "").strip():
+                return w  # already enriched (the AI path fills ipa; the offline stub does not)
+            detail = await loop.run_in_executor(None, _dictionary_lookup, w["word"], context)
+            if detail:
+                # Real details replace the offline "Bật AI (Cloud)…" placeholder.
+                for k in ("ipa", "part_of_speech", "meaning_vi", "example_en", "example_vi"):
+                    if detail.get(k):
+                        w[k] = detail[k]
+        except Exception:
+            pass
+        return w
+
+    return await asyncio.gather(*[enrich(w) for w in (words or [])])
+
 
 @app.delete("/api/vocabulary/{word_id}")
 def delete_vocab(word_id: int, db: Session = Depends(get_db)):

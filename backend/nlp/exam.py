@@ -63,11 +63,32 @@ _CONVERTERS = {
 
 
 def extract_exam(text: str, num_questions: int = 10, types=None, with_explanation: bool = True):
+    import re
     types = [t for t in (types or []) if t in _CONVERTERS] or ["mcq"]
+
+    source_ref = None
+    try:
+        match = re.search(r"\[Trang (\d+)\]", text)
+        n = match.group(1) if match else "1"
+        source_ref = f"Trang {n}"
+        text = re.sub(r"^\[Trang \d+\]\s*\n?", "", text, flags=re.MULTILINE)
+    except Exception:
+        pass
+
     base = extract_quiz(text, num_questions=num_questions)
     questions = []
     for i, q in enumerate(base.get("questions", [])[:num_questions]):
-        questions.append(_CONVERTERS[types[i % len(types)]](dict(q)))
+        converted = _CONVERTERS[types[i % len(types)]](dict(q))
+        if source_ref:
+            try:
+                converted["source_ref"] = source_ref
+                expl = converted.get("explanation")
+                if expl and not expl.strip().endswith(f"({source_ref})"):
+                    converted["explanation"] = f"{expl.strip()} ({source_ref})"
+            except Exception:
+                pass
+        questions.append(converted)
+
     if not with_explanation:
         for q in questions:
             q.pop("explanation", None)

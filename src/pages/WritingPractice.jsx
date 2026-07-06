@@ -13,6 +13,48 @@ function playAudio(text) {
   try { new Audio(url).play(); } catch (e) {}
 }
 
+// Word-level diff (LCS) between the learner's answer and the corrected sentence, so the
+// Suggestion shows what to KEEP, ADD (green) and REMOVE (red strikethrough) — like datpmt.
+function renderDiff(userText, correctedText) {
+  const a = String(userText || '').trim().split(/\s+/).filter(Boolean);
+  const b = String(correctedText || '').trim().split(/\s+/).filter(Boolean);
+  if (!b.length) return null;
+  const norm = (w) => w.toLowerCase().replace(/[.,!?;:"'()]/g, '');
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = m - 1; i >= 0; i--)
+    for (let j = n - 1; j >= 0; j--)
+      dp[i][j] = norm(a[i]) === norm(b[j]) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const out = [];
+  let i = 0, j = 0;
+  while (i < m && j < n) {
+    if (norm(a[i]) === norm(b[j])) { out.push({ t: b[j], s: 'same' }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push({ t: a[i], s: 'del' }); i++; }
+    else { out.push({ t: b[j], s: 'add' }); j++; }
+  }
+  while (i < m) out.push({ t: a[i++], s: 'del' });
+  while (j < n) out.push({ t: b[j++], s: 'add' });
+  return out.map((tok, k) => {
+    const style = tok.s === 'add'
+      ? { color: '#22C55E', fontWeight: 700 }
+      : tok.s === 'del'
+        ? { color: '#EF4444', textDecoration: 'line-through', opacity: 0.85 }
+        : { color: 'var(--text-primary)' };
+    return <span key={k} style={style}>{tok.t}{' '}</span>;
+  });
+}
+
+// Render **bold** / *italic* markers (the grader wraps key phrases) so improvement notes read
+// like datpmt's highlighted feedback.
+function renderRich(text) {
+  const parts = String(text || '').split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+  return parts.map((p, k) => {
+    if (p.startsWith('**') && p.endsWith('**')) return <strong key={k} style={{ color: '#D97706' }}>{p.slice(2, -2)}</strong>;
+    if (p.startsWith('*') && p.endsWith('*')) return <em key={k} style={{ color: '#8A334C' }}>{p.slice(1, -1)}</em>;
+    return <span key={k}>{p}</span>;
+  });
+}
+
 // Setup Data
 const MODES = [
   { id: 'sentence', label: 'Câu' },
@@ -59,6 +101,9 @@ export default function WritingPractice() {
   const [dictOpen, setDictOpen] = useState(false);
   const [dictWords, setDictWords] = useState(null);
   const [dictLoading, setDictLoading] = useState(false);
+  // Which dictionary words are already in the user's Vocabulary, and their status
+  // ('learning' = Đang học, 'learned' = Đã thuộc). Powers the datpmt "Add to List" → status badge.
+  const [savedWords, setSavedWords] = useState({});
   
   const [hintPopover, setHintPopover] = useState(null);
   const [hintLoading, setHintLoading] = useState(false);
@@ -198,6 +243,18 @@ export default function WritingPractice() {
       });
       const data = await res.json();
       setDictWords(data.words);
+      // Cross-reference the user's Vocabulary so already-saved words show their status
+      // (Đang học / Đã thuộc) instead of a "Lưu" button — same as datpmt's "Add to List".
+      try {
+        const email = getEmail();
+        const vres = await fetch(`http://127.0.0.1:8000/api/vocabulary/list${email ? `?email=${encodeURIComponent(email)}` : ''}`);
+        const vdata = await vres.json();
+        const map = {};
+        (vdata.words || []).forEach(w => {
+          map[(w.word || '').toLowerCase()] = (w.learned || (w.correct_count >= 3)) ? 'learned' : 'learning';
+        });
+        setSavedWords(map);
+      } catch { /* status badges are best-effort */ }
     } catch (e) {
       console.error(e);
       notify('Lỗi tra từ điển', 'error');
@@ -257,8 +314,9 @@ export default function WritingPractice() {
   };
 
   const handleSaveWord = async (wordObj) => {
+    const key = (wordObj.word || '').toLowerCase();
     try {
-      await fetch('http://127.0.0.1:8000/api/vocabulary/add', {
+      const res = await fetch('http://127.0.0.1:8000/api/vocabulary/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -272,7 +330,10 @@ export default function WritingPractice() {
           api_key: localStorage.getItem('workflow_api_key') || ''
         })
       });
-      notify('Đã lưu vào từ vựng');
+      const data = await res.json();
+      const status = data.status || 'learning';
+      setSavedWords(prev => ({ ...prev, [key]: status }));
+      notify(data.already ? 'Từ này đã có trong danh sách từ vựng' : 'Đã thêm vào Từ vựng — bắt đầu ôn tập!');
     } catch (e) {
       console.error(e);
       notify('Lỗi lưu từ vựng', 'error');
@@ -504,10 +565,20 @@ export default function WritingPractice() {
           <div style={{ flex: '1 1 300px', backgroundColor: 'var(--bg-tertiary)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-light)', maxHeight: '400px', overflowY: 'auto', lineHeight: 1.9 }}>
             {lesson.sentences.map((s, i) => {
               if (i < currentIndex) {
-                return <span key={i} style={{ color: 'var(--text-primary)' }}>{(grades[i]?.corrected || answers[i] || s.reference_en)} </span>;
+                // done: show the learner's (corrected) English, in solid dark text
+                return <span key={i} style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{(grades[i]?.corrected || answers[i] || s.reference_en)} </span>;
               } else if (i === currentIndex) {
-                return <span key={i} style={{ color: '#8A334C', fontWeight: 700 }}>{s.vi} </span>;
+                // current: bright pink highlight (the sentence they translate now)
+                return (
+                  <span key={i} style={{
+                    color: '#DB2777', fontWeight: 700,
+                    backgroundColor: 'rgba(236,72,153,0.14)',
+                    borderRadius: '4px', padding: '2px 4px',
+                    boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone',
+                  }}>{s.vi} </span>
+                );
               } else {
+                // upcoming: muted grey
                 return <span key={i} style={{ color: 'var(--text-muted)' }}>{s.vi} </span>;
               }
             })}
@@ -538,23 +609,29 @@ export default function WritingPractice() {
                 </div>
               ) : (
                 <div style={{ fontSize: '0.9rem' }}>
-                  <div style={{ marginBottom: '8px' }}>
-                    <strong>Gợi ý: </strong>
-                    <span>{currentGrade.suggestion}</span>
+                  <div style={{ marginBottom: '10px', lineHeight: 1.7 }}>
+                    <strong>Gợi ý (Suggestion): </strong>
                     <button onClick={() => playAudio(currentGrade.suggestion)} style={{ background: 'none', border: 'none', cursor: 'pointer', verticalAlign: 'middle', marginLeft: '4px' }}>
                       <Volume2 size={16} color="#8A334C" />
                     </button>
+                    <div style={{ marginTop: '4px', padding: '8px', borderRadius: '8px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-light)' }}>
+                      {renderDiff(answers[currentIndex], currentGrade.suggestion) || <span>{currentGrade.suggestion}</span>}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      <span style={{ color: '#22C55E', fontWeight: 700 }}>xanh</span> = nên thêm ·{' '}
+                      <span style={{ color: '#EF4444', textDecoration: 'line-through' }}>đỏ</span> = nên bỏ
+                    </div>
                   </div>
                   {currentGrade.improvements && currentGrade.improvements.length > 0 && (
                     <div style={{ marginBottom: '8px' }}>
                       <strong>Cần cải thiện:</strong>
-                      <ul style={{ margin: '4px 0 0 0', paddingLeft: '20px' }}>
-                        {currentGrade.improvements.map((imp, idx) => <li key={idx}>{imp}</li>)}
+                      <ul style={{ margin: '4px 0 0 0', paddingLeft: '20px', lineHeight: 1.6 }}>
+                        {currentGrade.improvements.map((imp, idx) => <li key={idx}>{renderRich(imp)}</li>)}
                       </ul>
                     </div>
                   )}
                   {currentGrade.tip_vi && (
-                    <div style={{ color: '#F59E0B' }}>⚠️ {currentGrade.tip_vi}</div>
+                    <div style={{ color: '#F59E0B' }}>⚠️ {renderRich(currentGrade.tip_vi)}</div>
                   )}
                 </div>
               )}
@@ -702,12 +779,22 @@ export default function WritingPractice() {
                         <Volume2 size={16} color="#8A334C" />
                       </button>
                     </div>
-                    <button
-                      onClick={() => handleSaveWord(w)}
-                      style={{ backgroundColor: '#8A334C', color: '#fff', border: 'none', borderRadius: '16px', padding: '4px 10px', fontSize: '0.8rem', cursor: 'pointer' }}
-                    >
-                      ＋ Lưu
-                    </button>
+                    {savedWords[(w.word || '').toLowerCase()] ? (
+                      <span style={{
+                        borderRadius: '16px', padding: '4px 10px', fontSize: '0.78rem', fontWeight: 700,
+                        backgroundColor: savedWords[(w.word || '').toLowerCase()] === 'learned' ? '#E8F5E9' : '#FEF3C7',
+                        color: savedWords[(w.word || '').toLowerCase()] === 'learned' ? '#2C5E4F' : '#92400E',
+                      }}>
+                        {savedWords[(w.word || '').toLowerCase()] === 'learned' ? '✓ Đã thuộc' : '● Đang học'}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleSaveWord(w)}
+                        style={{ backgroundColor: '#8A334C', color: '#fff', border: 'none', borderRadius: '16px', padding: '4px 10px', fontSize: '0.8rem', cursor: 'pointer' }}
+                      >
+                        ＋ Lưu
+                      </button>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px', marginBottom: '8px' }}>
                     {w.part_of_speech && <span style={{ backgroundColor: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>{w.part_of_speech}</span>}
@@ -766,15 +853,26 @@ export default function WritingPractice() {
               {hintPopover.meaning_vi}
             </div>
           )}
-          <button
-            onClick={() => handleSaveWord(hintPopover)}
-            style={{
-              backgroundColor: '#8A334C', color: '#fff', border: 'none', borderRadius: '16px',
-              padding: '4px 12px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', marginBottom: '8px'
-            }}
-          >
-            ＋ Lưu vào từ vựng
-          </button>
+          {savedWords[(hintPopover.word || '').toLowerCase()] ? (
+            <span style={{
+              display: 'inline-block', marginBottom: '8px', borderRadius: '16px', padding: '4px 12px',
+              fontSize: '0.8rem', fontWeight: 700,
+              backgroundColor: savedWords[(hintPopover.word || '').toLowerCase()] === 'learned' ? '#E8F5E9' : '#FEF3C7',
+              color: savedWords[(hintPopover.word || '').toLowerCase()] === 'learned' ? '#2C5E4F' : '#92400E',
+            }}>
+              {savedWords[(hintPopover.word || '').toLowerCase()] === 'learned' ? '✓ Đã thuộc' : '● Đang học'}
+            </span>
+          ) : (
+            <button
+              onClick={() => handleSaveWord(hintPopover)}
+              style={{
+                backgroundColor: '#8A334C', color: '#fff', border: 'none', borderRadius: '16px',
+                padding: '4px 12px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', marginBottom: '8px'
+              }}
+            >
+              ＋ Lưu vào từ vựng
+            </button>
+          )}
           {hintPopover.example_en && (
             <div style={{ marginTop: '8px', padding: '8px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
               <div style={{ fontSize: '0.9rem', color: '#000' }}>{hintPopover.example_en}</div>

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, Users, Mail, Loader2, ChevronDown } from 'lucide-react';
+import { X, Loader2, Eye, Pencil } from 'lucide-react';
 import { getStoredUser } from '../../utils/googleAuth';
 
 const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) => {
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('Viewer');
+  const [role, setRole] = useState('editor'); // Default to editor based on mockup
   const [isInviting, setIsInviting] = useState(false);
   const [activeMembers, setActiveMembers] = useState([]);
   const [pendingInvites, setPendingInvites] = useState([]);
@@ -74,6 +74,29 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
 
   if (!isOpen) return null;
 
+  const combinedMembers = [
+    ...activeMembers,
+    ...pendingInvites.map(i => ({ ...i, isPending: true }))
+  ];
+
+  // Colors for avatars
+  const avatarColors = [
+    { bg: '#22C55E', text: '#FFFFFF' }, // Green
+    { bg: '#8B5CF6', text: '#FFFFFF' }, // Purple
+    { bg: '#F87171', text: '#FFFFFF' }, // Red/Pink
+    { bg: '#3B82F6', text: '#FFFFFF' }, // Blue
+    { bg: '#F59E0B', text: '#FFFFFF' }, // Yellow
+  ];
+
+  const getInitials = (emailOrName) => {
+    if (!emailOrName) return '??';
+    const parts = emailOrName.split('@')[0].split(/[._-]/);
+    if (parts.length > 1) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return emailOrName.substring(0, 2).toUpperCase();
+  };
+
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -81,171 +104,162 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
       display: 'flex', alignItems: 'center', justifyContent: 'center'
     }}>
       <div style={{
-        backgroundColor: '#FFFDF9', width: '560px', borderRadius: '24px',
-        display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-xl)',
-        maxHeight: '85vh', overflow: 'hidden'
+        backgroundColor: '#FFFFFF', width: '460px', borderRadius: '16px',
+        display: 'flex', flexDirection: 'column', boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+        maxHeight: '90vh', overflow: 'hidden'
       }}>
         {/* Header */}
-        <div style={{ padding: '24px 32px 16px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--brand-primary)', letterSpacing: '0.05em', marginBottom: '4px' }}>
-              PROJECT COLLABORATION
-            </div>
-            <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-navy)' }}>
-              Members and invites
-            </h2>
-          </div>
+        <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#1F2937' }}>
+            Mời bạn bè
+          </h2>
           <button onClick={onClose} style={{ 
-            background: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', 
+            background: '#F3F4F6', border: 'none', 
             borderRadius: '50%', width: '32px', height: '32px', 
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', color: 'var(--text-secondary)' 
+            cursor: 'pointer', color: '#6B7280' 
           }}>
             <X size={16} />
           </button>
         </div>
 
         {/* Content (Scrollable) */}
-        <div style={{ padding: '16px 32px 32px 32px', overflowY: 'auto' }}>
+        <div style={{ padding: '0 24px 24px 24px', overflowY: 'auto' }}>
           
-          {/* Invite Section */}
-          <div style={{ 
-            border: '1px solid #E5E7EB', borderRadius: '16px', padding: '20px', 
-            backgroundColor: 'var(--bg-tertiary)', marginBottom: '24px' 
-          }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4B5563', letterSpacing: '0.05em', marginBottom: '12px' }}>
-              INVITE BY EMAIL
-            </div>
-            
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <input 
-                type="email" 
-                placeholder="teammate@example.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                style={{ flex: 1, padding: '10px 16px', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.875rem', outline: 'none' }}
-                disabled={!projectId && !documentId}
-              />
-              <div style={{ position: 'relative', minWidth: '100px' }}>
-                <select
-                  value={role}
-                  onChange={e => setRole(e.target.value)}
-                  style={{ width: '100%', padding: '10px 32px 10px 16px', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.875rem', outline: 'none', appearance: 'none', backgroundColor: 'var(--bg-tertiary)', cursor: (!projectId && !documentId) ? 'not-allowed' : 'pointer', fontWeight: 600, color: '#374151' }}
-                  disabled={!projectId && !documentId}
-                >
-                  <option value="Viewer">Viewer</option>
-                  <option value="Editor">Editor</option>
-                  <option value="Admin">Admin</option>
-                </select>
-                <ChevronDown size={14} color="#6B7280" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-              </div>
-              <button 
-                onClick={handleInvite}
-                disabled={isInviting || !email || (!projectId && !documentId)}
-                style={{ 
-                  padding: '0 20px', borderRadius: '12px', border: 'none', 
-                  backgroundColor: (!email || (!projectId && !documentId)) ? '#D1D5DB' : 'var(--brand-primary)', color: 'white', 
-                  fontWeight: 600, fontSize: '0.875rem', cursor: (!email || (!projectId && !documentId)) ? 'not-allowed' : 'pointer',
-                  display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s'
-                }}
-              >
-                {isInviting ? <Loader2 size={16} className="spin" /> : <UserPlus size={16} />}
-                Invite
-              </button>
-            </div>
-            {error && <div style={{ color: '#B91C1C', fontSize: '0.85rem', marginTop: '8px' }}>{error}</div>}
-          </div>
-
           {/* Active Members */}
           <div style={{ marginBottom: '24px' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4B5563', letterSpacing: '0.05em', marginBottom: '12px' }}>
-              ACTIVE MEMBERS
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.05em', marginBottom: '12px' }}>
+              THÀNH VIÊN HIỆN TẠI
             </div>
             
-            <div style={{ border: '1px solid #E5E7EB', borderRadius: '16px', backgroundColor: 'var(--bg-tertiary)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {loading ? (
-                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}><Loader2 size={24} className="spin" /></div>
+                <div style={{ padding: '24px', textAlign: 'center', color: '#9CA3AF' }}><Loader2 size={24} className="spin" /></div>
               ) : (() => {
-                const list = [...activeMembers];
+                const list = [...combinedMembers];
                 const hasOwner = list.some(m => m.role && m.role.toLowerCase() === 'owner');
                 if (!hasOwner) {
                   const ownerEmail = currentUser?.email || 'owner@local.app';
                   list.unshift({ email: ownerEmail, role: 'owner' });
                 }
                 return list;
-              })().map((member, idx) => (
-                <div key={idx} style={{ 
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
-                  padding: '16px', borderBottom: idx < activeMembers.length - 1 ? '1px solid #E5E7EB' : 'none' 
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ 
-                      width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#F3E8E8', 
-                      color: 'var(--brand-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontWeight: 800, fontSize: '1.1rem'
-                    }}>
-                      {member.email.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      {currentUser?.email === member.email ? (
-                        <div style={{ fontWeight: 700, color: 'var(--text-navy)', fontSize: '0.95rem' }}>{currentUser.name}</div>
-                      ) : (
-                        <div style={{ fontWeight: 700, color: 'var(--text-navy)', fontSize: '0.95rem' }}>{member.email.split('@')[0]}</div>
-                      )}
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{member.email}</div>
-                    </div>
-                  </div>
-                  <div style={{ 
-                    padding: '4px 12px', borderRadius: '16px', backgroundColor: '#FDECEC', 
-                    color: 'var(--brand-primary)', fontSize: '0.75rem', fontWeight: 700 
+              })().map((member, idx) => {
+                const isPending = member.isPending;
+                const displayName = currentUser?.email === member.email ? currentUser.name : member.email.split('@')[0];
+                const colorIdx = idx % avatarColors.length;
+                const { bg, text } = avatarColors[colorIdx];
+                
+                let roleLabel = 'Xem';
+                let roleBg = '#EFF6FF';
+                let roleColor = '#2563EB';
+                
+                if (member.role === 'editor' || member.role === 'owner' || member.role === 'admin') {
+                  roleLabel = 'Chỉnh sửa';
+                  roleBg = '#ECFDF5';
+                  roleColor = '#059669';
+                }
+
+                if (isPending) {
+                  roleLabel = 'Đang chờ';
+                  roleBg = '#F3F4F6';
+                  roleColor = '#6B7280';
+                }
+
+                return (
+                  <div key={idx} style={{ 
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                    padding: '12px 16px', borderRadius: '12px', border: '1px solid #F3F4F6',
+                    backgroundColor: '#FAFAFA'
                   }}>
-                    {member.role}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ 
+                        width: '36px', height: '36px', borderRadius: '50%', backgroundColor: bg, 
+                        color: text, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 700, fontSize: '0.9rem'
+                      }}>
+                        {getInitials(displayName)}
+                      </div>
+                      <div style={{ fontWeight: 600, color: '#374151', fontSize: '0.95rem' }}>
+                        {displayName}
+                      </div>
+                    </div>
+                    <div style={{ 
+                      padding: '4px 12px', borderRadius: '20px', backgroundColor: roleBg, 
+                      color: roleColor, fontSize: '0.75rem', fontWeight: 600 
+                    }}>
+                      {roleLabel}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          {/* Pending Invites */}
+          {/* Invite Input */}
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.05em', marginBottom: '12px' }}>
+              EMAIL HOẶC TÊN NGƯỜI DÙNG
+            </div>
+            <input 
+              type="email" 
+              placeholder="email@example.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', outline: 'none' }}
+              disabled={!projectId && !documentId}
+            />
+          </div>
+
+          {/* Access Rights Toggles */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.05em', marginBottom: '12px' }}>
+              QUYỀN TRUY CẬP
+            </div>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button 
+                onClick={() => setRole('viewer')}
+                style={{ 
+                  flex: 1, padding: '12px', borderRadius: '12px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                  border: role === 'viewer' ? '1px solid #007AFF' : '1px solid #E5E7EB',
+                  backgroundColor: role === 'viewer' ? '#007AFF' : '#FFFFFF',
+                  color: role === 'viewer' ? '#FFFFFF' : '#4B5563',
+                  fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s'
+                }}
+              >
+                <Eye size={16} /> Chỉ xem
+              </button>
+              <button 
+                onClick={() => setRole('editor')}
+                style={{ 
+                  flex: 1, padding: '12px', borderRadius: '12px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                  border: role === 'editor' ? '1px solid #007AFF' : '1px solid #E5E7EB',
+                  backgroundColor: role === 'editor' ? '#007AFF' : '#FFFFFF',
+                  color: role === 'editor' ? '#FFFFFF' : '#4B5563',
+                  fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s'
+                }}
+              >
+                <Pencil size={16} /> Chỉnh sửa
+              </button>
+            </div>
+          </div>
+
+          {/* Submit Button */}
           <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4B5563', letterSpacing: '0.05em', marginBottom: '12px' }}>
-              PENDING INVITES
-            </div>
-            
-            <div style={{ border: '1px dashed #D1D5DB', borderRadius: '16px', backgroundColor: 'var(--bg-tertiary)', padding: pendingInvites.length === 0 ? '24px' : '0', overflow: 'hidden' }}>
-              {loading ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}><Loader2 size={24} className="spin" /></div>
-              ) : pendingInvites.length === 0 ? (
-                <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', textAlign: 'center' }}>
-                  No invites yet.
-                </div>
-              ) : pendingInvites.map((invite, idx) => (
-                <div key={idx} style={{ 
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
-                  padding: '16px', borderBottom: idx < pendingInvites.length - 1 ? '1px solid #E5E7EB' : 'none' 
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ 
-                      width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#F3F4F6', 
-                      color: '#9CA3AF', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontWeight: 800, fontSize: '1.1rem'
-                    }}>
-                      <Mail size={18} />
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 600, color: '#374151', fontSize: '0.95rem' }}>{invite.email}</div>
-                      <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>Invited as {invite.role}</div>
-                    </div>
-                  </div>
-                  <div style={{ 
-                    padding: '4px 12px', borderRadius: '16px', backgroundColor: '#F3F4F6', 
-                    color: '#4B5563', fontSize: '0.75rem', fontWeight: 600 
-                  }}>
-                    {invite.status}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <button 
+              onClick={handleInvite}
+              disabled={isInviting || !email || (!projectId && !documentId)}
+              style={{ 
+                width: '100%', padding: '14px', borderRadius: '12px', border: 'none', 
+                backgroundColor: (!email || (!projectId && !documentId)) ? '#9CA3AF' : '#8A334C', color: 'white', 
+                fontWeight: 600, fontSize: '1rem', cursor: (!email || (!projectId && !documentId)) ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
+              }}
+            >
+              {isInviting ? <Loader2 size={20} className="spin" /> : 'Gửi lời mời'}
+            </button>
+            {error && <div style={{ color: '#EF4444', fontSize: '0.85rem', marginTop: '12px', textAlign: 'center' }}>{error}</div>}
           </div>
 
         </div>

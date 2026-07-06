@@ -23,6 +23,7 @@ export default function Vocabulary() {
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isListExpanded, setIsListExpanded] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('all'); // all | learning | learned
   const [newWord, setNewWord] = useState('');
   const [review, setReview] = useState(null);
   const [toast, setToast] = useState(null);
@@ -540,6 +541,26 @@ export default function Vocabulary() {
             <span style={{ transform: isListExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
           </div>
 
+          {isListExpanded && words.length > 0 && (
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              {[
+                { k: 'all', label: `Tất cả (${words.length})` },
+                { k: 'learning', label: `● Đang học (${words.filter(w => w.learned !== 1).length})` },
+                { k: 'learned', label: `✓ Đã thuộc (${words.filter(w => w.learned === 1).length})` },
+              ].map(f => (
+                <button key={f.k} onClick={() => setStatusFilter(f.k)}
+                  style={{
+                    padding: '6px 12px', borderRadius: '16px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                    border: '1px solid', borderColor: statusFilter === f.k ? '#8A334C' : 'var(--border-medium)',
+                    backgroundColor: statusFilter === f.k ? '#8A334C' : 'var(--bg-primary)',
+                    color: statusFilter === f.k ? '#fff' : 'var(--text-secondary)',
+                  }}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {isListExpanded && (
             <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '8px' }}>
               {words.length === 0 ? (
@@ -572,7 +593,9 @@ export default function Vocabulary() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {words.map(w => (
+                  {words
+                    .filter(w => statusFilter === 'all' || (statusFilter === 'learned' ? w.learned === 1 : w.learned !== 1))
+                    .map(w => (
                     <div key={w.id} style={{ padding: '16px', borderRadius: '12px', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-primary)', position: 'relative' }}>
                       <button onClick={() => handleDelete(w.id)} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}>×</button>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
@@ -580,7 +603,14 @@ export default function Vocabulary() {
                         <button onClick={() => playAudio(w.word)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 0 }}><Volume2 size={18} color="#8A334C" /></button>
                         {w.ipa && <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{w.ipa}</span>}
                         {w.part_of_speech && <span style={{ backgroundColor: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{w.part_of_speech}</span>}
-                        {w.learned === 1 && <span style={{ backgroundColor: '#D1FAE5', color: '#065F46', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>đã thuộc</span>}
+                        {w.learned === 1
+                          ? <span style={{ backgroundColor: '#D1FAE5', color: '#065F46', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>✓ đã thuộc</span>
+                          : <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>● đang học</span>}
+                        {(w.correct_count > 0 || w.wrong_count > 0) && (
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                            {w.correct_count || 0}✓ / {w.wrong_count || 0}✗
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '8px' }}>{w.meaning_vi}</div>
                       {w.example_en && (
