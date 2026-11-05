@@ -32,64 +32,10 @@ except Exception:
 
 from fastapi import FastAPI, HTTPException, Header, UploadFile, File, Depends
 from pydantic import BaseModel, Field
-from dotenv import load_dotenv
 
-from google.antigravity import Agent, LocalAgentConfig, CapabilitiesConfig
-
-# Single-shot generation config: disable the agent's builtin tools/subagents so we get a
-# fast single model response (~8s) instead of a full coding-agent loop (~40s).
-FAST_CAPS = CapabilitiesConfig(enable_subagents=False, enabled_tools=[])
-
-
-# AI-token accounting: a small JSON file next to the backend (no DB schema change).
-# Tokens are estimated at ~4 chars/token from prompt + response; powers GET /api/usage
-# and the "AI TOKENS" widgets in the Sidebar / account dropdown.
-from db.database import USAGE_FILE, UPLOAD_DIR  # per-user data dir, see db/database.py
-USAGE_QUOTA = 500_000
-
-def _read_usage():
-    try:
-        with open(USAGE_FILE) as f:
-            return json.load(f)
-    except Exception:
-        return {"used_tokens": 0}
-
-def _record_usage(prompt, result):
-    data = _read_usage()
-    data["used_tokens"] = data.get("used_tokens", 0) + int((len(prompt) + len(str(result))) / 4)
-    try:
-        with open(USAGE_FILE, "w") as f:
-            json.dump(data, f)
-    except Exception:
-        pass  # accounting must never break a generation
-
-
-# Run a one-shot Gemini generation with a HARD timeout. On timeout/error the caller falls
-# back to the offline NLP engine, so the app never hangs on a slow/rate-limited AI call.
-async def agent_run(config, prompt, structured=True, timeout=30):
-    # Local-LLM engine: the UI sets the key to "LOCAL", so every generator that builds a
-    # LocalAgentConfig(api_key="LOCAL", ...) is transparently routed to the local model here.
-    # On any failure the caller's except-branch falls back to the offline NLP engine.
-    if getattr(config, "api_key", None) and config.api_key.startswith("LOCAL"):
-        model_name = config.api_key.split(":", 1)[1] if ":" in config.api_key else None
-        from nlp.local_llm import local_generate
-        schema = getattr(config, "response_schema", None)
-        result = await local_generate(prompt, structured=structured, schema=schema,
-                                      model_name=model_name,
-                                      timeout=max(timeout, 120))
-        _record_usage(prompt, result)
-        return result
-
-    async def _call():
-        async with Agent(config) as agent:
-            response = await agent.chat(prompt)
-            return await (response.structured_output() if structured else response.text())
-    result = await asyncio.wait_for(_call(), timeout=timeout)
-    _record_usage(prompt, result)
-    return result
-
-# Load env vars from parent directory .env if it exists
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+from db.database import UPLOAD_DIR  # per-user data dir, see db/database.py
+from core.agent import (Agent, LocalAgentConfig, FAST_CAPS, get_api_key, agent_run,
+                        USAGE_QUOTA, read_usage as _read_usage)
 
 # Raw uploaded PDFs are kept here so the UI can render the real document (a true PDF
 # viewer) instead of only its extracted text. Served by GET /api/documents/{id}/file.
@@ -180,22 +126,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Check for API key
-api_key = os.getenv("GEMINI_API_KEY") or os.getenv("VITE_GEMINI_API_KEY")
-
-def get_api_key(x_api_key: str | None) -> str | None:
-    # Engine toggle from the UI (Settings → AI Engine):
-    #   "OFFLINE" -> force the deterministic local NLP/algorithm engine (returns None).
-    #   "LOCAL"   -> force the local downloaded LLM (Ollama); routed inside agent_run.
-    if x_api_key == "OFFLINE":
-        return None
-    if x_api_key and x_api_key.startswith("LOCAL"):
-        return x_api_key
-    # Accept both Google AI Studio keys (AIzaSy...) and Antigravity keys (AQ...).
-    if x_api_key and x_api_key.startswith(("AIzaSy", "AQ")):
-        return x_api_key
-    return api_key
 
 # --- Schemas ---
 class ChatRequest(BaseModel):
@@ -509,7 +439,7 @@ async def generate_project_roadmap(project_id: int, req: TopicRequest, db: Sessi
 
     # 2. Call roadmap generator
     from nlp.roadmap import generate_roadmap
-    items = await generate_roadmap(text_content, api_key=req.api_key)
+    items = await generate_roadmap(text_content, api_key=get_api_key(req.api_key))
     
     # 3. Save to DB
     crud.create_roadmap(db, project_id=project_id, items=items)
@@ -542,7 +472,7 @@ async def generate_document_roadmap(document_id: int, req: TopicRequest, db: Ses
     if not doc or not doc.content:
         return {"status": "error", "message": "Không tìm thấy nội dung tài liệu."}
     from nlp.roadmap import generate_roadmap
-    items = await generate_roadmap(doc.content, api_key=req.api_key)
+    items = await generate_roadmap(doc.content, api_key=get_api_key(req.api_key))
     
     old_roadmaps = db.query(models.Roadmap).filter(models.Roadmap.document_id == document_id).all()
     for rm in old_roadmaps:
@@ -2454,7 +2384,6 @@ async def generate_vocab(req: VocabGenerateRequest, db: Session = Depends(get_db
         raise HTTPException(status_code=400, detail="Vui lòng cung cấp Gemini API Key để tạo từ vựng bằng AI.")
         
     try:
-        from core.agent import LocalAgentConfig, agent_run, FAST_CAPS
         config = LocalAgentConfig(
             api_key=current_key, 
             model="gemini-3.1-flash", 

@@ -77,7 +77,7 @@ a = Analysis(
         "sqlalchemy.orm.sessionmaker",
         "pyvi",
         "en_core_web_sm",
-    ] + collect_submodules("nlp") + collect_submodules("db"),
+    ] + collect_submodules("nlp") + collect_submodules("db") + collect_submodules("core"),
     hookspath=["hooks"],
     runtime_hooks=[],
     excludes=[],
