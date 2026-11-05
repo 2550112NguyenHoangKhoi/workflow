@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Folder, FileText, Download, Trash2, Eye, ArrowLeft, BrainCircuit, Cloud, PlusCircle, CheckCircle2, Share2 } from 'lucide-react';
-import { getLocalFiles, saveLocalFile, deleteLocalFile } from '../utils/storage';
 import * as drive from '../utils/googleDrive';
 import { toggleSource, isSelected } from '../utils/examSources';
 import DueFlashcardModal from '../components/modals/DueFlashcardModal';

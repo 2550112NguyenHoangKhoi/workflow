@@ -4,6 +4,7 @@ import { ReactFlow, Controls, Background, applyNodeChanges, applyEdgeChanges } f
 import { toPng } from 'html-to-image';
 import dagre from 'dagre';
 import '@xyflow/react/dist/style.css';
+import { getEngineKey } from '../../utils/engine';
 
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
@@ -109,7 +110,7 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
         },
         body: JSON.stringify({ 
           topic_or_text: textContent,
-          api_key: localStorage.getItem('workflow_api_key') || '',
+          api_key: getEngineKey(),
           project_id: projId,
           document_id: docId
         })

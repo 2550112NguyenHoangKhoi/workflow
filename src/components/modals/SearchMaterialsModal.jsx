@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { X, Search } from 'lucide-react';
+import { getEngineKey } from '../../utils/engine';
+import { readUploadResult } from '../../utils/uploads';
 
 const SearchMaterialsModal = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
@@ -26,7 +28,7 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
           return `https://www.youtube.com/embed/${videoId}`;
         }
       }
-    } catch (e) {}
+    } catch {}
     return url;
   };
 
@@ -42,7 +44,7 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': localStorage.getItem('workflow_api_key') || ''
+          'x-api-key': getEngineKey()
         },
         body: JSON.stringify({ query: query.trim() })
       });
@@ -70,13 +72,17 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
       const match = window.location.hash.match(/#\/project\/(\d+)/);
       const projectId = match ? parseInt(match[1]) : null;
 
+      const failed = [];
       for (let url of Array.from(selectedUrls)) {
-        await fetch('http://127.0.0.1:8000/api/documents/ingest_url', {
+        const res = await fetch('http://127.0.0.1:8000/api/documents/ingest_url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url, project_id: projectId })
         });
+        const result = await readUploadResult(res);
+        if (!result.ok) failed.push(`${url}\n  → ${result.message}`);
       }
+      if (failed.length) alert(`Không thêm được ${failed.length} liên kết:\n\n${failed.join('\n')}`);
       setSelectedUrls(new Set());
       onClose();
       window.location.reload();

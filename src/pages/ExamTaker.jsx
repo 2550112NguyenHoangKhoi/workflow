@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, FileText, X, Clock, CheckCircle2, XCircle, RotateCcw, Trophy, FileImage, Type, ZoomIn, ZoomOut, Loader2 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { getEngineKey } from '../utils/engine';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -212,7 +213,7 @@ function ExamTaker() {
     if (adding) return;
     setAdding(true);
     try {
-      const key = localStorage.getItem('workflow_api_key') || localStorage.getItem('workflow_gemini_key') || '';
+      const key = getEngineKey();
       const r = await fetch(`http://127.0.0.1:8000/api/exams/${artifactId}/questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -45,7 +45,6 @@
   
   --shadow-sm: 0 2px 8px rgba(138, 51, 75, 0.04);
   --shadow-md: 0 4px 16px rgba(138, 51, 75, 0.06);
-  --shadow-premium: 0 8px 24px rgba(138, 51, 75, 0.08);
   
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
@@ -80,7 +79,6 @@
 
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
-  --shadow-premium: 0 8px 24px rgba(0, 0, 0, 0.7);
 
   color-scheme: dark; /* native inputs, scrollbars, etc. */
 }

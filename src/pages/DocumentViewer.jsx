@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useOutletContext } from 'react-router-dom';
-import { Users, ArrowRight, BrainCircuit, FileText, Sparkles, MessageCircle, Settings, FileSearch, PenTool, LayoutTemplate, Briefcase, Languages, Network } from 'lucide-react';
+import { Users, ArrowRight, BrainCircuit, FileText, Sparkles } from 'lucide-react';
 import PdfViewer from '../components/PdfViewer';
 import ProjectCollaborationModal from '../components/modals/ProjectCollaborationModal';
 import CreateExamModal from '../components/modals/CreateExamModal';
@@ -15,6 +15,7 @@ import remarkMath from 'remark-math';
 import remarkBreaks from 'remark-breaks';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import { getEngineKey } from '../utils/engine';
 
 const DocumentViewer = () => {
   const { id } = useParams();
@@ -143,8 +144,10 @@ const DocumentViewer = () => {
     // Construct the contextual payload
     const payload = {
       message: content,
-      context: activeDoc ? activeDoc.content.slice(0, 6000) : '',
-      persona: chatMode === 'omiguide' ? selectedPersona : null
+      // The backend loads the full document/project text itself from the ids below.
+      context: '',
+      persona: chatMode === 'omiguide' ? selectedPersona : null,
+      api_key: getEngineKey()
     };
     
     if (isProjectRoute && id) {
@@ -182,11 +185,12 @@ const DocumentViewer = () => {
     }
   };
 
+  // Quiz/flashcard pills open the real generators; the others are chat prompts.
   const actionPills = [
-    "Tạo quiz nhanh",
-    "Tạo flashcard",
-    "Giải thích lại",
-    "Cho ví dụ"
+    { label: "Tạo quiz nhanh", action: () => setIsExamModalOpen(true) },
+    { label: "Tạo flashcard", action: () => setIsFlashcardOpen(true) },
+    { label: "Giải thích lại", action: () => sendMessage("Giải thích lại") },
+    { label: "Cho ví dụ", action: () => sendMessage("Cho ví dụ") }
   ];
 
   return (
@@ -395,12 +399,12 @@ const DocumentViewer = () => {
                 {/* Action Pills — sends prompt directly to chat like Workflow */}
                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-start', marginBottom: '12px', flexWrap: 'wrap' }}>
                   {actionPills.map(pill => (
-                    <button key={pill} onClick={() => sendMessage(pill)} disabled={!activeDoc || isTyping} style={{
+                    <button key={pill.label} onClick={pill.action} disabled={!activeDoc || isTyping} style={{
                       backgroundColor: 'var(--bg-tertiary)', border: '1px solid #D6C5B3', borderRadius: '20px', padding: '6px 14px',
                       fontSize: '0.8rem', fontWeight: 600, color: '#1F2937', cursor: (!activeDoc || isTyping) ? 'not-allowed' : 'pointer',
                       whiteSpace: 'nowrap', opacity: (!activeDoc || isTyping) ? 0.5 : 1, transition: 'all 0.2s'
                     }}>
-                      {pill}
+                      {pill.label}
                     </button>
                   ))}
                 </div>

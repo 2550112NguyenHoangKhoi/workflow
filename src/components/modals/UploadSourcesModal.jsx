@@ -1,10 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { X, Upload, Loader2, Link as LinkIcon, Check } from 'lucide-react';
+import { X, Upload, Loader2, Check } from 'lucide-react';
+import { readUploadResult } from '../../utils/uploads';
 
 const UploadSourcesModal = ({ isOpen, onClose, projectId, documentId }) => {
   const [urlInput, setUrlInput] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
+  const [uploadMessage, setUploadMessage] = useState('');
   const fileInputRef = useRef(null);
 
   const handleUploadFile = async (files) => {
@@ -25,9 +27,11 @@ const UploadSourcesModal = ({ isOpen, onClose, projectId, documentId }) => {
         method: 'POST',
         body: formData,
       });
-      if (res.ok) {
+      const result = await readUploadResult(res);
+      setUploadMessage(result.message);
+      if (result.ok) {
         setUploadStatus('success');
-        setTimeout(() => { setUploadStatus(null); }, 3000);
+        setTimeout(() => { setUploadStatus(null); }, result.warning ? 8000 : 3000);
       } else {
         setUploadStatus('error');
       }
@@ -111,8 +115,8 @@ const UploadSourcesModal = ({ isOpen, onClose, projectId, documentId }) => {
               </>
             )}
           </div>
-          {uploadStatus === 'success' && <div style={{ fontSize: '0.82rem', color: 'var(--brand-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '4px' }}><Check size={14}/> Tải tài liệu lên thành công!</div>}
-          {uploadStatus === 'error' && <div style={{ fontSize: '0.82rem', color: 'red', marginBottom: '16px' }}>Lỗi khi xử lý tài liệu.</div>}
+          {uploadStatus === 'success' && <div style={{ fontSize: '0.82rem', color: 'var(--brand-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '4px' }}><Check size={14}/> Tải tài liệu lên thành công!{uploadMessage && <span style={{ color: '#B45309' }}> {uploadMessage}</span>}</div>}
+          {uploadStatus === 'error' && <div style={{ fontSize: '0.82rem', color: 'red', marginBottom: '16px' }}>{uploadMessage || 'Lỗi khi xử lý tài liệu.'}</div>}
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-navy)' }}>Links</div>
@@ -142,14 +146,16 @@ const UploadSourcesModal = ({ isOpen, onClose, projectId, documentId }) => {
                         document_id: documentId ? parseInt(documentId) : null
                       })
                     });
-                    if (res.ok) {
+                    const result = await readUploadResult(res);
+                    setUploadMessage(result.message);
+                    if (result.ok) {
                       setUploadStatus('success');
                       setUrlInput('');
                       setTimeout(() => { setUploadStatus(null); }, 3000);
                     } else {
                       setUploadStatus('error');
                     }
-                  } catch (e) {
+                  } catch {
                     setUploadStatus('error');
                   } finally {
                     setIsUploading(false);
@@ -161,7 +167,7 @@ const UploadSourcesModal = ({ isOpen, onClose, projectId, documentId }) => {
               </button>
             </div>
             {uploadStatus === 'success' && <div style={{ fontSize: '0.8rem', color: 'var(--brand-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}><Check size={14}/> Thêm link thành công!</div>}
-            {uploadStatus === 'error' && <div style={{ fontSize: '0.8rem', color: 'red' }}>Lỗi khi xử lý link.</div>}
+            {uploadStatus === 'error' && <div style={{ fontSize: '0.8rem', color: 'red' }}>{uploadMessage || 'Lỗi khi xử lý link.'}</div>}
           </div>
 
         </div>

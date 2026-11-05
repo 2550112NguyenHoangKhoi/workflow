@@ -96,7 +96,8 @@ def generate_concept_map(text: str) -> Dict:
     concepts = [chunk.text.lower().strip() for chunk in doc.noun_chunks if len(chunk.text.split()) <= 3]
     
     # Filter common stop words and very short words
-    concepts = list(set([c for c in concepts if len(c) > 3 and c not in nlp.Defaults.stop_words]))
+    # dict.fromkeys dedupes while keeping document order (set() made results vary per run)
+    concepts = list(dict.fromkeys(c for c in concepts if len(c) > 3 and c not in nlp.Defaults.stop_words))
     
     sentences = [sent.text.strip() for sent in doc.sents]
     
@@ -131,16 +132,25 @@ def generate_concept_map(text: str) -> Dict:
     # Only keep the most important edges to avoid a hairball graph
     edges_list = sorted(G.edges(data=True), key=lambda x: x[2]['weight'], reverse=True)
     
-    # Keep top 15 edges
-    top_edges = edges_list[:15]
+    # Keep ~15 edges, but first give every concept its strongest edge: with tied weights a
+    # plain top-15 cut was filled entirely by the first sentence's concepts.
+    top_edges, picked, covered = [], set(), set()
+    for u, v, data in edges_list:
+        if u not in covered or v not in covered:
+            top_edges.append((u, v, data)); picked.add((u, v)); covered.update((u, v))
+    for u, v, data in edges_list:
+        if len(top_edges) >= max(15, len(picked)):
+            break
+        if (u, v) not in picked:
+            top_edges.append((u, v, data)); picked.add((u, v))
     
     # Build final graph dictionary
-    nodes = set()
+    nodes = {}  # ordered set: keeps output stable across runs
     edges = []
     
     for u, v, data in top_edges:
-        nodes.add(u)
-        nodes.add(v)
+        nodes[u] = None
+        nodes[v] = None
         edges.append({"source": u, "target": v, "weight": data['weight']})
         
     # Format for frontend (e.g., React Flow)

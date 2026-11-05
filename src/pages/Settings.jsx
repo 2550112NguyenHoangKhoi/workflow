@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Save, CheckCircle2, ShieldAlert, Cpu, Server, Settings as SettingsIcon, Download, TerminalSquare, RefreshCw, XCircle, Sparkles } from 'lucide-react';
+import { Key, Save, CheckCircle2, ShieldAlert, Server, Settings as SettingsIcon, Download, TerminalSquare, RefreshCw, XCircle, Sparkles, HardDrive, Cloud } from 'lucide-react';
+import { getDriveApiKey, setDriveApiKey, DRIVE_KEY_STORAGE } from '../utils/googleDrive';
 
 // Three interchangeable engines power EVERY AI feature (chat, quiz, flashcards, notes, concept
 // map, roadmap...). The choice is encoded into localStorage['workflow_api_key'], which every
@@ -56,6 +57,45 @@ const Settings = () => {
     localStorage.setItem('workflow_api_key', signal);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
+  };
+
+  // Google Drive API key (entered by the user, kept only in this machine's localStorage).
+  const [driveKey, setDriveKey] = useState(() => {
+    try { return localStorage.getItem(DRIVE_KEY_STORAGE) || ''; } catch { return ''; }
+  });
+  const [driveSaved, setDriveSaved] = useState(false);
+  const saveDriveKey = () => {
+    setDriveApiKey(driveKey);
+    setDriveSaved(true);
+    setTimeout(() => setDriveSaved(false), 2500);
+  };
+
+  // Storage folder (desktop app): where the database and uploaded files live.
+  const [dataDir, setDataDir] = useState('');
+  const isDesktop = Boolean(window.workflowDesktop?.selectWorkspace);
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/api/system/info')
+      .then(res => (res.ok ? res.json() : null))
+      .then(d => d && setDataDir(d.data_dir))
+      .catch(() => {});
+  }, []);
+
+  const handleSelectWorkspace = async () => {
+    try {
+      const res = await window.workflowDesktop.selectWorkspace();
+      if (!res) return;
+      const what = res.existing
+        ? 'Thư mục này đã có dữ liệu Workflow — ứng dụng sẽ dùng dữ liệu đó.'
+        : res.moved
+          ? 'Đã sao chép tài liệu và cơ sở dữ liệu sang thư mục mới (bản cũ vẫn được giữ nguyên).'
+          : 'Thư mục mới sẽ bắt đầu với dữ liệu trống.';
+      if (window.confirm(`Thư mục lưu trữ: ${res.path}\n\n${what}\n\nKhởi động lại ứng dụng ngay để áp dụng?`)) {
+        await window.workflowDesktop.relaunch();
+      }
+    } catch (err) {
+      console.error(err);
+      alert(`Không đổi được thư mục lưu trữ.\n${err.message || ''}`);
+    }
   };
 
   const checkLocal = async () => {
@@ -243,6 +283,52 @@ const Settings = () => {
         }}>
           {isSaved ? <><CheckCircle2 size={20} /> Đã lưu cài đặt</> : <><Save size={20} /> Lưu cài đặt</>}
         </button>
+      </div>
+
+      <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '16px', padding: '32px', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+          <Cloud size={20} /> Google Drive API Key
+        </h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: 0, lineHeight: 1.6 }}>
+          Dùng để duyệt Thư viện Drive công khai và lấy nội dung file Drive làm nguồn đề thi. Key chỉ lưu trên máy này.
+          Tạo key tại <strong>Google Cloud Console → APIs &amp; Services → Credentials → Create credentials → API key</strong>,
+          bật <strong>Google Drive API</strong> cho project, rồi giới hạn key chỉ dùng Drive API.
+        </p>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <input
+            type="password"
+            value={driveKey}
+            onChange={(e) => setDriveKey(e.target.value)}
+            placeholder="AIza..."
+            autoComplete="off"
+            style={{ flex: '1 1 260px', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border-medium)', fontFamily: 'monospace' }}
+          />
+          <button onClick={saveDriveKey} style={{ padding: '10px 18px', borderRadius: '10px', border: 'none', backgroundColor: driveSaved ? '#3B6B59' : '#8A334B', color: 'white', fontWeight: 700, cursor: 'pointer' }}>
+            {driveSaved ? 'Đã lưu' : 'Lưu key'}
+          </button>
+        </div>
+        {!driveKey && getDriveApiKey() && (
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Đang dùng key từ file .env (chế độ phát triển).</span>
+        )}
+      </div>
+
+      <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '16px', padding: '32px', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+          <HardDrive size={20} /> Thư mục lưu trữ dữ liệu
+        </h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: 0 }}>
+          Cơ sở dữ liệu và các file tài liệu bạn tải lên được lưu tại đây. Có thể chọn một thư mục đồng bộ (Google Drive, iCloud, OneDrive…) để sao lưu.
+        </p>
+        <code style={{ backgroundColor: '#0F172A', color: '#E2E8F0', padding: '10px 14px', borderRadius: '10px', fontSize: '0.85rem', wordBreak: 'break-all' }}>
+          {dataDir || 'Không kết nối được backend.'}
+        </code>
+        {isDesktop ? (
+          <button onClick={handleSelectWorkspace} style={{ alignSelf: 'flex-start', padding: '10px 18px', borderRadius: '10px', border: '1px solid #8A334B', backgroundColor: 'white', color: '#8A334B', fontWeight: 700, cursor: 'pointer' }}>
+            Đổi thư mục lưu trữ…
+          </button>
+        ) : (
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Chỉ đổi được thư mục trong ứng dụng desktop.</span>
+        )}
       </div>
     </div>
   );

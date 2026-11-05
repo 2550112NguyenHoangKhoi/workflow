@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { FolderOpen, MessageCircle, Folder, Settings, Zap, FileText, User, LogOut, ChevronRight, ChevronDown, PenTool, Brain, BookMarked } from 'lucide-react';
+import { FolderOpen, MessageCircle, Folder, Settings, Zap, FileText, User, LogOut, ChevronRight, ChevronDown, PenTool, Brain, BookMarked, Pencil, Trash2 } from 'lucide-react';
 import { LIBRARY_ROOT, LIBRARY_ROOT_NAME, listChildren } from '../../utils/googleDrive';
 import UserProfileModal from '../modals/UserProfileModal';
 
@@ -72,6 +72,62 @@ const Sidebar = () => {
       if (res.ok) fetchData();
     } catch (err) {
       console.error('Failed to create folder', err);
+    }
+  };
+
+  const api = async (url, method, body) => {
+    const res = await fetch(`http://127.0.0.1:8000${url}`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  };
+
+  const handleRenameFolder = async (folder) => {
+    const name = window.prompt('Đổi tên thư mục:', folder.name);
+    if (!name || name.trim() === folder.name) return;
+    try { await api(`/api/folders/${folder.id}`, 'PATCH', { name }); fetchData(); }
+    catch (e) { alert(e.message); }
+  };
+
+  const handleDeleteFolder = async (folder) => {
+    if (!window.confirm(`Xoá thư mục "${folder.name}"?\nCác dự án bên trong sẽ được giữ lại và chuyển sang "Không phân loại".`)) return;
+    try { await api(`/api/folders/${folder.id}`, 'DELETE'); fetchData(); }
+    catch (e) { alert(e.message); }
+  };
+
+  // Right-click a project: rename, move to another folder, or delete it.
+  const handleProjectMenu = async (e, project) => {
+    e.preventDefault();
+    const choice = window.prompt(
+      `Dự án "${project.name}" — nhập số:\n1. Đổi tên\n2. Chuyển sang thư mục khác\n3. Xoá dự án`, '1');
+    try {
+      if (choice === '1') {
+        const name = window.prompt('Tên mới:', project.name);
+        if (name && name.trim() !== project.name) await api(`/api/projects/${project.id}`, 'PATCH', { name });
+      } else if (choice === '2') {
+        const list = folders.map((f, i) => `${i + 1}. ${f.name}`).join('\n');
+        const pick = window.prompt(`Chuyển tới thư mục (0 = Không phân loại):\n${list}`, '0');
+        if (pick === null) return;
+        const idx = parseInt(pick, 10);
+        if (idx === 0) await api(`/api/projects/${project.id}`, 'PATCH', { unfile: true });
+        else if (folders[idx - 1]) await api(`/api/projects/${project.id}`, 'PATCH', { folder_id: folders[idx - 1].id });
+        else return;
+      } else if (choice === '3') {
+        if (!window.confirm(`Xoá dự án "${project.name}" cùng toàn bộ tài liệu, flashcard và đề thi bên trong? Không thể hoàn tác.`)) return;
+        await api(`/api/projects/${project.id}`, 'DELETE');
+        if (routeProjectId === String(project.id)) navigate('/documents');
+      } else {
+        return;
+      }
+      fetchData();
+    } catch (err) {
+      alert(err.message);
     }
   };
 
@@ -239,13 +295,23 @@ const Sidebar = () => {
                   <FolderOpen size={16} />
                   <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{folder.name}</span>
                 </div>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleNewProject(folder.id); }} 
-                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-                  title="Thêm dự án vào thư mục"
-                >
-                  <span style={{ fontSize: '1.2rem', fontWeight: 500 }}>+</span>
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                  <button onClick={(e) => { e.stopPropagation(); handleRenameFolder(folder); }} title="Đổi tên thư mục"
+                    style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px' }}>
+                    <Pencil size={13} />
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder); }} title="Xoá thư mục (giữ lại dự án)"
+                    style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px' }}>
+                    <Trash2 size={13} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleNewProject(folder.id); }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                    title="Thêm dự án vào thư mục"
+                  >
+                    <span style={{ fontSize: '1.2rem', fontWeight: 500 }}>+</span>
+                  </button>
+                </div>
               </div>
               
               {isExpanded && folderProjects.length > 0 && (
@@ -256,6 +322,8 @@ const Sidebar = () => {
                       <div 
                         key={project.id} 
                         onClick={() => navigate(`/project/${project.id}`)}
+                onContextMenu={(e) => handleProjectMenu(e, project)}
+                title="Chuột phải: đổi tên / chuyển thư mục / xoá"
                         style={{
                           display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 16px',
                           borderRadius: '8px', color: isActive ? 'var(--brand-secondary)' : 'var(--text-secondary)', 
@@ -289,6 +357,8 @@ const Sidebar = () => {
               <div 
                 key={project.id} 
                 onClick={() => navigate(`/project/${project.id}`)}
+                onContextMenu={(e) => handleProjectMenu(e, project)}
+                title="Chuột phải: đổi tên / chuyển thư mục / xoá"
                 style={{
                   display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px',
                   borderRadius: '8px', color: isActive ? 'var(--brand-secondary)' : 'var(--text-secondary)', 
@@ -320,6 +390,8 @@ const Sidebar = () => {
                 <div 
                   key={project.id} 
                   onClick={() => navigate(`/project/${project.id}`)}
+                onContextMenu={(e) => handleProjectMenu(e, project)}
+                title="Chuột phải: đổi tên / chuyển thư mục / xoá"
                   style={{
                     display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px',
                     borderRadius: '8px', color: isActive ? 'var(--brand-secondary)' : 'var(--text-secondary)', 

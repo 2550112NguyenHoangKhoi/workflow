@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Loader2, Download } from 'lucide-react';
+import { X, FileText, Loader2, Download, RefreshCw } from 'lucide-react';
+import { getEngineKey } from '../../utils/engine';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -20,7 +21,7 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
     }
   }, [isOpen]);
 
-  const generateNotes = async () => {
+  const generateNotes = async (regenerate = false) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -57,9 +58,13 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
       setActiveDoc(latestDoc);
       
       // 2. Generate Notes via GET endpoint (which caches in DB)
-      const res = await fetch(`http://127.0.0.1:8000/api/documents/${latestDoc.id}/notes`);
+      const params = new URLSearchParams({ api_key: getEngineKey(), regenerate: regenerate ? 'true' : 'false' });
+      const res = await fetch(`http://127.0.0.1:8000/api/documents/${latestDoc.id}/notes?${params}`);
       
-      if (!res.ok) throw new Error("Failed to generate notes");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || "Failed to generate notes");
+      }
       
       const data = await res.json();
       
@@ -121,11 +126,16 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
             <div>
               <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-navy)', margin: 0 }}>Smart Notes</h2>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: 0 }}>
-                {activeDoc ? `Algorithmically Extracted from ${activeDoc.filename}` : 'TextRank Extraction'}
+                {activeDoc ? `Ghi chú từ ${activeDoc.filename}` : 'Smart Notes'}
               </p>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
+            {(markdown || error) && !isLoading && (
+              <button onClick={() => generateNotes(true)} title="Tạo lại ghi chú bằng bộ máy AI hiện tại" style={{ background: '#F3F4F6', border: 'none', cursor: 'pointer', color: 'var(--text-navy)', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
+                <RefreshCw size={16} /> Tạo lại
+              </button>
+            )}
             {markdown && (
               <button onClick={exportToMD} title="Download Markdown" style={{ background: '#E8F5E9', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
                 <Download size={16} /> Export MD

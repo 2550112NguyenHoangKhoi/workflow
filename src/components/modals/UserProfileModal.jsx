@@ -7,8 +7,8 @@ const UserProfileModal = ({ isOpen, onClose, user }) => {
   useEffect(() => {
     if (isOpen && user?.email) {
       fetch(`http://127.0.0.1:8000/api/user/stats?email=${encodeURIComponent(user.email)}`)
-        .then(res => res.json())
-        .then(data => setStats(data))
+        .then(res => (res.ok ? res.json() : null))
+        .then(data => { if (data) setStats(data); })
         .catch(err => console.error("Failed to load user stats", err));
     }
   }, [isOpen, user]);

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Loader2, Clock, BookOpen } from 'lucide-react';
+import { getEngineKey } from '../../utils/engine';
+import { buildStudyPlanIcs, downloadIcs, durationToDays } from '../../utils/ics';
 
 const StudyPlanModal = ({ isOpen, onClose }) => {
   const [pathData, setPathData] = useState(null);
@@ -60,7 +62,7 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-api-key': localStorage.getItem('workflow_api_key') || ''
+          'x-api-key': getEngineKey()
         },
         body: JSON.stringify({ 
           topic: `${topicName} - Thời lượng: ${duration}, Mục tiêu: ${targetLevel}`
@@ -152,8 +154,11 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
                   <h3 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', color: 'var(--text-navy)' }}>{pathData.title}</h3>
                   <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: '1.5' }}>{pathData.description}</p>
                 </div>
-                <button onClick={() => alert('Đã tạo file .ics và kết nối Google Calendar thành công!')} style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#4285F4', color: 'white', padding: '10px 16px', borderRadius: '8px', border: 'none', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                  <Calendar size={18} /> Kết nối Google Calendar
+                <button
+                  onClick={() => downloadIcs(buildStudyPlanIcs(pathData, { days: durationToDays(duration) }), `${pathData.title || 'lo-trinh-hoc'}.ics`)}
+                  title="Tải file lịch .ics rồi nhập vào Google Calendar, Apple Calendar hoặc Outlook (mỗi chủ đề là một buổi học lúc 19:00)"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#4285F4', color: 'white', padding: '10px 16px', borderRadius: '8px', border: 'none', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  <Calendar size={18} /> Thêm vào lịch (.ics)
                 </button>
               </div>
 

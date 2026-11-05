@@ -15,6 +15,7 @@ class Flashcard(Base):
     ease = Column(Float, default=2.5)
     repetitions = Column(Integer, default=0)
     due_date = Column(Date, default=datetime.date.today)
+    last_reviewed = Column(DateTime, nullable=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
     
@@ -76,7 +77,6 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     name = Column(String)
     picture = Column(String, nullable=True)
-    status = Column(String, default="free")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     last_login = Column(DateTime, default=datetime.datetime.utcnow)
 

@@ -5,15 +5,24 @@ import random
 import asyncio
 import datetime
 import ssl
+import sys
 import nltk
 from nltk.corpus import wordnet as wn
+
+# Bundled NLTK data (backend/nltk_data, or <_MEIPASS>/nltk_data in the frozen build) must be
+# on the search path BEFORE the lookup below, otherwise the packaged app tries to download.
+_NLTK_BUNDLE = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "nltk_data")
+if os.path.isdir(_NLTK_BUNDLE) and _NLTK_BUNDLE not in nltk.data.path:
+    nltk.data.path.insert(0, _NLTK_BUNDLE)
 
 try:
     nltk.data.find('corpora/wordnet')
 except LookupError:
-    ssl._create_default_https_context = ssl._create_unverified_context
-    nltk.download('wordnet', quiet=True)
-    nltk.download('omw-1.4', quiet=True)
+    try:
+        nltk.download('wordnet', quiet=True)
+        nltk.download('omw-1.4', quiet=True)
+    except Exception as e:  # offline first run: WordNet features degrade, app still starts
+        print(f"[startup] could not download WordNet: {e}")
 
 import difflib
 try:
@@ -23,69 +32,14 @@ except Exception:
 
 from fastapi import FastAPI, HTTPException, Header, UploadFile, File, Depends
 from pydantic import BaseModel, Field
-from dotenv import load_dotenv
 
-from google.antigravity import Agent, LocalAgentConfig, CapabilitiesConfig
-
-# Single-shot generation config: disable the agent's builtin tools/subagents so we get a
-# fast single model response (~8s) instead of a full coding-agent loop (~40s).
-FAST_CAPS = CapabilitiesConfig(enable_subagents=False, enabled_tools=[])
-
-
-# AI-token accounting: a small JSON file next to the backend (no DB schema change).
-# Tokens are estimated at ~4 chars/token from prompt + response; powers GET /api/usage
-# and the "AI TOKENS" widgets in the Sidebar / account dropdown.
-USAGE_FILE = os.path.join(os.path.dirname(__file__), "usage.json")
-USAGE_QUOTA = 500_000
-
-def _read_usage():
-    try:
-        with open(USAGE_FILE) as f:
-            return json.load(f)
-    except Exception:
-        return {"used_tokens": 0}
-
-def _record_usage(prompt, result):
-    data = _read_usage()
-    data["used_tokens"] = data.get("used_tokens", 0) + int((len(prompt) + len(str(result))) / 4)
-    try:
-        with open(USAGE_FILE, "w") as f:
-            json.dump(data, f)
-    except Exception:
-        pass  # accounting must never break a generation
-
-
-# Run a one-shot Gemini generation with a HARD timeout. On timeout/error the caller falls
-# back to the offline NLP engine, so the app never hangs on a slow/rate-limited AI call.
-async def agent_run(config, prompt, structured=True, timeout=30):
-    # Local-LLM engine: the UI sets the key to "LOCAL", so every generator that builds a
-    # LocalAgentConfig(api_key="LOCAL", ...) is transparently routed to the local model here.
-    # On any failure the caller's except-branch falls back to the offline NLP engine.
-    if getattr(config, "api_key", None) and config.api_key.startswith("LOCAL"):
-        model_name = config.api_key.split(":", 1)[1] if ":" in config.api_key else None
-        from nlp.local_llm import local_generate
-        schema = getattr(config, "response_schema", None)
-        result = await local_generate(prompt, structured=structured, schema=schema,
-                                      model_name=model_name,
-                                      timeout=max(timeout, 120))
-        _record_usage(prompt, result)
-        return result
-
-    async def _call():
-        async with Agent(config) as agent:
-            response = await agent.chat(prompt)
-            return await (response.structured_output() if structured else response.text())
-    result = await asyncio.wait_for(_call(), timeout=timeout)
-    _record_usage(prompt, result)
-    return result
-
-# Load env vars from parent directory .env if it exists
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+from db.database import UPLOAD_DIR  # per-user data dir, see db/database.py
+from core.agent import (Agent, LocalAgentConfig, FAST_CAPS, get_api_key, agent_run,
+                        USAGE_QUOTA, read_usage as _read_usage)
 
 # Raw uploaded PDFs are kept here so the UI can render the real document (a true PDF
 # viewer) instead of only its extracted text. Served by GET /api/documents/{id}/file.
 from fastapi.responses import FileResponse
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 
 import sys
 from pathlib import Path
@@ -99,11 +53,6 @@ def patch_database_schema(engine):
     inspector = inspect(engine)
     
     with engine.begin() as conn:
-        if "users" in inspector.get_table_names():
-            cols = [c["name"] for c in inspector.get_columns("users")]
-            if "status" not in cols:
-                conn.execute(text("ALTER TABLE users ADD COLUMN status VARCHAR DEFAULT 'free'"))
-
         if "chat_messages" in inspector.get_table_names():
             cols = [c["name"] for c in inspector.get_columns("chat_messages")]
             if "document_id" not in cols:
@@ -122,6 +71,8 @@ def patch_database_schema(engine):
                 conn.execute(text("ALTER TABLE flashcards ADD COLUMN project_id INTEGER REFERENCES projects(id)"))
             if "document_id" not in cols:
                 conn.execute(text("ALTER TABLE flashcards ADD COLUMN document_id INTEGER REFERENCES documents(id)"))
+            if "last_reviewed" not in cols:
+                conn.execute(text("ALTER TABLE flashcards ADD COLUMN last_reviewed DATETIME"))
 
         if "project_members" in inspector.get_table_names():
             cols = [c["name"] for c in inspector.get_columns("project_members")]
@@ -161,33 +112,41 @@ BASE_DIR = setup_runtime_paths()
 
 app = FastAPI()
 
-# Allow the local frontend (Vite dev server on :5173 / Electron) to call the
-# backend cross-origin at http://127.0.0.1:8000. Wildcard origin with
-# allow_credentials=False (browsers reject "*" + credentials).
+# CORS: only the app's own origins may call the backend from a browser context — the Vite
+# dev server, and the packaged Electron window (file:// pages send Origin "null").
+# Any other website the user visits gets no CORS headers, so it can't read local data.
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import hmac
+
+_ALLOWED_ORIGINS = [o.strip() for o in os.getenv(
+    "WORKFLOW_ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173,null").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Check for API key
-api_key = os.getenv("GEMINI_API_KEY") or os.getenv("VITE_GEMINI_API_KEY")
+# Per-launch API token. The Electron shell generates one, passes it to this process and to
+# its own window; requests without it are refused. That blocks other local pages (incl.
+# sandboxed iframes, whose Origin is also "null") and form-POST CSRF. Unset when running
+# from source, so `uvicorn main:app` + `npm run dev` keep working without setup.
+_API_TOKEN = os.getenv("WORKFLOW_API_TOKEN", "")
+# <iframe>/<object> loads of a document's file can't carry headers; they only display it.
+_TOKEN_EXEMPT = re.compile(r"^/api/documents/\d+/file$")
 
-def get_api_key(x_api_key: str | None) -> str | None:
-    # Engine toggle from the UI (Settings → AI Engine):
-    #   "OFFLINE" -> force the deterministic local NLP/algorithm engine (returns None).
-    #   "LOCAL"   -> force the local downloaded LLM (Ollama); routed inside agent_run.
-    if x_api_key == "OFFLINE":
-        return None
-    if x_api_key and x_api_key.startswith("LOCAL"):
-        return x_api_key
-    # Accept both Google AI Studio keys (AIzaSy...) and Antigravity keys (AQ...).
-    if x_api_key and x_api_key.startswith(("AIzaSy", "AQ")):
-        return x_api_key
-    return api_key
+
+@app.middleware("http")
+async def _require_api_token(request, call_next):
+    if (_API_TOKEN and request.method != "OPTIONS" and request.url.path.startswith("/api/")
+            and not (request.method == "GET" and _TOKEN_EXEMPT.match(request.url.path))):
+        sent = request.headers.get("x-workflow-token", "")
+        if not hmac.compare_digest(sent, _API_TOKEN):
+            return JSONResponse({"detail": "Missing or invalid app token."}, status_code=401)
+    return await call_next(request)
 
 # --- Schemas ---
 class ChatRequest(BaseModel):
@@ -335,26 +294,11 @@ class QuizSubmitRequest(BaseModel):
     score: int
     total_questions: int
 
-class UpgradeRequest(BaseModel):
-    email: str
-
 class RoadmapItemUpdate(BaseModel):
     completed: bool | None = None
     active: bool | None = None
 
 # --- Folder Endpoints ---
-@app.post("/api/user/upgrade")
-def upgrade_user(req: UpgradeRequest, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.email == req.email).first()
-    if not db_user:
-        db_user = models.User(email=req.email, name=req.email.split('@')[0], status="premium")
-        db.add(db_user)
-    else:
-        db_user.status = "premium"
-    db.commit()
-    db.refresh(db_user)
-    return {"status": "premium", "email": req.email}
-
 @app.post("/api/auth/login")
 def login(user_data: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user_data.email).first()
@@ -395,7 +339,63 @@ async def get_folders_api(db: Session = Depends(get_db)):
 
 @app.post("/api/folders")
 async def create_folder_api(folder: FolderCreate, db: Session = Depends(get_db)):
-    return crud.create_folder(db, name=folder.name)
+    name = (folder.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Tên thư mục không được để trống.")
+    return crud.create_folder(db, name=name)
+
+
+@app.patch("/api/folders/{folder_id}")
+def rename_folder_api(folder_id: int, folder: FolderCreate, db: Session = Depends(get_db)):
+    db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
+    if not db_folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    name = (folder.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Tên thư mục không được để trống.")
+    db_folder.name = name
+    db.commit()
+    return {"id": db_folder.id, "name": db_folder.name}
+
+
+@app.delete("/api/folders/{folder_id}")
+def delete_folder_api(folder_id: int, db: Session = Depends(get_db)):
+    """Delete a folder. Its projects are kept and become unfiled — never deleted with it."""
+    db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
+    if not db_folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    moved = db.query(models.Project).filter(models.Project.folder_id == folder_id).update({models.Project.folder_id: None})
+    db.delete(db_folder)
+    db.commit()
+    return {"status": "ok", "unfiled_projects": moved}
+
+
+class ProjectUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    folder_id: int | None = None
+    unfile: bool = False  # true = remove from its folder (folder_id=None is "unchanged")
+
+
+@app.patch("/api/projects/{project_id}")
+def update_project_api(project_id: int, req: ProjectUpdate, db: Session = Depends(get_db)):
+    project = crud.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if req.name is not None:
+        if not req.name.strip():
+            raise HTTPException(status_code=422, detail="Tên dự án không được để trống.")
+        project.name = req.name.strip()
+    if req.description is not None:
+        project.description = req.description
+    if req.unfile:
+        project.folder_id = None
+    elif req.folder_id is not None:
+        if not db.query(models.Folder).filter(models.Folder.id == req.folder_id).first():
+            raise HTTPException(status_code=404, detail="Folder not found")
+        project.folder_id = req.folder_id
+    db.commit()
+    return {"id": project.id, "name": project.name, "description": project.description, "folder_id": project.folder_id}
 
 # --- Project Endpoints ---
 
@@ -497,11 +497,11 @@ async def generate_project_roadmap(project_id: int, req: TopicRequest, db: Sessi
         if doc.content:
             text_content += doc.content + "\n\n"
     if not text_content.strip():
-        text_content = "Vui lòng cung cấp nội dung chung."
+        raise HTTPException(status_code=422, detail="Dự án chưa có tài liệu nào có nội dung để lập giáo án.")
 
     # 2. Call roadmap generator
     from nlp.roadmap import generate_roadmap
-    items = await generate_roadmap(text_content, api_key=req.api_key)
+    items = await generate_roadmap(text_content, api_key=get_api_key(req.api_key))
     
     # 3. Save to DB
     crud.create_roadmap(db, project_id=project_id, items=items)
@@ -531,10 +531,12 @@ async def update_roadmap_item_endpoint(item_id: int, req: RoadmapItemUpdate, db:
 @app.post("/api/documents/{document_id}/roadmap/generate")
 async def generate_document_roadmap(document_id: int, req: TopicRequest, db: Session = Depends(get_db)):
     doc = db.query(models.Document).filter(models.Document.id == document_id).first()
-    if not doc or not doc.content:
-        return {"status": "error", "message": "Không tìm thấy nội dung tài liệu."}
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu.")
+    if not (doc.content or "").strip():
+        raise HTTPException(status_code=422, detail="Tài liệu chưa có nội dung văn bản để lập giáo án.")
     from nlp.roadmap import generate_roadmap
-    items = await generate_roadmap(doc.content, api_key=req.api_key)
+    items = await generate_roadmap(doc.content, api_key=get_api_key(req.api_key))
     
     old_roadmaps = db.query(models.Roadmap).filter(models.Roadmap.document_id == document_id).all()
     for rm in old_roadmaps:
@@ -594,29 +596,53 @@ async def get_document_artifacts(document_id: int, db: Session = Depends(get_db)
     return [{"id": a.id, "type": a.type, "title": a.title, "content": a.content, "created_at": a.created_at} for a in artifacts]
 
 @app.get("/api/documents/{document_id}/notes")
-async def get_document_notes_api(document_id: int, db: Session = Depends(get_db)):
-    # Check if artifact exists
-    artifact = db.query(models.Artifact).filter(models.Artifact.document_id == document_id, models.Artifact.type == 'smart_notes').first()
-    if artifact:
-        import json
-        return json.loads(artifact.content)
-    
-    # Generate notes if not exists
+async def get_document_notes_api(document_id: int, api_key: str | None = None, regenerate: bool = False,
+                                 x_api_key: str | None = Header(default=None), db: Session = Depends(get_db)):
+    """Smart notes for a document, cached as a 'smart_notes' artifact. Uses the selected AI
+    engine (falls back to the offline TextRank extractor); `regenerate=true` rebuilds them."""
+    doc = db.query(models.Document).filter(models.Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu.")
+    cached = db.query(models.Artifact).filter(models.Artifact.document_id == document_id,
+                                              models.Artifact.type == 'smart_notes').all()
+    if cached and not regenerate:
+        try:
+            return json.loads(cached[0].content)
+        except Exception:
+            pass
+
     text = get_document_text(db, document_id)
-    from nlp.notes import extract_notes
-    notes_dict = extract_notes(text)
-    
-    # Save it
-    import json
-    new_artifact = models.Artifact(
+    if not text.strip():
+        raise HTTPException(status_code=422, detail="Tài liệu chưa có nội dung văn bản để tạo ghi chú.")
+
+    notes_dict = None
+    current_key = get_api_key(api_key or x_api_key)
+    if current_key:
+        try:
+            config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite",
+                                      response_schema=NoteSchema, capabilities=FAST_CAPS)
+            prompt = ("Generate high-quality, structured study notes (title, summary, and sections with "
+                      "bullet_points) based on the following text, in the SAME language as the text.\n"
+                      f"Text: {text[:30000]}")
+            data = await agent_run(config, prompt, timeout=40)
+            if data and data.get("summary") and data.get("sections"):
+                notes_dict = data
+        except Exception as e:
+            print(f"[notes] AI failed, falling back to offline: {e}")
+    if notes_dict is None:
+        from nlp.notes import extract_notes
+        notes_dict = extract_notes(text)
+
+    for old in cached:
+        db.delete(old)
+    db.add(models.Artifact(
         document_id=document_id,
+        project_id=doc.project_id,
         type='smart_notes',
         title=notes_dict.get('title', 'Smart Notes'),
-        content=json.dumps(notes_dict, ensure_ascii=False)
-    )
-    db.add(new_artifact)
+        content=json.dumps(notes_dict, ensure_ascii=False),
+    ))
     db.commit()
-    
     return notes_dict
 
 # --- AI Engine ---
@@ -660,6 +686,13 @@ async def recommend_local_model():
         "reasoning": reason,
         "alternatives": alts
     }
+
+@app.get("/api/system/info")
+def system_info():
+    """Where this install keeps its data (shown in Settings → storage folder)."""
+    from db.database import DATA_DIR
+    return {"data_dir": DATA_DIR}
+
 
 @app.get("/api/usage")
 async def get_usage():
@@ -741,16 +774,23 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     if request.project_id or request.document_id:
         crud.save_chat_message(db, project_id=request.project_id, role=role, content=message_text, persona=request.persona, document_id=request.document_id)
 
-    context = request.context or ""
-    if request.project_id and not context:
-        project = crud.get_project(db, request.project_id)
-        if project:
-            sources = [doc.content for doc in project.documents if doc.content]
-            context = "\n\n---\n\n".join(sources)[:30000]
-    elif request.document_id and not context:
-        doc = db.query(models.Document).filter(models.Document.id == request.document_id).first()
-        if doc and doc.content:
-            context = doc.content[:30000]
+    # Context comes from the DB whenever we know the document/project: the focused document
+    # first, then the project's other documents, so project chat sees every source.
+    context = ""
+    if request.project_id or request.document_id:
+        docs = []
+        if request.document_id:
+            focused = db.query(models.Document).filter(models.Document.id == request.document_id).first()
+            if focused:
+                docs.append(focused)
+        if request.project_id:
+            project = crud.get_project(db, request.project_id)
+            if project:
+                docs += [d for d in project.documents if d.id != request.document_id]
+        context = "\n\n---\n\n".join(
+            f"[{d.filename}]\n{d.content}" for d in docs if (d.content or "").strip())[:30000]
+    if not context:
+        context = request.context or ""
             
     # persona=None means "Chat chính" (plain AI Q&A, no tutor persona).
     if request.persona is None:
@@ -830,24 +870,37 @@ async def generate_flashcards(request: FlashcardRequest, db: Session = Depends(g
         if doc_text.strip():
             text_to_process = doc_text
 
+    def _card_dict(c):
+        return {"id": c.id, "front": c.front, "back": c.back, "interval": c.interval,
+                "ease": c.ease, "repetitions": c.repetitions, "due_date": c.due_date.isoformat()}
+
     def _save(cards):
+        """Store a freshly generated set. Regenerating replaces only cards that were never
+        reviewed — reviewed cards keep their SM-2 history, and a generated card whose front
+        matches a kept card reuses it instead of duplicating it."""
+        kept = {}
         if request.project_id or request.document_id:
             query = db.query(models.Flashcard)
             if request.document_id:
                 query = query.filter(models.Flashcard.document_id == request.document_id)
-            elif request.project_id:
+            else:
                 query = query.filter(models.Flashcard.project_id == request.project_id)
-            query.delete()
+            for old in query.all():
+                if crud.flashcard_has_progress(old):
+                    kept[(old.front or "").strip().lower()] = old
+                else:
+                    db.delete(old)
             db.commit()
 
-        out = []
+        out, seen = [], set()
         for c in cards:
-            db_card = crud.create_flashcard(db, front=c.get("front", ""), back=c.get("back", ""), project_id=request.project_id, document_id=request.document_id)
-            out.append({
-                "id": db_card.id, "front": db_card.front, "back": db_card.back,
-                "interval": db_card.interval, "ease": db_card.ease,
-                "repetitions": db_card.repetitions, "due_date": db_card.due_date.isoformat()
-            })
+            front, back = c.get("front", ""), c.get("back", "")
+            key = front.strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            card = kept.get(key) or crud.create_flashcard(db, front=front, back=back, project_id=request.project_id, document_id=request.document_id)
+            out.append(_card_dict(card))
         return out
 
     current_key = get_api_key(request.api_key)
@@ -866,116 +919,180 @@ async def generate_flashcards(request: FlashcardRequest, db: Session = Depends(g
 
 from fastapi import Form
 
+TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".csv", ".json", ".html", ".htm", ".tex", ".rtf", ".srt", ".vtt", ""}
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+MEDIA_SUFFIXES = {".mp4", ".mp3", ".m4a", ".wav"}
+
+
+def _decode_text_file(raw: bytes) -> str:
+    """Plain-text uploads: reject binaries, then try the common encodings in order."""
+    if b"\x00" in raw[:4096] and not raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        raise ValueError("binary")
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16")
+    # cp1258 = Windows Vietnamese, the usual non-UTF-8 encoding for Vietnamese .txt files.
+    for enc in ("utf-8-sig", "cp1258"):
+        try:
+            return raw.decode(enc)
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
 @app.post("/api/documents/upload")
 def upload_document(
     file: UploadFile = File(...),
     project_id: int | None = Form(None),
     db: Session = Depends(get_db)
 ):
-    import tempfile, os, shutil
-    
-    suffix = os.path.splitext(file.filename)[1].lower()
+    """Store an uploaded source and its extracted text.
+
+    Unsupported or unreadable files are rejected (422) instead of being stored as empty
+    documents that every AI feature then silently runs on. When the file is fine but no text
+    could be extracted (scanned PDF, OCR/transcription extras not installed) the document is
+    kept — it can still be viewed — and the response carries a `warning`."""
+    import tempfile, shutil
+
+    suffix = os.path.splitext(file.filename or "")[1].lower()
+    if suffix not in TEXT_SUFFIXES | IMAGE_SUFFIXES | MEDIA_SUFFIXES | {".pdf", ".docx"}:
+        raise HTTPException(status_code=422, detail=(
+            f"Định dạng '{suffix}' chưa được hỗ trợ. Hãy dùng PDF, DOCX, TXT/MD, ảnh (PNG/JPG) "
+            "hoặc âm thanh/video (MP3/MP4). Với PPTX/DOC, hãy xuất sang PDF trước."))
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         shutil.copyfileobj(file.file, tmp)
         path = tmp.name
-    
+
     try:
         text = ""
+        warning = None
         kind = "document"
         page_count = None
         pages_data = None
-        
+
         if suffix == ".pdf":
             kind = "pdf"
             import pdfplumber
             try:
                 with pdfplumber.open(path) as pdf:
-                    pages = []
-                    for page in pdf.pages:
-                        page_text = (page.extract_text() or "") + "\n"
-                        pages.append(page_text)
-                        text += page_text
-                    page_count = len(pages)
-                    pages_data = json.dumps(pages)
+                    pages = [(page.extract_text() or "") + "\n" for page in pdf.pages]
             except Exception:
-                pass
-        elif suffix in [".docx"]:
+                raise HTTPException(status_code=422, detail="Không đọc được file PDF (file hỏng hoặc có mật khẩu).")
+            text = "".join(pages)
+            page_count = len(pages)
+            pages_data = json.dumps(pages)
+            if not text.strip():
+                warning = "PDF không có lớp chữ (có thể là bản scan) nên các tính năng AI sẽ không có nội dung để dùng."
+        elif suffix == ".docx":
             kind = "docx"
             try:
                 import docx
                 d = docx.Document(path)
-                text = "\n".join([p.text for p in d.paragraphs])
+                text = "\n".join(p.text for p in d.paragraphs)
             except Exception:
-                pass
-        elif suffix in [".png", ".jpg", ".jpeg", ".webp"]:
+                raise HTTPException(status_code=422, detail="Không đọc được file DOCX (file hỏng?).")
+        elif suffix in IMAGE_SUFFIXES:
             kind = "image"
             try:
                 import pytesseract
                 from PIL import Image
                 text = pytesseract.image_to_string(Image.open(path), lang="vie+eng")
-            except Exception:
-                pass
-        elif suffix in [".mp4", ".mp3", ".m4a", ".wav"]:
+            except ImportError:
+                warning = "Chưa cài OCR (pytesseract + Tesseract) nên chưa trích được chữ từ ảnh."
+            except Exception as e:
+                warning = f"Không nhận dạng được chữ trong ảnh: {e}"
+        elif suffix in MEDIA_SUFFIXES:
             kind = "audio" if suffix in [".mp3", ".m4a", ".wav"] else "video"
             try:
                 from faster_whisper import WhisperModel
                 model = WhisperModel("tiny", device="cpu", compute_type="int8")
                 segments, info = model.transcribe(path)
-                text = "\n".join([segment.text for segment in segments])
-            except Exception:
-                pass
+                text = "\n".join(segment.text for segment in segments)
+            except ImportError:
+                warning = "Chưa cài faster-whisper nên chưa chuyển được âm thanh thành chữ."
+            except Exception as e:
+                warning = f"Không chuyển được âm thanh thành chữ: {e}"
         else:
+            with open(path, "rb") as f:
+                raw = f.read()
             try:
-                with open(path, "r", encoding="utf-8") as f:
-                    text = f.read()
-            except Exception:
-                pass
-                
+                text = _decode_text_file(raw)
+            except ValueError:
+                raise HTTPException(status_code=422, detail="File không phải văn bản thuần (có vẻ là file nhị phân).")
+
         doc = crud.create_document(db, filename=file.filename, content=text, kind=kind, project_id=project_id, page_count=page_count, pages_data=pages_data)
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         shutil.copyfile(path, os.path.join(UPLOAD_DIR, f"{doc.id}{suffix}"))
-        return {"id": doc.id, "filename": doc.filename, "kind": doc.kind, "upload_date": doc.upload_date.isoformat()}
+        out = {"id": doc.id, "filename": doc.filename, "kind": doc.kind, "upload_date": doc.upload_date.isoformat()}
+        if warning:
+            out["warning"] = warning
+        return out
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         os.unlink(path)
 
+
+def _youtube_video_id(url: str) -> str | None:
+    import urllib.parse
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if host.endswith("youtu.be"):
+        return parsed.path.lstrip("/").split("/")[0] or None
+    if "youtube" in host:
+        q = urllib.parse.parse_qs(parsed.query).get("v")
+        if q:
+            return q[0]
+        parts = [p for p in parsed.path.split("/") if p]
+        if len(parts) >= 2 and parts[0] in ("shorts", "embed", "live", "v"):
+            return parts[1]
+    return None
+
+
+def _youtube_transcript(video_id: str) -> str:
+    from youtube_transcript_api import YouTubeTranscriptApi
+    langs = ["vi", "en"]
+    if hasattr(YouTubeTranscriptApi, "get_transcript"):  # youtube-transcript-api < 1.0
+        return "\n".join(t["text"] for t in YouTubeTranscriptApi.get_transcript(video_id, languages=langs))
+    fetched = YouTubeTranscriptApi().fetch(video_id, languages=langs)  # >= 1.0
+    return "\n".join(snippet.text for snippet in fetched)
+
+
 @app.post("/api/documents/ingest_url")
 @app.post("/api/documents/url")
 def ingest_url(request: UrlIngestRequest, db: Session = Depends(get_db)):
-    url = request.url
+    url = (request.url or "").strip()
+    if not url.lower().startswith(("http://", "https://")):
+        raise HTTPException(status_code=422, detail="Liên kết phải bắt đầu bằng http:// hoặc https://")
     text = ""
     filename = url
     kind = "link"
-    
-    if "youtube.com" in url or "youtu.be" in url:
+
+    video_id = _youtube_video_id(url)
+    if video_id:
         kind = "video"
+        filename = f"YouTube: {video_id}"
         try:
-            from youtube_transcript_api import YouTubeTranscriptApi
-            import urllib.parse
-            if "youtu.be" in url:
-                video_id = url.split("/")[-1].split("?")[0]
-            else:
-                parsed = urllib.parse.urlparse(url)
-                video_id = urllib.parse.parse_qs(parsed.query).get('v', [None])[0]
-            if video_id:
-                try:
-                    transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['vi', 'en'])
-                    text = "\n".join([t['text'] for t in transcript])
-                    filename = f"YouTube: {video_id}"
-                except Exception:
-                    pass
-        except ImportError:
-            pass
+            text = _youtube_transcript(video_id)
+        except Exception as e:
+            print(f"[ingest] YouTube transcript failed for {video_id}: {e}")
+            raise HTTPException(status_code=422, detail="Video này không có phụ đề (vi/en) để trích nội dung.")
     else:
         try:
             import trafilatura
             downloaded = trafilatura.fetch_url(url)
             if downloaded:
                 text = trafilatura.extract(downloaded) or ""
-        except ImportError:
-            pass
-            
+                meta = trafilatura.extract_metadata(downloaded)
+                if meta is not None and getattr(meta, "title", None):
+                    filename = meta.title
+        except Exception as e:
+            print(f"[ingest] fetch failed for {url}: {e}")
+        if not text.strip():
+            raise HTTPException(status_code=422, detail="Không lấy được nội dung từ trang này (trang cần đăng nhập, chặn tải, hoặc không có văn bản).")
+
     doc = crud.create_document(db, filename=filename, content=text, kind=kind, project_id=request.project_id)
     return {"id": doc.id, "filename": doc.filename, "kind": doc.kind, "upload_date": doc.upload_date.isoformat()}
 
@@ -1068,17 +1185,12 @@ async def generate_path(request: LearningPathRequest, x_api_key: str | None = He
     current_key = get_api_key(x_api_key)
     if current_key:
         try:
-            config = LocalAgentConfig(
-                api_key=current_key,
-                response_schema=LearningPathSchema
-            )
+            config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite",
+                                      response_schema=LearningPathSchema, capabilities=FAST_CAPS)
             prompt = f"Create a comprehensive, step-by-step learning path for the topic: '{request.topic}'. Break it down into logical modules, and each module should have specific topics with descriptions and estimated study times."
-            
-            async with Agent(config) as agent:
-                response = await agent.chat(prompt)
-                data = await response.structured_output()
-                if data:
-                    return data
+            data = await agent_run(config, prompt, structured=True, timeout=40)
+            if data and data.get("modules"):
+                return data
         except Exception as e:
             print(f"Error generating learning path, falling back to offline: {e}")
 
@@ -1105,11 +1217,9 @@ async def search_materials(request: SearchRequest, x_api_key: str | None = Heade
                 })
         
         # If we have a valid key, use AI to filter and score for quality
-        if current_key:
-            config = LocalAgentConfig(
-                api_key=current_key,
-                response_schema=SearchMaterialSchema
-            )
+        if current_key and raw_results:
+            config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite",
+                                      response_schema=SearchMaterialSchema, capabilities=FAST_CAPS)
             prompt = f"""
             You are a helpful and intelligent curator. A user is searching for materials on the topic: '{request.query}'.
             I have queried a search engine and retrieved the following raw results:
@@ -1124,11 +1234,12 @@ async def search_materials(request: SearchRequest, x_api_key: str | None = Heade
             - Assign a 'relevancy_score' from 0 to 100 indicating how relevant and academically/professionally useful the result is.
             """
             
-            async with Agent(config) as agent:
-                response = await agent.chat(prompt)
-                data = await response.structured_output()
+            try:
+                data = await agent_run(config, prompt, structured=True, timeout=30)
                 if data and data.get("results"):
                     return data
+            except Exception as e:  # keep the raw search results if curation fails
+                print(f"[search] AI curation failed, returning raw results: {e}")
 
         # Fallback to top 5 if AI fails or no key
         fallback_results = []
@@ -1157,6 +1268,23 @@ async def search_materials(request: SearchRequest, x_api_key: str | None = Heade
     except Exception as e:
         print(f"Error searching materials: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+def _clear_unshared_artifacts(db, art_type: str, project_id=None, document_id=None):
+    """Regenerating a quiz / exam prep / study plan replaces the previous one for the same
+    document (or project) — except artifacts someone has been shared, which are kept."""
+    query = db.query(models.Artifact).filter(models.Artifact.type == art_type)
+    if document_id:
+        query = query.filter(models.Artifact.document_id == document_id)
+    elif project_id:
+        query = query.filter(models.Artifact.project_id == project_id)
+    else:
+        return
+    shared_ids = {sid for (sid,) in db.query(models.Share.artifact_id).filter(models.Share.artifact_id.isnot(None))}
+    for art in query.all():
+        if art.id not in shared_ids:
+            db.delete(art)
+    db.commit()
+
 
 def get_document_text(db: Session, document_id: int | None, page_ranges: list[int] | None = None) -> str:
     if not document_id:
@@ -1203,13 +1331,7 @@ async def generate_quiz_endpoint(request: TopicRequest, db: Session = Depends(ge
             data = await agent_run(config, prompt)
             if data and data.get("questions"):
                 if request.project_id or request.document_id:
-                    query = db.query(models.Artifact).filter(models.Artifact.type == "quiz")
-                    if request.document_id:
-                        query = query.filter(models.Artifact.document_id == request.document_id)
-                    elif request.project_id:
-                        query = query.filter(models.Artifact.project_id == request.project_id)
-                    query.delete()
-                    db.commit()
+                    _clear_unshared_artifacts(db, "quiz", request.project_id, request.document_id)
                     crud.create_artifact(db, project_id=request.project_id, type="quiz", title=data.get("title", "Bài Trắc Nghiệm"), content=json.dumps(data), document_id=request.document_id)
                 return data
         except Exception as e:
@@ -1217,13 +1339,7 @@ async def generate_quiz_endpoint(request: TopicRequest, db: Session = Depends(ge
     from nlp.quizzes import extract_quiz
     quiz_data = extract_quiz(text_to_process, num_questions=5)
     if request.project_id or request.document_id:
-        query = db.query(models.Artifact).filter(models.Artifact.type == "quiz")
-        if request.document_id:
-            query = query.filter(models.Artifact.document_id == request.document_id)
-        elif request.project_id:
-            query = query.filter(models.Artifact.project_id == request.project_id)
-        query.delete()
-        db.commit()
+        _clear_unshared_artifacts(db, "quiz", request.project_id, request.document_id)
         crud.create_artifact(db, project_id=request.project_id, type="quiz", title=quiz_data.get("title", "Bài Trắc Nghiệm"), content=json.dumps(quiz_data), document_id=request.document_id)
     return quiz_data
 class ExamPrepSchema(BaseModel):
@@ -1247,13 +1363,7 @@ async def generate_exam_prep_endpoint(request: TopicRequest, db: Session = Depen
             data = await agent_run(config, prompt)
             if data and data.get("markdown_content"):
                 if request.project_id or request.document_id:
-                    query = db.query(models.Artifact).filter(models.Artifact.type == "examprep")
-                    if request.document_id:
-                        query = query.filter(models.Artifact.document_id == request.document_id)
-                    elif request.project_id:
-                        query = query.filter(models.Artifact.project_id == request.project_id)
-                    query.delete()
-                    db.commit()
+                    _clear_unshared_artifacts(db, "examprep", request.project_id, request.document_id)
                     crud.create_artifact(db, project_id=request.project_id, type="examprep", title=data.get("title", "Tài liệu phòng thi"), content=json.dumps(data), document_id=request.document_id)
                 return data
         except Exception as e:
@@ -1263,13 +1373,7 @@ async def generate_exam_prep_endpoint(request: TopicRequest, db: Session = Depen
     from nlp.concept_map import generate_offline_exam_prep
     data = generate_offline_exam_prep(text_to_process)
     if request.project_id or request.document_id:
-        query = db.query(models.Artifact).filter(models.Artifact.type == "examprep")
-        if request.document_id:
-            query = query.filter(models.Artifact.document_id == request.document_id)
-        elif request.project_id:
-            query = query.filter(models.Artifact.project_id == request.project_id)
-        query.delete()
-        db.commit()
+        _clear_unshared_artifacts(db, "examprep", request.project_id, request.document_id)
         crud.create_artifact(db, project_id=request.project_id, type="examprep", title=data.get("title", "Tài liệu phòng thi"), content=json.dumps(data), document_id=request.document_id)
     return data
 
@@ -1293,13 +1397,7 @@ async def generate_study_plan_endpoint(request: TopicRequest, db: Session = Depe
             data = await agent_run(config, prompt)
             if data and data.get("markdown_content"):
                 if request.project_id or request.document_id:
-                    query = db.query(models.Artifact).filter(models.Artifact.type == "studyplan")
-                    if request.document_id:
-                        query = query.filter(models.Artifact.document_id == request.document_id)
-                    elif request.project_id:
-                        query = query.filter(models.Artifact.project_id == request.project_id)
-                    query.delete()
-                    db.commit()
+                    _clear_unshared_artifacts(db, "studyplan", request.project_id, request.document_id)
                     crud.create_artifact(db, project_id=request.project_id, type="studyplan", title=data.get("title", "Giáo Án"), content=json.dumps(data), document_id=request.document_id)
                 return data
         except Exception as e:
@@ -1309,13 +1407,7 @@ async def generate_study_plan_endpoint(request: TopicRequest, db: Session = Depe
     from nlp.concept_map import generate_offline_study_plan
     data = generate_offline_study_plan(text_to_process)
     if request.project_id or request.document_id:
-        query = db.query(models.Artifact).filter(models.Artifact.type == "studyplan")
-        if request.document_id:
-            query = query.filter(models.Artifact.document_id == request.document_id)
-        elif request.project_id:
-            query = query.filter(models.Artifact.project_id == request.project_id)
-        query.delete()
-        db.commit()
+        _clear_unshared_artifacts(db, "studyplan", request.project_id, request.document_id)
         crud.create_artifact(db, project_id=request.project_id, type="studyplan", title=data.get("title", "Giáo Án"), content=json.dumps(data), document_id=request.document_id)
     return data
 
@@ -1445,15 +1537,6 @@ async def generate_concept_map_endpoint(request: TopicRequest):
     from nlp.concept_map import generate_concept_map
     return generate_concept_map(request.topic_or_text)
 
-if __name__ == "__main__":
-    import uvicorn
-    import sys
-    
-    is_frozen = getattr(sys, 'frozen', False)
-    if is_frozen:
-        uvicorn.run(app, host="127.0.0.1", port=8000, workers=1)
-    else:
-        uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
 
 @app.post("/api/suggestions")
 async def generate_suggestions(request: TopicRequest, x_api_key: str | None = Header(default=None)):
@@ -1461,16 +1544,15 @@ async def generate_suggestions(request: TopicRequest, x_api_key: str | None = He
     
     if current_key:
         try:
-            config = LocalAgentConfig(api_key=current_key, response_schema=SuggestionSchema)
+            config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite",
+                                      response_schema=SuggestionSchema, capabilities=FAST_CAPS)
             prompt = f"""Analyze the following text corpus from a user's document library. Suggest 3 things: a topic for a structured learning path, a specific topic for a multiple-choice quiz, and a topic for a set of flashcards. Keep the suggestions concise.
 
 Corpus:
 {request.topic_or_text[:5000]}"""
-            async with Agent(config) as agent:
-                response = await agent.chat(prompt)
-                data = await response.structured_output()
-                if data:
-                    return data
+            data = await agent_run(config, prompt, structured=True, timeout=30)
+            if data:
+                return data
         except Exception as e:
             print(f"[suggestions] AI failed, falling back to offline: {e}")
 
@@ -1511,6 +1593,7 @@ class ExamGenRequest(_BaseModel):
     project_id: int | None = None
     document_id: int | None = None
     owner_email: str | None = None
+    drive_api_key: str | None = None
 
 class ExamDocGenRequest(_BaseModel):
     title: str = "Tài liệu ôn thi"
@@ -1520,6 +1603,7 @@ class ExamDocGenRequest(_BaseModel):
     sources: list[ExamSource] = []
     api_key: str | None = None
     owner_email: str | None = None
+    drive_api_key: str | None = None
 
 class ShareRequest(_BaseModel):
     artifact_id: int | None = None
@@ -1724,9 +1808,11 @@ class ExamDocSchema(_BaseModel):
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _fetch_drive_text(file_id: str) -> str:
+def _fetch_drive_text(file_id: str, api_key: str | None = None) -> str:
+    """Text of a public Drive file. The key comes from the user's Settings (sent with the
+    request); the .env value is only a fallback for local development."""
     try:
-        key = os.getenv("VITE_GOOGLE_DRIVE_API_KEY", "")
+        key = (api_key or "").strip() or os.getenv("VITE_GOOGLE_DRIVE_API_KEY", "")
         # macOS system Python lacks CA certs (CERTIFICATE_VERIFY_FAILED) — use certifi's bundle.
         import ssl, certifi
         ctx = ssl.create_default_context(cafile=certifi.where())
@@ -1757,7 +1843,7 @@ def _fetch_drive_text(file_id: str) -> str:
         return ""
 
 
-def _assemble_source_text(db, sources: list, document_id=None) -> str:
+def _assemble_source_text(db, sources: list, document_id=None, drive_api_key=None) -> str:
     parts = []
     for src in sources:
         try:
@@ -1766,7 +1852,7 @@ def _assemble_source_text(db, sources: list, document_id=None) -> str:
             elif src.type == "document":
                 parts.append(get_document_text(db, int(src.value)))
             elif src.type == "drive":
-                parts.append(_fetch_drive_text(src.value))
+                parts.append(_fetch_drive_text(src.value, drive_api_key))
         except Exception:
             pass
     if document_id:
@@ -1776,7 +1862,7 @@ def _assemble_source_text(db, sources: list, document_id=None) -> str:
             pass
     return "\n\n".join(filter(None, parts))[:60000]
 
-def _assemble_source_text_paged(db, sources: list, document_id=None) -> str:
+def _assemble_source_text_paged(db, sources: list, document_id=None, drive_api_key=None) -> str:
     """Like _assemble_source_text but, for `document` and top-level `document_id`
     sources that have per-page text (Document.pages_data JSON array), interleaves
     a `[Trang N]` marker before each page so the model can cite pages. Falls back
@@ -1807,7 +1893,7 @@ def _assemble_source_text_paged(db, sources: list, document_id=None) -> str:
                 else:
                     parts.append(get_document_text(db, doc_id))
             elif src.type == "drive":
-                parts.append(_fetch_drive_text(src.value))
+                parts.append(_fetch_drive_text(src.value, drive_api_key))
         except Exception:
             pass
     if document_id:
@@ -1869,7 +1955,7 @@ def _normalize_exam_questions(questions):
 async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
     from nlp.exam import extract_exam
 
-    text = _assemble_source_text_paged(db, req.sources, document_id=req.document_id)
+    text = _assemble_source_text_paged(db, req.sources, document_id=req.document_id, drive_api_key=req.drive_api_key)
     if not text.strip():
         text = f"{req.title}. {req.description}"
 
@@ -1925,15 +2011,7 @@ async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
         "description": req.description,
     }
 
-    if req.project_id or req.document_id:
-        query = db.query(models.Artifact).filter(models.Artifact.type == "exam")
-        if req.document_id:
-            query = query.filter(models.Artifact.document_id == req.document_id)
-        elif req.project_id:
-            query = query.filter(models.Artifact.project_id == req.project_id)
-        query.delete()
-        db.commit()
-
+    # Exams are named, configured user work: a new exam never replaces an earlier one.
     artifact = crud.create_artifact(
         db,
         project_id=req.project_id,
@@ -2008,7 +2086,7 @@ async def add_exam_questions(artifact_id: int, req: ExamAddQuestionsRequest, db=
 async def generate_examdoc(req: ExamDocGenRequest, db=Depends(get_db)):
     from nlp.concept_map import generate_offline_exam_prep
 
-    text = _assemble_source_text(db, req.sources)
+    text = _assemble_source_text(db, req.sources, drive_api_key=req.drive_api_key)
     if not text.strip():
         text = f"{req.title}. {req.description}"
 
@@ -2455,7 +2533,6 @@ async def generate_vocab(req: VocabGenerateRequest, db: Session = Depends(get_db
         raise HTTPException(status_code=400, detail="Vui lòng cung cấp Gemini API Key để tạo từ vựng bằng AI.")
         
     try:
-        from core.agent import LocalAgentConfig, agent_run, FAST_CAPS
         config = LocalAgentConfig(
             api_key=current_key, 
             model="gemini-3.1-flash", 
@@ -2734,7 +2811,15 @@ def _dictionary_lookup(word: str, context: str = ""):
 
 @app.get("/api/vocabulary/lookup")
 def lookup_dictionary(word: str):
-    return _dictionary_lookup(word)
+    result = _dictionary_lookup(word)
+    if result:
+        return result
+    # Online dictionary unreachable / unknown word: offline bank + WordNet.
+    from nlp import writing as writing_engine
+    offline = writing_engine.lookup_word(word)
+    if offline.get("part_of_speech") or offline.get("ipa"):
+        return {**offline, "grammar": "", "synonyms": []}
+    raise HTTPException(status_code=404, detail="Không tìm thấy từ này trong từ điển.")
 
 
 def _passage_example(word, text) -> str:
@@ -2906,6 +2991,25 @@ def grade_vocab(req: VocabGradeRequest, db: Session = Depends(get_db)):
     db.commit()
     return {"id": word.id, "learned": word.learned, "points_delta": points, "repetitions": word.repetitions}
 
+def _local_date(dt):
+    """created_at columns are naive UTC; streaks are about the learner's local calendar days."""
+    if dt is None:
+        return None
+    return dt.replace(tzinfo=datetime.timezone.utc).astimezone().date()
+
+
+def _day_streak(days: set) -> int:
+    """Consecutive active days ending today — or yesterday, so the streak doesn't drop to 0
+    every morning before the first session of the day."""
+    today = datetime.date.today()
+    day = today if today in days else today - datetime.timedelta(days=1)
+    streak = 0
+    while day in days:
+        streak += 1
+        day -= datetime.timedelta(days=1)
+    return streak
+
+
 @app.get("/api/vocabulary/stats")
 def get_vocab_stats(email: str | None = None, db: Session = Depends(get_db)):
     from sqlalchemy import func
@@ -2920,45 +3024,16 @@ def get_vocab_stats(email: str | None = None, db: Session = Depends(get_db)):
     learned = word_query.filter(models.VocabWord.learned == 1).count()
     completion = round(learned / total * 100) if total > 0 else 0
     
-    review_query = db.query(models.VocabReview)
-    if email:
-        review_query = review_query.filter(models.VocabReview.owner_email == email)
-    else:
-        review_query = review_query.filter(models.VocabReview.owner_email.is_(None))
-        
     points = db.query(func.sum(models.VocabReview.points)).filter(
         models.VocabReview.owner_email == email if email else models.VocabReview.owner_email.is_(None)
     ).scalar() or 0
     
-    # Streak calculation
-    dates = db.query(func.date(models.VocabReview.created_at)).filter(
+    # Streak: local calendar days with at least one review.
+    review_times = db.query(models.VocabReview.created_at).filter(
         models.VocabReview.owner_email == email if email else models.VocabReview.owner_email.is_(None)
-    ).distinct().order_by(func.date(models.VocabReview.created_at).desc()).all()
-    
-    streak = 0
-    today = datetime.date.today()
-    yesterday = today - datetime.timedelta(days=1)
-    
-    if dates:
-        # SQLite func.date() returns ISO strings ('2026-07-05'); coerce to date objects
-        # so membership tests against `today`/`yesterday` (datetime.date) actually match.
-        date_set = set()
-        for d in dates:
-            v = d[0]
-            if not v:
-                continue
-            if isinstance(v, str):
-                try:
-                    v = datetime.date.fromisoformat(v[:10])
-                except ValueError:
-                    continue
-            date_set.add(v)
-        if today in date_set or yesterday in date_set:
-            curr = today if today in date_set else yesterday
-            while curr in date_set:
-                streak += 1
-                curr -= datetime.timedelta(days=1)
-                
+    ).all()
+    streak = _day_streak({_local_date(t) for (t,) in review_times if t})
+
     achievements = [
         {"id": "first_word", "title_vi": "Bước khởi đầu", "desc_vi": "Thêm từ vựng đầu tiên", "unlocked": total >= 1},
         {"id": "quick_learner", "title_vi": "Học nhanh", "desc_vi": "Thuộc 5 từ vựng", "unlocked": learned >= 5},
@@ -2998,8 +3073,9 @@ def writing_log_attempt(req: WritingAttemptRequest, db=Depends(get_db)):
 @app.get("/api/writing/progress")
 def writing_progress(email: str | None = None, db=Depends(get_db)):
     q = db.query(models.WritingAttempt)
-    if email:
-        q = q.filter(models.WritingAttempt.owner_email == email)
+    # Same rule as vocabulary: no email = the signed-out bucket, not everyone's attempts.
+    q = q.filter(models.WritingAttempt.owner_email == email) if email \
+        else q.filter(models.WritingAttempt.owner_email.is_(None))
     rows = q.order_by(models.WritingAttempt.created_at.desc()).all()
 
     total_points = sum(r.points or 0 for r in rows)
@@ -3022,14 +3098,7 @@ def writing_progress(email: str | None = None, db=Depends(get_db)):
         categories.append(acc)
     categories.sort(key=lambda c: c["avg_score"])   # weakest first
 
-    # Streak: consecutive days (up to today) with at least one attempt.
-    import datetime as _dt
-    days = {r.created_at.date() for r in rows if r.created_at}
-    streak = 0
-    day = _dt.date.today()
-    while day in days:
-        streak += 1
-        day -= _dt.timedelta(days=1)
+    streak = _day_streak({_local_date(r.created_at) for r in rows if r.created_at})
 
     recent = [
         {"mode": r.mode, "level": r.level, "category": r.category, "task": r.task,
@@ -3267,3 +3336,14 @@ def post_team_message(project_id: int, body: TeamMessageIn, db=Depends(get_db)):
     db.commit()
     db.refresh(msg)
     return _msg_dict(msg)
+
+
+# Must stay at the very END of the module: in the frozen (PyInstaller) build uvicorn.run()
+# blocks, so any route defined below this point would never be registered.
+if __name__ == "__main__":
+    import uvicorn
+
+    if getattr(sys, "frozen", False):
+        uvicorn.run(app, host="127.0.0.1", port=int(os.getenv("WORKFLOW_PORT", "8000")), workers=1)
+    else:
+        uvicorn.run("main:app", host="127.0.0.1", port=int(os.getenv("WORKFLOW_PORT", "8000")), reload=True)

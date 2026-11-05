@@ -1,11 +1,32 @@
 // Google Drive (private) integration via Google Identity Services (GIS) token flow.
 // No client secret needed: the OAuth Client ID is public and embedded in the frontend.
-// Requires (in .env, Vite-exposed):
-//   VITE_GOOGLE_OAUTH_CLIENT_ID = <...>.apps.googleusercontent.com
-//   VITE_GOOGLE_DRIVE_API_KEY   = AIza...   (your existing key)
+// Config:
+//   VITE_GOOGLE_OAUTH_CLIENT_ID = <...>.apps.googleusercontent.com   (.env, build time)
+//   Drive API key: entered by the user in Settings (stored in localStorage, never bundled).
+//   VITE_GOOGLE_DRIVE_API_KEY in .env is only a fallback for local development.
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || '';
-const API_KEY = import.meta.env.VITE_GOOGLE_DRIVE_API_KEY || '';
+export const DRIVE_KEY_STORAGE = 'workflow_drive_api_key';
+
+export function getDriveApiKey() {
+  try {
+    return (localStorage.getItem(DRIVE_KEY_STORAGE) || '').trim() || import.meta.env.VITE_GOOGLE_DRIVE_API_KEY || '';
+  } catch {
+    return import.meta.env.VITE_GOOGLE_DRIVE_API_KEY || '';
+  }
+}
+
+export function setDriveApiKey(key) {
+  localStorage.setItem(DRIVE_KEY_STORAGE, (key || '').trim());
+}
+
+export const MISSING_DRIVE_KEY_MSG = 'Chưa nhập Google Drive API key — vào Cài đặt → Google Drive để nhập.';
+
+// `key=` query param when we have one. Without a key, only OAuth-authorised calls work.
+function keyParam(prefix) {
+  const key = getDriveApiKey();
+  return key ? `${prefix}key=${encodeURIComponent(key)}` : '';
+}
 const SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
@@ -88,8 +109,9 @@ function authHeaders() {
 }
 
 async function driveGet(path) {
+  if (!getDriveApiKey() && !isConnected()) throw new Error(MISSING_DRIVE_KEY_MSG);
   const sep = path.includes('?') ? '&' : '?';
-  const res = await fetch(`https://www.googleapis.com/drive/v3/${path}${sep}key=${API_KEY}`, {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/${path}${keyParam(sep)}`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error(`Drive API ${res.status}: ${await res.text()}`);
@@ -135,8 +157,9 @@ export const publicShareUrl = (fileId) => `https://drive.google.com/file/d/${fil
 export async function downloadFile(file) {
   const isNative = file.mimeType.startsWith('application/vnd.google-apps');
   const url = isNative
-    ? `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=text/plain&key=${API_KEY}`
-    : `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&key=${API_KEY}`;
+    ? `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=text/plain${keyParam('&')}`
+    : `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media${keyParam('&')}`;
+  if (!getDriveApiKey() && !isConnected()) throw new Error(MISSING_DRIVE_KEY_MSG);
   const res = await fetch(url, { headers: authHeaders() });
   if (!res.ok) throw new Error(`Tải file thất bại (${res.status})`);
   const blob = await res.blob();

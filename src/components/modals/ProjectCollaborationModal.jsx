@@ -65,7 +65,7 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
         setEmail('');
         fetchMembers(); // Refresh lists
       }
-    } catch (err) {
+    } catch {
       setError('Đã xảy ra lỗi.');
     } finally {
       setIsInviting(false);

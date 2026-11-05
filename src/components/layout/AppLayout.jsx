@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import StudioSidebar from './StudioSidebar';
@@ -6,7 +6,6 @@ import ProjectStudioSidebar from './ProjectStudioSidebar';
 import TeamChatWidget from './TeamChatWidget';
 
 import Topbar from './Topbar';
-import { getStoredUser } from '../../utils/googleAuth';
 import { MessageSquarePlus } from 'lucide-react';
 
 const AppLayout = () => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, ArrowRight, Check, Download } from 'lucide-react';
+import { X, Calendar, Check } from 'lucide-react';
 
 const DueFlashcardModal = ({ isOpen, onClose }) => {
   const [cards, setCards] = useState([]);
@@ -32,23 +32,19 @@ const DueFlashcardModal = ({ isOpen, onClose }) => {
       const docId = matchDoc ? parseInt(matchDoc[1], 10) : null;
       const projId = matchProj ? parseInt(matchProj[1], 10) : null;
 
+      // Scope strictly by the current route: a project page reviews all of the project's
+      // due cards, a document page that document's, the chat page its active document,
+      // anywhere else everything that's due (matches the library's "due" counter).
       let url = 'http://127.0.0.1:8000/api/flashcards/due';
       const params = [];
       if (projId) {
         params.push(`project_id=${projId}`);
-      }
-      
-      let finalDocId = docId;
-      if (!finalDocId) {
+      } else if (docId) {
+        params.push(`document_id=${docId}`);
+      } else if (window.location.hash.startsWith('#/chat')) {
         const storedId = sessionStorage.getItem('active_document_id');
-        if (storedId) {
-          finalDocId = parseInt(storedId, 10);
-        }
+        if (storedId) params.push(`document_id=${parseInt(storedId, 10)}`);
       }
-      if (finalDocId) {
-        params.push(`document_id=${finalDocId}`);
-      }
-
       if (params.length > 0) {
         url += `?${params.join('&')}`;
       }

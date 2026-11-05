@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, FileText, AlertCircle, Network, BrainCircuit, Cloud, Share2, Sparkles, BookOpen } from 'lucide-react';
+import { Upload, FileText, Network, BrainCircuit, Cloud, Share2, Sparkles, BookOpen } from 'lucide-react';
 import UploadModal from '../modals/UploadModal';
 import CreateExamModal from '../modals/CreateExamModal';
 import CreateStudyDocModal from '../modals/CreateStudyDocModal';
@@ -12,10 +12,6 @@ import ArtifactViewerModal from '../modals/ArtifactViewerModal';
 import { getOwnerEmail } from '../../utils/examSources';
 
 // Node.js APIs available because nodeIntegration is true
-const fs = window.require ? window.require('fs') : null;
-const path = window.require ? window.require('path') : null;
-const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
-const os = window.require ? window.require('os') : null;
 
 const StudioSidebar = () => {
   const navigate = useNavigate();
@@ -81,21 +77,6 @@ const StudioSidebar = () => {
         : items.map(renderItem)}
     </div>
   );
-
-  const handleSelectWorkspace = async () => {
-    if (!ipcRenderer) return alert("Electron IPC not available in browser mode.");
-    try {
-      const selectedPath = await ipcRenderer.invoke('dialog:openDirectory');
-      if (selectedPath) {
-        const configPath = path.join(os.homedir(), '.workflow_config.json');
-        fs.writeFileSync(configPath, JSON.stringify({ workspace_path: selectedPath }, null, 2));
-        alert(`Workspace updated to:\n${selectedPath}\n\nPlease restart the application for the database to move.`);
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Failed to set workspace.");
-    }
-  };
 
   return (
     <>

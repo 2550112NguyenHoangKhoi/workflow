@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { X, UploadCloud, Sparkles, CheckCircle2, XCircle, RotateCcw, FileText } from 'lucide-react';
 import { getSelectedSources, extractFileText, getOwnerEmail } from '../../utils/examSources';
 import ArtifactViewerModal from './ArtifactViewerModal';
+import { getEngineKey } from '../../utils/engine';
+import { getDriveApiKey } from '../../utils/googleDrive';
 
 const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) => {
   const navigate = useNavigate();
@@ -67,7 +69,8 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
         ].filter(Boolean),
         with_explanation: withExplanation,
         sources,
-        api_key: localStorage.getItem('workflow_api_key') || localStorage.getItem('workflow_gemini_key') || '',
+        api_key: getEngineKey(),
+        drive_api_key: getDriveApiKey(),
         project_id: projectId ? parseInt(projectId) : null,
         document_id: activeDocId ? parseInt(activeDocId) : null,
         owner_email: getOwnerEmail(),

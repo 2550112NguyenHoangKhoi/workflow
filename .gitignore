@@ -33,7 +33,6 @@ __pycache__/
 *$py.class
 backend/build/
 backend/dist/
-backend/*.spec
 
 # Local secrets (API keys)
 .env
@@ -42,6 +41,8 @@ backend/*.spec
 backend/uploads/
 *.db
 *.db.bak
+*.sqlite
+usage.json
 
 # AI Contextual and test files
 .agents/
