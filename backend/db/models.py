@@ -203,6 +203,8 @@ class WritingAttempt(Base):
     points = Column(Integer, default=0)     # points earned this session
     num_items = Column(Integer, default=0)  # sentences graded (0 for ielts)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    exercise_id = Column(String, nullable=True, index=True)  # library item (attempt counts per exercise)
+    detail = Column(Text, nullable=True)     # JSON: speaking question/transcript/feedback for history
 
 class VocabWord(Base):
     __tablename__ = "vocab_words"

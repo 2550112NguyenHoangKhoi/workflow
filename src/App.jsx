@@ -8,6 +8,7 @@ import ExamTaker from './pages/ExamTaker';
 import Settings from './pages/Settings';
 import LandingPage from './pages/LandingPage';
 import WritingPractice from './pages/WritingPractice';
+import Speaking from './pages/Speaking';
 import ActiveLearning from './pages/ActiveLearning';
 import Vocabulary from './pages/Vocabulary';
 import { getStoredUser } from './utils/googleAuth';
@@ -43,6 +44,7 @@ const App = () => {
           <Route path="project/:id" element={<DocumentViewer />} />
           <Route path="settings" element={<Settings />} />
           <Route path="writing" element={<WritingPractice />} />
+          <Route path="speaking" element={<Speaking />} />
           <Route path="active-learning" element={<ActiveLearning />} />
           <Route path="vocabulary" element={<Vocabulary />} />
         </Route>

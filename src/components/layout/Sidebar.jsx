@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { FolderOpen, MessageCircle, Folder, Settings, Zap, FileText, User, LogOut, ChevronRight, ChevronDown, PenTool, Brain, BookMarked, Pencil, Trash2, Cloud, HardDrive, Users, Pin, X } from 'lucide-react';
+import { FolderOpen, MessageCircle, Folder, Settings, Zap, FileText, User, LogOut, ChevronRight, ChevronDown, PenTool, Brain, BookMarked, Pencil, Trash2, Cloud, HardDrive, Users, Pin, X, Mic } from 'lucide-react';
 import * as drive from '../../utils/googleDrive';
 import UserProfileModal from '../modals/UserProfileModal';
 
@@ -282,6 +282,18 @@ const Sidebar = () => {
           <PenTool size={20} />
           <div>
             <div>Luyện viết</div>
+          </div>
+        </NavLink>
+
+        <NavLink to="/speaking" style={({ isActive }) => ({
+          display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px',
+          color: isActive ? 'var(--bg-tertiary)' : 'var(--text-primary)',
+          backgroundColor: isActive ? 'var(--brand-primary)' : 'transparent',
+          fontWeight: 600, textDecoration: 'none'
+        })}>
+          <Mic size={20} />
+          <div>
+            <div>Luyện nói</div>
           </div>
         </NavLink>
 

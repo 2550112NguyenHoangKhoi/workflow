@@ -1,0 +1,202 @@
+"""Offline content for the English practice library (original material, written for Workflow).
+
+- CONVERSATIONS: everyday dialogues, Vietnamese + English per line. Used by conversation
+  writing (read Vietnamese, write English line by line) and conversation speaking (pick a
+  character and say your lines).
+- TASK1_CHARTS: IELTS Writing Task 1 prompts with the data, so the chart is drawn in the app.
+- SPEAKING_PART1 / SPEAKING_PART2 (cue cards with Part 3 follow-ups).
+"""
+
+CONVERSATIONS = [
+    {"id": "c-a1-cafe", "level": "A1", "topic": "Food & Drink", "title": "Ordering at a Café",
+     "scene": "Mai orders a drink and a snack at a small café near her school.",
+     "lines": [
+         ("Staff", "Xin chào! Bạn muốn uống gì?", "Hello! What would you like to drink?"),
+         ("Mai", "Cho tôi một ly trà sữa, làm ơn.", "A milk tea, please."),
+         ("Staff", "Bạn muốn cỡ nhỏ hay cỡ lớn?", "Would you like a small or a large one?"),
+         ("Mai", "Cỡ nhỏ thôi. Bao nhiêu tiền vậy?", "Just a small one. How much is it?"),
+         ("Staff", "Ba mươi nghìn đồng. Bạn có muốn ăn bánh không?", "Thirty thousand dong. Would you like a cake?"),
+         ("Mai", "Có, cho tôi một cái bánh chuối.", "Yes, one banana cake, please."),
+         ("Staff", "Đây ạ. Chúc bạn một ngày vui vẻ!", "Here you are. Have a nice day!"),
+     ]},
+    {"id": "c-a1-lost", "level": "A1", "topic": "Transportation & Travel", "title": "Where Is the Bus Stop?",
+     "scene": "Tom is new in the city and asks Linh for directions.",
+     "lines": [
+         ("Tom", "Xin lỗi, trạm xe buýt ở đâu?", "Excuse me, where is the bus stop?"),
+         ("Linh", "Nó ở gần ngân hàng, bên kia đường.", "It is near the bank, across the street."),
+         ("Tom", "Đi bộ có xa không?", "Is it far to walk?"),
+         ("Linh", "Không xa đâu, khoảng năm phút.", "Not far, about five minutes."),
+         ("Tom", "Xe buýt số mười đi đến chợ phải không?", "Does bus number ten go to the market?"),
+         ("Linh", "Đúng rồi. Nó đến mỗi mười lăm phút.", "Yes. It comes every fifteen minutes."),
+         ("Tom", "Cảm ơn bạn rất nhiều!", "Thank you very much!"),
+     ]},
+    {"id": "c-a2-weekend", "level": "A2", "topic": "Entertainment & Leisure", "title": "Plans for the Weekend",
+     "scene": "Two classmates talk about what they will do on Saturday.",
+     "lines": [
+         ("An", "Cuối tuần này bạn định làm gì?", "What are you going to do this weekend?"),
+         ("Ben", "Mình định đi xem phim với anh trai.", "I'm going to see a film with my brother."),
+         ("An", "Phim gì vậy? Mình cũng thích xem phim.", "Which film? I like films too."),
+         ("Ben", "Một phim hoạt hình mới. Bạn có muốn đi cùng không?", "A new cartoon. Do you want to come with us?"),
+         ("An", "Muốn chứ! Mấy giờ phim bắt đầu?", "Sure! What time does it start?"),
+         ("Ben", "Lúc bảy giờ tối. Chúng ta gặp nhau ở rạp lúc sáu rưỡi nhé.", "At seven in the evening. Let's meet at the cinema at half past six."),
+         ("An", "Được. Mình sẽ mang theo bỏng ngô.", "OK. I'll bring some popcorn."),
+     ]},
+    {"id": "c-a2-doctor", "level": "A2", "topic": "Health & Medicine", "title": "At the Clinic",
+     "scene": "Hoa feels unwell and visits a doctor after school.",
+     "lines": [
+         ("Doctor", "Chào em, em thấy trong người thế nào?", "Hello, how are you feeling?"),
+         ("Hoa", "Em bị đau đầu và hơi sốt từ hôm qua.", "I've had a headache and a slight fever since yesterday."),
+         ("Doctor", "Em có ho hay đau họng không?", "Do you have a cough or a sore throat?"),
+         ("Hoa", "Em hơi đau họng một chút.", "My throat is a little sore."),
+         ("Doctor", "Có lẽ em bị cảm. Hãy nghỉ ngơi và uống nhiều nước.", "You probably have a cold. Get some rest and drink plenty of water."),
+         ("Hoa", "Em có cần uống thuốc không ạ?", "Do I need to take any medicine?"),
+         ("Doctor", "Uống thuốc này hai lần một ngày, sau bữa ăn.", "Take this medicine twice a day, after meals."),
+     ]},
+    {"id": "c-b1-project", "level": "B1", "topic": "School & Education", "title": "A Group Project Problem",
+     "scene": "Minh and Sara are worried because a teammate has not done his part.",
+     "lines": [
+         ("Minh", "Bạn có tin gì từ Khoa chưa? Hạn nộp là thứ Sáu rồi.", "Have you heard from Khoa? The deadline is on Friday."),
+         ("Sara", "Chưa. Mình đã nhắn tin hai lần nhưng cậu ấy không trả lời.", "Not yet. I've texted him twice, but he hasn't replied."),
+         ("Minh", "Nếu cậu ấy không làm phần khảo sát, cả nhóm sẽ bị điểm thấp.", "If he doesn't do the survey part, the whole group will get a low mark."),
+         ("Sara", "Hay là chúng ta chia lại công việc và báo với thầy?", "Why don't we divide the work again and tell the teacher?"),
+         ("Minh", "Ý hay, nhưng mình nghĩ nên gọi cho cậu ấy trước đã.", "Good idea, but I think we should call him first."),
+         ("Sara", "Đúng vậy. Có thể cậu ấy đang gặp chuyện gì đó.", "You're right. Maybe something has happened to him."),
+         ("Minh", "Để mình gọi tối nay rồi báo lại cho bạn.", "I'll call him tonight and let you know."),
+     ]},
+    {"id": "c-b1-flat", "level": "B1", "topic": "Shopping & Money", "title": "Looking at a Flat",
+     "scene": "Lan visits a flat to rent and asks the owner some questions.",
+     "lines": [
+         ("Owner", "Đây là phòng khách. Nó khá rộng và nhiều ánh sáng.", "This is the living room. It's quite spacious and gets a lot of light."),
+         ("Lan", "Đẹp quá. Tiền thuê đã bao gồm điện nước chưa ạ?", "It's lovely. Does the rent include electricity and water?"),
+         ("Owner", "Bao gồm nước, nhưng điện thì trả riêng theo số.", "Water is included, but electricity is paid separately by usage."),
+         ("Lan", "Tôi cần đặt cọc bao nhiêu?", "How much deposit do I need to pay?"),
+         ("Owner", "Một tháng tiền nhà, và hợp đồng tối thiểu sáu tháng.", "One month's rent, and the minimum contract is six months."),
+         ("Lan", "Tôi có thể nuôi một con mèo nhỏ không?", "Am I allowed to keep a small cat?"),
+         ("Owner", "Được, miễn là bạn giữ căn hộ sạch sẽ.", "Yes, as long as you keep the flat clean."),
+     ]},
+    {"id": "c-b2-remote", "level": "B2", "topic": "Work & Business", "title": "Should We Work From Home?",
+     "scene": "Two colleagues discuss a proposal to make remote work permanent.",
+     "lines": [
+         ("Quang", "Anh nghĩ sao về đề xuất làm việc từ xa vĩnh viễn?", "What do you make of the proposal to make remote work permanent?"),
+         ("Emma", "Về nguyên tắc tôi ủng hộ, nhưng tôi lo về giao tiếp trong nhóm.", "In principle I'm in favour, but I'm concerned about communication within the team."),
+         ("Quang", "Cũng phải. Một số dự án cần trao đổi trực tiếp thường xuyên.", "Fair point. Some projects require frequent face-to-face discussion."),
+         ("Emma", "Có lẽ mô hình kết hợp sẽ là giải pháp dung hoà.", "Perhaps a hybrid model would be a reasonable compromise."),
+         ("Quang", "Miễn là chúng ta thống nhất được những ngày cả nhóm lên văn phòng.", "As long as we agree on which days the whole team comes into the office."),
+         ("Emma", "Tôi sẽ soạn một bản đề xuất chi tiết để trình lên ban giám đốc.", "I'll draft a detailed proposal to put to the management."),
+     ]},
+    {"id": "c-b2-plastic", "level": "B2", "topic": "Nature & Environment", "title": "Banning Plastic Bags",
+     "scene": "Friends debate whether the city should ban single-use plastic bags.",
+     "lines": [
+         ("Vy", "Thành phố đang cân nhắc cấm hoàn toàn túi ni-lông dùng một lần.", "The city is considering a complete ban on single-use plastic bags."),
+         ("Jack", "Nghe thì hay, nhưng liệu người bán nhỏ lẻ có chịu nổi chi phí không?", "It sounds good, but can small vendors really afford the extra cost?"),
+         ("Vy", "Chính quyền có thể hỗ trợ túi giấy giá rẻ trong giai đoạn đầu.", "The authorities could subsidise cheap paper bags at first."),
+         ("Jack", "Có lý. Dù vậy, thay đổi thói quen người tiêu dùng mới là phần khó nhất.", "That makes sense. Even so, changing consumer habits is the hardest part."),
+         ("Vy", "Đúng, nên cần cả chiến dịch truyền thông đi kèm.", "Exactly, so it would need an awareness campaign alongside it."),
+         ("Jack", "Nếu được thực hiện từng bước, tôi nghĩ nó sẽ thành công.", "If it's introduced gradually, I think it could work."),
+     ]},
+]
+
+# IELTS Writing Task 1 — every prompt carries its data so the chart is drawn, not described.
+TASK1_CHARTS = [
+    {"id": "t1-bar-languages", "type": "bar", "title": "Students learning foreign languages at a school, 2024",
+     "prompt": "The bar chart below shows the number of students learning five foreign languages at a school in 2024. "
+               "Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+     "unit": "students", "categories": ["English", "Japanese", "Korean", "French", "Chinese"],
+     "series": [{"name": "Boys", "values": [210, 85, 60, 40, 75]}, {"name": "Girls", "values": [230, 95, 110, 70, 65]}]},
+    {"id": "t1-bar-transport", "type": "bar", "title": "How employees travel to work in a city (%)",
+     "prompt": "The chart compares how employees in a city travelled to work in 2004 and 2024. "
+               "Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+     "unit": "%", "categories": ["Car", "Motorbike", "Bus", "Bicycle", "Walking"],
+     "series": [{"name": "2004", "values": [12, 58, 10, 15, 5]}, {"name": "2024", "values": [24, 49, 17, 4, 6]}]},
+    {"id": "t1-pie-energy", "type": "pie", "title": "Household electricity use in 2023 (%)",
+     "prompt": "The pie chart shows how electricity was used in an average household in 2023. "
+               "Summarise the information by selecting and reporting the main features.",
+     "unit": "%", "categories": ["Heating & cooling", "Water heating", "Kitchen appliances", "Lighting", "Electronics", "Other"],
+     "series": [{"name": "Share", "values": [38, 17, 15, 11, 13, 6]}]},
+    {"id": "t1-pie-budget", "type": "pie", "title": "A university's spending in 2024 (%)",
+     "prompt": "The pie chart illustrates how a university spent its budget in 2024. "
+               "Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+     "unit": "%", "categories": ["Staff salaries", "Research", "Buildings", "Scholarships", "Library", "Administration"],
+     "series": [{"name": "Share", "values": [45, 20, 14, 9, 5, 7]}]},
+    {"id": "t1-line-temp", "type": "line", "title": "Average daily temperature in two cities (°C)",
+     "prompt": "The line graph shows the average daily temperature in City A and City B over a year. "
+               "Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+     "unit": "°C", "categories": ["Jan", "Mar", "May", "Jul", "Sep", "Nov"],
+     "series": [{"name": "City A", "values": [17, 22, 29, 30, 27, 21]}, {"name": "City B", "values": [2, 8, 17, 24, 18, 6]}]},
+    {"id": "t1-line-reading", "type": "line", "title": "Books read per adult per year, 2015–2025",
+     "prompt": "The graph shows the average number of books read per adult each year in three countries between 2015 and 2025. "
+               "Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+     "unit": "books", "categories": ["2015", "2017", "2019", "2021", "2023", "2025"],
+     "series": [{"name": "Country X", "values": [12, 11, 10, 13, 11, 10]}, {"name": "Country Y", "values": [6, 7, 8, 11, 10, 9]},
+                {"name": "Country Z", "values": [3, 4, 4, 6, 7, 8]}]},
+    {"id": "t1-table-spending", "type": "table", "title": "Average monthly spending by age group (USD)",
+     "prompt": "The table gives information about average monthly spending on four items by three age groups. "
+               "Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+     "unit": "USD", "categories": ["Housing", "Food", "Transport", "Entertainment"],
+     "series": [{"name": "18–30", "values": [420, 260, 90, 150]}, {"name": "31–50", "values": [650, 380, 140, 110]},
+                {"name": "51+", "values": [500, 310, 70, 60]}]},
+    {"id": "t1-table-tourism", "type": "table", "title": "International visitors (millions)",
+     "prompt": "The table shows the number of international visitors to four countries in 2010, 2018 and 2024. "
+               "Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+     "unit": "million", "categories": ["Country A", "Country B", "Country C", "Country D"],
+     "series": [{"name": "2010", "values": [5.1, 12.4, 3.0, 8.8]}, {"name": "2018", "values": [15.5, 14.0, 6.2, 9.1]},
+                {"name": "2024", "values": [17.6, 11.8, 9.4, 10.3]}]},
+    {"id": "t1-mixed-cars", "type": "mixed", "title": "Cars sold (bars, thousands) and average price (line, $1,000)",
+     "prompt": "The chart shows the number of cars sold and their average price in Country X between 2019 and 2024. "
+               "Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+     "unit": "", "categories": ["2019", "2020", "2021", "2022", "2023", "2024"],
+     "series": [{"name": "Cars sold (thousands)", "values": [320, 250, 280, 340, 390, 410], "kind": "bar"},
+                {"name": "Average price ($1,000)", "values": [22, 23, 25, 28, 29, 30], "kind": "line"}]},
+    {"id": "t1-mixed-cafe", "type": "mixed", "title": "Café visitors (bars) and average spend per visitor (line, $)",
+     "prompt": "The chart shows the number of visitors to a café and the average amount each visitor spent over one week. "
+               "Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+     "unit": "", "categories": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+     "series": [{"name": "Visitors", "values": [120, 110, 135, 140, 210, 320, 280], "kind": "bar"},
+                {"name": "Average spend ($)", "values": [6.5, 6.2, 6.8, 7.0, 8.4, 9.6, 9.1], "kind": "line"}]},
+]
+
+SPEAKING_PART1 = {
+    "Hometown": ["Where is your hometown?", "What do you like most about your hometown?", "Has your hometown changed much in recent years?"],
+    "Study": ["What are you studying at the moment?", "Why did you choose that subject?", "What do you find most difficult about your studies?"],
+    "Work": ["Do you work or are you a student?", "What do you enjoy about your job?", "Would you like to change your job in the future?"],
+    "Hobbies": ["What do you like doing in your free time?", "Did you have the same hobbies when you were a child?", "Is there a new hobby you would like to try?"],
+    "Food": ["What is your favourite food?", "Do you prefer eating at home or eating out?", "Is there any food you didn't like as a child?"],
+    "Weather": ["What's the weather like in your country?", "Which season do you like best?", "Does the weather affect your mood?"],
+    "Accommodation": ["Do you live in a house or a flat?", "What is your favourite room at home?", "Would you like to move somewhere else in the future?"],
+    "Travel": ["Do you enjoy travelling?", "Where did you go on your last holiday?", "Do you prefer travelling alone or with others?"],
+    "Sports": ["Do you play any sports?", "What sports are popular in your country?", "Did you do much exercise when you were younger?"],
+    "Technology": ["How often do you use your phone?", "What apps do you use most?", "Do you think people rely too much on technology?"],
+    "Family & friends": ["Do you spend much time with your family?", "Who are you closest to in your family?", "How do you usually keep in touch with friends?"],
+    "Books": ["Do you like reading?", "What kind of books do you read?", "Do you prefer paper books or e-books?"],
+    "Music": ["What kind of music do you listen to?", "Have you ever learned to play an instrument?", "When do you usually listen to music?"],
+    "Shopping": ["Do you enjoy shopping?", "Do you prefer shopping online or in stores?", "What was the last thing you bought?"],
+    "Environment": ["Do you do anything to protect the environment?", "Is pollution a problem where you live?", "Do you recycle at home?"],
+    "Social media": ["Which social media do you use?", "How much time do you spend on social media each day?", "Has social media changed the way people communicate?"],
+}
+
+SPEAKING_PART2 = [
+    {"id": "p2-teacher", "topic": "People", "card": "Describe a teacher who has influenced you.",
+     "points": ["who this teacher is", "what subject they taught", "what they were like", "and explain how they influenced you."],
+     "part3": ["What makes a good teacher?", "Should teachers be paid more?", "Will technology replace teachers in the future?"]},
+    {"id": "p2-place", "topic": "Places", "card": "Describe a place you visited that you would like to visit again.",
+     "points": ["where it is", "when you went there", "what you did there", "and explain why you would like to go back."],
+     "part3": ["Why do people like to travel?", "How does tourism affect local communities?", "Will people travel more or less in the future?"]},
+    {"id": "p2-skill", "topic": "Learning", "card": "Describe a skill you learned that you think is useful.",
+     "points": ["what the skill is", "how you learned it", "how long it took", "and explain why it is useful."],
+     "part3": ["Which skills are most important for young people today?", "Is it better to learn from a teacher or by yourself?", "Do schools teach enough practical skills?"]},
+    {"id": "p2-app", "topic": "Technology", "card": "Describe an app or website you use often.",
+     "points": ["what it is", "how you found it", "what you use it for", "and explain why you like it."],
+     "part3": ["How has the internet changed the way we learn?", "Do people spend too much time online?", "Should children's screen time be limited?"]},
+    {"id": "p2-event", "topic": "Events", "card": "Describe a celebration or festival you enjoyed.",
+     "points": ["what it was", "when and where it happened", "who you were with", "and explain why you enjoyed it."],
+     "part3": ["Why are traditional festivals important?", "Have festivals become too commercial?", "How do young people celebrate differently from older people?"]},
+    {"id": "p2-goal", "topic": "Plans", "card": "Describe a goal you would like to achieve in the next few years.",
+     "points": ["what the goal is", "why you want to achieve it", "what you are doing to reach it", "and explain how you will feel when you achieve it."],
+     "part3": ["Is it important to set goals?", "Do young people today have different goals from their parents?", "What can stop people from achieving their goals?"]},
+    {"id": "p2-book", "topic": "Media", "card": "Describe a book or film that made you think.",
+     "points": ["what it was", "when you read or watched it", "what it was about", "and explain why it made you think."],
+     "part3": ["Do films influence people's behaviour?", "Why do some people prefer books to films?", "Should governments control what films show?"]},
+    {"id": "p2-help", "topic": "People", "card": "Describe a time you helped someone.",
+     "points": ["who you helped", "what the situation was", "how you helped", "and explain how you felt afterwards."],
+     "part3": ["Why do people help strangers?", "Should schools teach children to volunteer?", "Are people less helpful than they used to be?"]},
+]

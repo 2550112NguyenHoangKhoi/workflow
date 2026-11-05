@@ -373,17 +373,16 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
 
 @app.get("/api/user/stats")
 def get_user_stats(email: str, db: Session = Depends(get_db)):
+    # A local/offline profile may never have gone through /api/auth: still report the counts
+    # (it used to 404, leaving the profile at "0 tài liệu · Đang tải..." forever).
     db_user = db.query(models.User).filter(models.User.email == email).first()
-    if not db_user:
-        raise HTTPException(status_code=404, detail="User not found")
-        
     doc_count = db.query(models.Document).count() # In a real app this would filter by user_id
     project_count = db.query(models.Project).count() # Same here
     
     return {
         "document_count": doc_count,
         "project_count": project_count,
-        "last_login": db_user.last_login.isoformat() if db_user.last_login else None
+        "last_login": db_user.last_login.isoformat() if db_user and db_user.last_login else None
     }
 
 @app.get("/api/folders")
@@ -2290,6 +2289,7 @@ class WritingAttemptRequest(_BaseModel):
     task: str = ""
     score: float = 0.0          # sentence/paragraph: avg /10; ielts: band /9
     num_items: int = 0
+    exercise_id: str | None = None
 
 class VocabAddRequest(_BaseModel):
     word: str
@@ -2831,6 +2831,13 @@ async def writing_generate_lesson(req: WritingLessonRequest, db=Depends(get_db))
                     ask + "\n\nTrả về JSON đúng schema: mode, level, category, "
                     "sentences[{vi, reference_en, hint}], ielts_prompt, min_words (250 cho task2), question_type, structure_hint."
                 )
+            elif req.mode == "conversation":
+                lvl_name = {"beginner": "A1-A2", "intermediate": "B1", "advanced": "B2"}.get(req.level, "A2")
+                ask = (f"Viết một đoạn hội thoại đời thường giữa hai người (trình độ {lvl_name}) về chủ đề "
+                       f"'{req.category or 'đời sống hằng ngày'}', 6-8 lượt lời. Mỗi lượt lời là một phần tử sentences gồm "
+                       "'vi' = câu tiếng Việt bắt đầu bằng tên người nói và dấu hai chấm (ví dụ 'Lan: ...'), "
+                       "'reference_en' = bản tiếng Anh tự nhiên (không kèm tên), hint để rỗng.")
+                prompt = (ask + "\n\nTrả về JSON đúng schema: mode, level, category, sentences[{vi, reference_en, hint}], ielts_prompt, min_words.")
             elif req.mode == "paragraph":
                 ask = (
                     f"Tạo một đoạn văn tiếng Việt mạch lạc thuộc thể loại '{req.category or 'Essays'}' "
@@ -2857,6 +2864,12 @@ async def writing_generate_lesson(req: WritingLessonRequest, db=Depends(get_db))
             )
             result = await agent_run(config, prompt, structured=True, timeout=30)
             
+            if result and req.mode == "conversation":
+                for st in result.get("sentences") or []:
+                    m = re.match(r"^\s*([^:]{1,20}):\s*(.+)$", st.get("vi", ""))
+                    if m:
+                        st["speaker"], st["vi"] = m.group(1).strip(), m.group(2).strip()
+                result["mode"] = "conversation"
             # Additional fallback checking for IELTS
             if result and (result.get("sentences") or req.mode == "ielts"):
                 result.setdefault("mode", req.mode)
@@ -2894,7 +2907,7 @@ async def writing_generate_lesson(req: WritingLessonRequest, db=Depends(get_db))
             question_type=req.question_type,
         )
 
-    title_map = {"sentence": "Luyện câu", "paragraph": "Luyện đoạn văn", "ielts": "Luyện IELTS Writing"}
+    title_map = {"sentence": "Luyện câu", "paragraph": "Luyện đoạn văn", "ielts": "Luyện IELTS Writing", "conversation": "Luyện hội thoại"}
     title = f"{title_map.get(req.mode, 'Luyện viết')} · {req.category or req.level}"
     artifact = crud.create_artifact(
         db, project_id=req.project_id, type="writing_lesson", title=title,
@@ -3733,13 +3746,162 @@ def _writing_points(mode: str, score: float, num_items: int) -> int:
     return int(round(score * max(1, num_items)))  # avg 8.0 over 10 -> 80 pts
 
 
+def _owner_filter(q, email):
+    return q.filter(models.WritingAttempt.owner_email == email) if email else q.filter(models.WritingAttempt.owner_email.is_(None))
+
+
+@app.get("/api/practice/library")
+def practice_library(mode: str = "sentence", level: str = "beginner", category: str = "", task: str = "",
+                     chart_type: str = "", page: int = 1, per_page: int = 6, email: str | None = None, db=Depends(get_db)):
+    """datpmt-style exercise list: filter by topic / chart type, page through, and see per
+    exercise how many times it was completed and when ("New" = never)."""
+    from nlp.library import list_exercises, categories
+    items = list_exercises(mode, level, category, task, chart_type)
+    stats = {}
+    ids = [i["id"] for i in items]
+    if ids:
+        for a in _owner_filter(db.query(models.WritingAttempt), email).filter(models.WritingAttempt.exercise_id.in_(ids)).all():
+            st = stats.setdefault(a.exercise_id, {"attempts": 0, "last": None, "best": 0.0})
+            st["attempts"] += 1
+            st["best"] = max(st["best"], a.score or 0)
+            if a.created_at and (st["last"] is None or a.created_at > st["last"]):
+                st["last"] = a.created_at
+    for it in items:
+        st = stats.get(it["id"], {})
+        it["attempts"] = st.get("attempts", 0)
+        it["best"] = st.get("best")
+        it["last_practiced"] = st["last"].isoformat() if st.get("last") else None
+        it["is_new"] = not st
+    per_page = max(1, min(50, per_page))
+    total = len(items)
+    page = max(1, min(page, max(1, -(-total // per_page))))
+    return {"items": items[(page - 1) * per_page: page * per_page], "total": total, "page": page,
+            "pages": max(1, -(-total // per_page)), "categories": categories(mode, task)}
+
+
+@app.get("/api/practice/exercise/{exercise_id:path}")
+def practice_exercise(exercise_id: str):
+    from nlp.library import get_exercise
+    ex = get_exercise(exercise_id)
+    if not ex:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bài tập.")
+    return ex
+
+
+class SpeakingGradeRequest(_BaseModel):
+    part: int = 1
+    question: str
+    transcript: str
+    duration_sec: float | None = None
+    exercise_id: str | None = None
+    topic: str = ""
+    owner_email: str | None = None
+    api_key: str | None = None
+
+
+class SpeakingBands(_BaseModel):
+    fluency: float
+    lexical: float
+    grammar: float
+    coherence: float
+
+
+class SpeakingGradeSchema(_BaseModel):
+    overall: float
+    bands: SpeakingBands
+    feedback: str
+    suggestions: list[str] = []
+    better_answer: str = ""
+
+
+@app.post("/api/speaking/grade")
+async def speaking_grade(req: SpeakingGradeRequest, db=Depends(get_db)):
+    """IELTS Speaking Part 1/2/3: band estimate from the transcript (fluency, lexical resource,
+    grammar, coherence) + suggestions; the attempt is kept for "Lịch sử luyện tập"."""
+    from nlp.speaking import grade_speaking
+    result = None
+    current_key = get_api_key(req.api_key)
+    if current_key and len(req.transcript.split()) >= 4:
+        try:
+            prompt = (f"You are an IELTS Speaking examiner. Part {req.part}. Question: {req.question}\n"
+                      f"Candidate's answer (speech transcript, {req.duration_sec or '?'} seconds): {req.transcript}\n\n"
+                      "Give band scores (fluency, lexical, grammar, coherence; 0-9 in 0.5 steps) and overall, a short feedback "
+                      "in Vietnamese, 2-4 concrete suggestions in Vietnamese, and a better_answer: an improved band-7.5 "
+                      "version of the candidate's own answer in English.")
+            config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite", response_schema=SpeakingGradeSchema, capabilities=FAST_CAPS)
+            data = await agent_run(config, prompt, structured=True, timeout=30)
+            if data and data.get("bands"):
+                result = {**data, "engine": "ai", "word_count": len(req.transcript.split())}
+        except Exception as e:
+            print(f"[speaking] AI failed, falling back to offline: {e}")
+    if not result:
+        result = {**grade_speaking(req.question, req.transcript, req.part, req.duration_sec), "engine": "offline"}
+    attempt = models.WritingAttempt(
+        owner_email=req.owner_email, mode="speaking", level="", category=req.topic, task=f"part{req.part}",
+        score=result["overall"], points=int(round(result["overall"] * 10)), num_items=1, exercise_id=req.exercise_id,
+        detail=json.dumps({"question": req.question, "transcript": req.transcript, "overall": result["overall"],
+                           "bands": result["bands"], "feedback": result["feedback"]}, ensure_ascii=False))
+    db.add(attempt)
+    db.commit()
+    return result
+
+
+class PronunciationRequest(_BaseModel):
+    target: str
+    transcript: str
+    exercise_id: str | None = None
+    level: str = ""
+    owner_email: str | None = None
+
+
+@app.post("/api/pronunciation/score")
+def pronunciation_score(req: PronunciationRequest, db=Depends(get_db)):
+    """Word-by-word comparison of the recognised speech with the target sentence."""
+    from nlp.speaking import score_pronunciation
+    r = score_pronunciation(req.target, req.transcript)
+    db.add(models.WritingAttempt(owner_email=req.owner_email, mode="pronunciation", level=req.level, category="",
+                                 task="", score=r["accuracy"] / 10, points=r["accuracy"] // 10, num_items=1,
+                                 exercise_id=req.exercise_id,
+                                 detail=json.dumps({"question": req.target, "transcript": req.transcript, "accuracy": r["accuracy"]}, ensure_ascii=False)))
+    db.commit()
+    return r
+
+
+@app.get("/api/pronunciation/sentences")
+def pronunciation_sentences(level: str = "beginner", category: str = ""):
+    """English sentences to read aloud (the sentence bank's references), by level/topic."""
+    from nlp import writing as W
+    lvl = {"beginner": "b", "intermediate": "i", "advanced": "a"}.get(level, "b")
+    out = []
+    for cat, by in W.SENTENCE_BANK.items():
+        if category and cat != category:
+            continue
+        out += [{"id": f"pron:{lvl}:{cat}:{i}", "text": en, "vi": vi, "category": cat} for i, (vi, en) in enumerate(by.get(lvl, []))]
+    return {"sentences": out, "categories": list(W.SENTENCE_BANK)}
+
+
+@app.get("/api/speaking/history")
+def speaking_history(email: str | None = None, db=Depends(get_db)):
+    rows = _owner_filter(db.query(models.WritingAttempt), email).filter(
+        models.WritingAttempt.mode.in_(["speaking", "pronunciation"])).order_by(models.WritingAttempt.id.desc()).limit(50).all()
+    out = []
+    for r in rows:
+        try:
+            d = json.loads(r.detail or "{}")
+        except Exception:
+            d = {}
+        out.append({"id": r.id, "mode": r.mode, "task": r.task, "topic": r.category, "score": r.score,
+                    "created_at": r.created_at.isoformat() if r.created_at else None, **d})
+    return {"history": out}
+
+
 @app.post("/api/writing/attempts")
 def writing_log_attempt(req: WritingAttemptRequest, db=Depends(get_db)):
     points = _writing_points(req.mode, req.score, req.num_items)
     attempt = models.WritingAttempt(
         owner_email=req.owner_email, mode=req.mode, level=req.level,
         category=req.category, task=req.task, score=req.score,
-        points=points, num_items=req.num_items,
+        points=points, num_items=req.num_items, exercise_id=req.exercise_id,
     )
     db.add(attempt)
     db.commit()

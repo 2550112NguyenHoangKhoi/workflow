@@ -500,6 +500,11 @@ Columns: **ID**, **Where** (file and symbol), **Symptom**, **Root cause**, **Fix
 | F-19 | `ActiveLearning.jsx`, `nlp/teachback.py` (`child_question`), `VoiceInput.jsx`, `POST /api/transcribe` | Teach-back was a single text box | "Dạy bạn nhỏ" mode: multi-turn, the AI plays a child who asks about the next gap, "ĐỘ HIỂU CỦA BẠN NHỎ" meter, "Dừng buổi dạy & chấm"; mic input (browser SpeechRecognition, else MediaRecorder → faster-whisper if installed); XP + "độ nhớ" per concept (localStorage `workflow_teach_xp`); macOS `NSMicrophoneUsageDescription` |
 | F-20 | `SmartReminder.jsx`, Settings "Nhắc nhở thông minh", `electron/main.cjs` `notify:show` | `NotificationsBell` only listed shares | Every N minutes a due flashcard becomes an A/B/C question in a native (Electron) / web notification and an in-app card answered in place (graded into SM-2); daily streak (`workflow_streak`, also bumped by flashcard reviews) |
 | F-21 | `models.ChatMessage.parent_id`, `/api/chat` `parent_id`/`user_id`, `_branch_path`, `DocumentViewer` thread | Chat was one linear thread | Branching chat: "Nhánh mới" on any answer, ‹ Nhánh k/n › switcher, "N nhánh đang mở"; the AI prompt gets only that branch's history, and "Giải thích lại / Cho ví dụ" refer to the branch's own question |
+| F-22 | `nlp/library.py`, `nlp/practice_bank.py`, `/api/practice/library`, `/api/practice/exercise/{id}`, `ExerciseLibrary.jsx`, `WritingPractice` | One random prompt per click; no per-exercise history | Exercise library per mode: topic / question-type / chart-type filter, "Đã làm: N", "Mới", last practised, paging; `WritingAttempt.exercise_id` |
+| F-23 | `WritingPractice` "Hội thoại", `practice_bank.CONVERSATIONS`, AI conversation generation | — | Conversation writing: Vietnamese dialogue → English line by line (A1–A2 / B1 / B2), speaker labels |
+| F-24 | `Task1Chart.jsx`, `practice_bank.TASK1_CHARTS` | Task 1 prompts were text-only | Bar / pie / line / table / mixed charts drawn (SVG) from data; random Task 1 also picks a charted prompt |
+| F-25 | `pages/Speaking.jsx` (route `/speaking`, sidebar "Luyện nói"), `nlp/speaking.py`, `/api/pronunciation/*`, `/api/speaking/grade`, `/api/speaking/history` | No speaking practice | Pronunciation (read sentences by level/topic; TTS model; word-level green/red/missed), conversation role-play (pick a character, others' lines spoken), IELTS Speaking Part 1 (question bank by topic) / Part 2 (cue card, 60 s prep, 120 s) / Part 3 / full simulation, band estimate (fluency, lexical, grammar, coherence; Gemini examiner with a better answer when a key is set), practice history |
+| F-26 | `UserProfileModal`, `/api/user/stats` | Sidebar "Hồ sơ của tôi" rendered nothing (no user prop); stats 404'd for local profiles | Falls back to the stored user; "Thành tích luyện tập": total points (+ teach XP), streaks, sessions, recent activity |
 
 ### UI (U)
 
@@ -537,34 +542,41 @@ Columns: **ID**, **Where** (file and symbol), **Symptom**, **Root cause**, **Fix
 
 ---
 
-## 11b. Reference products and feature gaps (surveyed 2026-11-05)
+## 11b. Reference products: parity matrix (re-surveyed 2026-11-05)
 
-The owner names two products as inspiration. Copy **features and mechanics, not branding, text or assets**. A search found no copied marketing text in `src/`.
+Sources: public pages + sitemap + robots, and the public JS bundles (omilearn `_next/static/chunks/377-*.js`, `9574-*.js`; datpmt `/packs/js/application-*.js`) for UI strings and flows of the signed-in app. Copy **features and mechanics, not branding, text or assets** — all practice content in `nlp/practice_bank.py` is original.
 
-**english.datpmt.com** (public pages; the exercises themselves need sign-in):
+**omilearn.com**
 
-| Their feature | Workflow today | Gap |
+| Feature (what their app does) | Workflow | Status |
 |---|---|---|
-| Sentence writing: 3 levels × 20 categories | `WritingPractice` sentence mode, same 20 categories | none |
-| Paragraph writing: Emails / Diaries / Essays / Articles / Stories / Reports | same 6 content types | none |
-| IELTS Writing: level → task → **exercise library** (Task 1: 360, filter by Bar / Pie / Mixed / Line / Table; Task 2: 539), each with an attempt count, a "New" badge and "last practiced" | one random prompt per click; Task 1 prompts are text-only; no history per exercise | **Exercise library with per-exercise attempt history; chart-type filter; rendered Task 1 charts** |
-| Pronunciation (AI feedback on spoken sentences, 3 levels) + conversations | none | speech recording + scoring (e.g. Web Speech API or Whisper, then compare with the target sentence) |
-| IELTS Speaking Parts 1–3 (full simulation and history "coming soon" on their side) | none | cue cards + recording + offline/AI rubric |
-| Leaderboard (points) | points/streaks exist locally (vocabulary, writing) | single-user app: a personal progress/history page instead |
+| Upload docs, chat with citations (`citations` event), select text in the PDF to ask AI (pdf.js text layer), "Vừa trang", highlight | PdfViewer text layer + selection menu; chat citations jump + highlight; fit-width/page | ✅ F-12, F-13, U-7 |
+| Non-linear (branching) chat, chat history saved/cleared | Branching chat (F-21); history per document/project | ✅ (no "xoá lịch sử" button yet) |
+| AI Tổng hợp from connected sources: Đề cương / Ghi chú (bài học) / Bảng so sánh / Tùy chỉnh; copy, export PDF | SynthesisModal (F-14) | ✅ |
+| AI Ôn tập set: Quiz (15) / Flashcard (15) / Tự luận with rubric grading / Dạy AI; "Tạo thêm N câu"; wrong answers → flashcards | Exam (MCQ/TF/short/essay) + essay rubric grading (F-15) + add-more questions + wrong→flashcards (F-16); flashcards; teach-back | ✅ |
+| Teach-back as a child who asks back, voice teaching, "Độ hiểu của đứa trẻ", XP + "độ nhớ" | F-19 | ✅ |
+| AI roadmap from a prompt or upload, by goal / deadline / level, weekly calendar, checkpoints | Roadmap asks for missing info (F-10), dated steps, .ics, Hôm nay/Tuần này badges (F-17) | ✅ (no Google Calendar API sync — .ics import) |
+| Smart reminder: quiz inside the notification, streak | F-20 | ✅ |
+| Mind-map style overview | Mind map per document / per subject (F-11) | ✅ (Workflow-specific) |
+| Notes node → "Tạo bài học từ ghi chú", voice-recording node (speech → note) | Smart notes, study doc; voice input exists (VoiceInput) | ⚠️ no free-form note editor / voice note |
+| **Canvas workspace** (drag nodes: documents, notes, AI chat, review, synthesis; connect edges so AI answers from linked nodes) | Document view + Studio tools | ❌ largest remaining gap |
+| Subject selection ("Chọn môn chính") filtering the workspace | Projects/folders | ⚠️ |
+| Teacher workspace (lesson plans by subject/grade/textbook/style, exams with answer key + grading guide exported to Word/PDF, print templates, classes/live activity) | Lesson plan (giáo án), exam generator, examdoc | ⚠️ no Word export / print templates / classes |
+| Feedback with screenshot | F-18 | ✅ |
+| AI material search with trust labels | `/api/search` | ⚠️ no trust labels |
 
-**omilearn.com** (public landing page; the app needs an account):
+**english.datpmt.com**
 
-| Their feature | Workflow today | Gap |
+| Feature | Workflow | Status |
 |---|---|---|
-| AI roadmap **scheduled on a calendar from a deadline / exam date** ("Lịch học tuần này") | roadmap steps without dates; Study Plan → `.ics` export | deadline input → dated schedule, a "today" view and reminders |
-| AI material search with "trusted" source labels | `/api/search` (DuckDuckGo + AI curation) | source-trust labelling |
-| **Smart reminders: a quiz inside the notification**, streak nudges | `NotificationsBell` only lists shared items | Electron native notifications with a due flashcard/quiz question; daily streak reminder |
-| **Branching (non-linear) chat**: each follow-up opens a branch | linear chat per document/project | `parent_id` on `chat_messages` + a thread/branch UI |
-| Active learning (teach-back) with XP and a "memory %" | `ActiveLearning` (understanding score) | XP/memory tracking over time |
-| Auto summary / flashcards / quizzes / spaced repetition | present | — |
-| Public HUST study library | Removed (F-9). Any public library folder can be pinned by link in Settings | — |
-
----
+| Sentence writing: 3 levels × 20 categories | same | ✅ |
+| Paragraph writing: Emails / Diaries / Essays / Articles / Stories / Reports, exercise list with attempts | same 6 types + library (F-22) | ✅ (bank is small: 1 paragraph per type × level; Gemini generates more) |
+| Conversation writing (NEW): A1–A2 / B1 / B2, 80 per level, topic filter | F-23 (8 dialogues bundled + AI) | ✅ content volume smaller |
+| IELTS Writing: level → Task 1 (Bar/Pie/Mixed/Line/Table filter, 360) / Task 2 (539), attempts, New, last practiced | F-22 + F-24 (10 charts, Task 2 model essays) + band grader | ✅ content volume smaller |
+| Pronunciation: sentences by level; conversations A1/A2/B1/B2 (listen, pick a character, speak your lines) | F-25 | ✅ (scores recognition accuracy, not phoneme-level like Azure pronunciation assessment) |
+| IELTS Speaking Part 1 (960 Qs, 27 topics) / Part 2 cue cards / Part 3 + Full Simulation (theirs "coming soon") / Practice History | F-25 (48 Part 1 Qs, 8 cue cards × 3 Part 3) | ✅ |
+| Vocabulary | Vocabulary page | ✅ |
+| Leaderboard (points) + public profile (rank, points, writing streak, recent activity) | Personal profile (F-26) | ⚠️ single-user app: no global ranking |
 
 ## 12. Verification recipes
 

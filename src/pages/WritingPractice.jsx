@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import ExerciseLibrary from '../components/ExerciseLibrary';
+import Task1Chart from '../components/Task1Chart';
 import { useLocation } from 'react-router-dom';
 import { Volume2, X } from 'lucide-react';
 import { getEngineKey } from '../utils/engine';
@@ -61,8 +63,11 @@ function renderRich(text) {
 const MODES = [
   { id: 'sentence', label: 'Câu' },
   { id: 'paragraph', label: 'Đoạn văn' },
+  { id: 'conversation', label: 'Hội thoại' },
   { id: 'ielts', label: 'IELTS' }
 ];
+const CHART_LABELS = { bar: 'Biểu đồ cột', pie: 'Biểu đồ tròn', line: 'Biểu đồ đường', table: 'Bảng số liệu', mixed: 'Biểu đồ kết hợp' };
+const QTYPE_LABELS = { opinion: 'Ý kiến', discussion: 'Thảo luận', problem_solution: 'Vấn đề - Giải pháp', advantage_disadvantage: 'Lợi - Hại', two_part: '2 phần' };
 
 const LEVELS = [
   { id: 'beginner', title: 'Cơ bản', desc: 'Dành cho người mới bắt đầu' },
@@ -142,14 +147,14 @@ export default function WritingPractice() {
 
   useEffect(() => { fetchProgress(); }, []);
 
-  const logAttempt = async ({ mode, level, category, task, score, num_items }) => {
+  const logAttempt = async ({ mode, level, category, task, score, num_items, exercise_id }) => {
     try {
       await fetch('http://127.0.0.1:8000/api/writing/attempts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           owner_email: getEmail(), mode, level, category: category || '',
-          task: task || '', score, num_items: num_items || 0,
+          task: task || '', score, num_items: num_items || 0, exercise_id: exercise_id || null,
         }),
       });
       fetchProgress();
@@ -163,7 +168,7 @@ export default function WritingPractice() {
   };
 
   const handleGenerate = async () => {
-    if (mode !== 'ielts' && !category) {
+    if (mode !== 'ielts' && mode !== 'conversation' && !category) {
       notify('Vui lòng chọn chủ đề.', 'error');
       return;
     }
@@ -202,6 +207,18 @@ export default function WritingPractice() {
       setLoading(false);
     }
   };
+
+  // Start a library exercise (same lesson shape as /api/writing/lessons/generate).
+  const startExercise = (ex) => {
+    setLesson(ex);
+    setAnswers({}); setGrades({}); setCurrentIndex(0);
+    setDictOpen(false); setHintPopover(null); setEssay(''); setIeltsResult(null);
+    if (ex.mode === 'ielts' && ex.task) setIeltsTask(ex.task);
+    const essayMode = ex.mode === 'ielts' && (ex.task === 'task1' || ieltsPractice === 'essay' || !(ex.sentences || []).length);
+    setScreen(essayMode ? 'essay' : 'practice');
+  };
+  const [libraryKey, setLibraryKey] = useState(0);
+  useEffect(() => { if (screen === 'setup') setLibraryKey(k => k + 1); }, [screen]); // fresh attempt counts
 
   const handleCheckSentence = async () => {
     const currentAns = answers[currentIndex] || '';
@@ -248,7 +265,7 @@ export default function WritingPractice() {
         mode: mode === 'ielts' ? 'ielts_translate' : mode, level,
         category: mode === 'ielts' ? 'IELTS · dịch bài mẫu' : (lesson.category || category),
         task: mode === 'ielts' ? ieltsTask : '',
-        score: Math.round(avg * 10) / 10, num_items: gradeValues.length,
+        score: Math.round(avg * 10) / 10, num_items: gradeValues.length, exercise_id: lesson.exercise_id,
       });
       setScreen('summary');
     }
@@ -384,7 +401,7 @@ export default function WritingPractice() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setIeltsResult(data);
-      logAttempt({ mode: 'ielts', level, category: '', task: ieltsTask, score: data.band || 0, num_items: 0 });
+      logAttempt({ mode: 'ielts', level, category: '', task: ieltsTask, score: data.band || 0, num_items: 0, exercise_id: lesson?.exercise_id });
     } catch (e) {
       console.error(e);
       notify('Lỗi chấm bài', 'error');
@@ -529,7 +546,7 @@ export default function WritingPractice() {
         )}
 
         {/* Category Selector */}
-        {mode !== 'ielts' && (
+        {mode !== 'ielts' && mode !== 'conversation' && (
           <div style={{ marginBottom: '24px' }}>
             <h3 style={{ marginBottom: '12px' }}>Chủ đề</h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -566,8 +583,21 @@ export default function WritingPractice() {
             cursor: 'pointer'
           }}
         >
-          Bắt đầu
+          {mode === 'conversation' ? 'Hội thoại ngẫu nhiên' : 'Bắt đầu (bài ngẫu nhiên)'}
         </button>
+
+        <div style={{ marginTop: '32px' }}>
+          <h3 style={{ marginBottom: '6px' }}>Thư viện bài tập</h3>
+          <p style={{ margin: '0 0 12px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            {mode === 'conversation' ? 'Đọc đoạn hội thoại tiếng Việt và viết lại bằng tiếng Anh, từ câu đầu đến câu cuối.'
+              : mode === 'ielts' && ieltsTask === 'task1' ? 'Mỗi đề kèm biểu đồ/bảng số liệu thật — lọc theo loại biểu đồ.'
+              : 'Chọn một bài cụ thể; số lần đã làm và lần luyện gần nhất được lưu cho từng bài.'}
+          </p>
+          <ExerciseLibrary mode={mode} level={level} task={mode === 'ielts' ? ieltsTask : ''} refreshKey={libraryKey}
+            filterLabel={mode === 'ielts' && ieltsTask === 'task1' ? 'Loại biểu đồ' : mode === 'ielts' ? 'Dạng đề' : 'Chủ đề'}
+            labels={mode === 'ielts' ? (ieltsTask === 'task1' ? CHART_LABELS : QTYPE_LABELS) : {}}
+            onStart={startExercise} />
+        </div>
       </div>
     );
   };
@@ -592,7 +622,7 @@ export default function WritingPractice() {
         {/* 1) HEADER ROW */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ margin: 0, fontSize: '1.25rem' }}>
-            {mode === 'ielts' ? 'Luyện IELTS — dịch bài mẫu' : 'Luyện dịch'}
+            {mode === 'ielts' ? 'Luyện IELTS — dịch bài mẫu' : lesson.mode === 'conversation' ? `Hội thoại · ${lesson.title || ''}` : 'Luyện dịch'}
           </h2>
           <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
             ⭐ {progress?.total_points ?? 0} · Câu {currentIndex + 1}/{lesson.sentences.length}
@@ -637,20 +667,20 @@ export default function WritingPractice() {
             {lesson.sentences.map((s, i) => {
               if (i < currentIndex) {
                 // done: show the learner's (corrected) English, in solid dark text
-                return <span key={i} style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{(grades[i]?.corrected || answers[i] || s.reference_en)} </span>;
+                return <span key={i} style={{ color: 'var(--text-primary)', fontWeight: 500, display: s.speaker ? 'block' : 'inline' }}>{s.speaker ? <b>{s.speaker}: </b> : null}{(grades[i]?.corrected || answers[i] || s.reference_en)} </span>;
               } else if (i === currentIndex) {
                 // current: bright pink highlight (the sentence they translate now)
                 return (
                   <span key={i} style={{
-                    color: '#DB2777', fontWeight: 700,
+                    color: '#DB2777', fontWeight: 700, display: s.speaker ? 'block' : 'inline',
                     backgroundColor: 'rgba(236,72,153,0.14)',
                     borderRadius: '4px', padding: '2px 4px',
                     boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone',
-                  }}>{s.vi} </span>
+                  }}>{s.speaker ? <b>{s.speaker}: </b> : null}{s.vi} </span>
                 );
               } else {
                 // upcoming: muted grey
-                return <span key={i} style={{ color: 'var(--text-muted)' }}>{s.vi} </span>;
+                return <span key={i} style={{ color: 'var(--text-muted)', display: s.speaker ? 'block' : 'inline' }}>{s.speaker ? <b>{s.speaker}: </b> : null}{s.vi} </span>;
               }
             })}
           </div>
@@ -786,9 +816,9 @@ export default function WritingPractice() {
 
         <div style={{ padding: '16px', backgroundColor: 'rgba(138, 51, 76, 0.05)', border: '1px solid #D6C5B3', borderRadius: '8px' }}>
           <div style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--brand-primary)' }}>Đề bài: {lesson.ielts_prompt}</div>
-          {ieltsTask === 'task1' && (
+          {lesson.chart ? <Task1Chart chart={lesson.chart} /> : ieltsTask === 'task1' && (
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-              Đề Task 1 ở đây là đề mô tả bằng chữ (không kèm hình biểu đồ): hãy viết dựa trên số liệu được nêu trong đề.
+              Đề này mô tả số liệu bằng chữ. Chọn một đề trong Thư viện bài tập để có biểu đồ.
             </div>
           )}
           {(lesson.structure_hint || []).length > 0 && (

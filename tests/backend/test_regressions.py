@@ -544,3 +544,40 @@ def test_branching_chat_and_child_teachback(client):
     from nlp.teachback import evaluate
     r = evaluate("Pushdown automaton", ["stack", "finite automaton", "context-free language"], "It has a stack.")
     assert r["child_question"] and r["gaps"]
+
+
+def test_practice_library_conversation_task1_and_speaking(client):
+    email = "lib@test.local"
+    # Library: conversations by CEFR band, attempts counted per exercise.
+    lib = client.get("/api/practice/library", params={"mode": "conversation", "level": "beginner", "email": email}).json()
+    assert lib["total"] >= 2 and all(i["level"] in ("A1", "A2") for i in lib["items"]) and lib["items"][0]["is_new"]
+    ex_id = lib["items"][0]["id"]
+    ex = client.get(f"/api/practice/exercise/{ex_id}").json()
+    assert ex["mode"] == "conversation" and ex["sentences"][0]["speaker"] and len(ex["speakers"]) == 2
+    client.post("/api/writing/attempts", json={"owner_email": email, "mode": "conversation", "score": 8, "num_items": 7, "exercise_id": ex_id})
+    item = next(i for i in client.get("/api/practice/library", params={"mode": "conversation", "level": "beginner", "email": email}).json()["items"] if i["id"] == ex_id)
+    assert item["attempts"] == 1 and not item["is_new"] and item["last_practiced"]
+
+    # Task 1: filter by chart type; every exercise carries its data.
+    pies = client.get("/api/practice/library", params={"mode": "ielts", "task": "task1", "chart_type": "pie"}).json()
+    assert pies["total"] == 2 and {"bar", "pie", "line", "table", "mixed"} == set(pies["categories"])
+    chart = client.get(f"/api/practice/exercise/{pies['items'][0]['id']}").json()["chart"]
+    assert chart["type"] == "pie" and abs(sum(chart["series"][0]["values"]) - 100) < 1
+    random_t1 = client.post("/api/writing/lessons/generate", json={"mode": "ielts", "task": "task1", **OFFLINE}).json()
+    assert random_t1.get("chart")
+
+    # Pronunciation: the misheard word is flagged.
+    r = client.post("/api/pronunciation/score", json={"target": "Nice to meet you.", "transcript": "nice to meat you"}).json()
+    assert [w["status"] for w in r["words"]] == ["ok", "ok", "wrong", "ok"] and r["accuracy"] == 75
+
+    # IELTS Speaking: a developed answer scores clearly above a two-word one; history kept.
+    q = "What do you like most about your hometown?"
+    good = client.post("/api/speaking/grade", json={"part": 1, "question": q, "owner_email": email, "duration_sec": 20, "transcript":
+        "I really like my hometown because it is peaceful and the people are friendly. For example, when I was a child "
+        "my neighbours often invited us for dinner. However, it has changed a lot recently, which makes me a little sad."}).json()
+    weak = client.post("/api/speaking/grade", json={"part": 1, "question": q, "owner_email": email, "transcript": "It is good. I like it."}).json()
+    assert 5.5 <= good["overall"] <= 8 and weak["overall"] <= 4.5
+    hist = client.get("/api/speaking/history", params={"email": email}).json()["history"]
+    assert hist[0]["question"] == q and hist[0]["transcript"]
+    # Local profiles that never went through /api/auth still get stats (was 404).
+    assert client.get("/api/user/stats", params={"email": "nobody@local"}).status_code == 200

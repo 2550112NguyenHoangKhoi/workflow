@@ -972,6 +972,13 @@ def generate_lesson(mode: str, level: str, category: str = "", topic: str = "",
             ]
             
             prompt = random.choice(bank)
+            # Prefer a prompt that comes with its data, so the chart can be drawn.
+            from .practice_bank import TASK1_CHARTS
+            chart = random.choice(TASK1_CHARTS)
+            if not topic:
+                return {"exercise_id": f"task1:{chart['id']}", "mode": "ielts", "level": level, "category": "", "task": task,
+                        "sentences": [], "ielts_prompt": chart["prompt"], "min_words": 150, "question_type": "",
+                        "structure_hint": struct_hint, "chart": chart}
             if topic:
                 # bias toward a prompt containing a topic keyword, if any match
                 matches = [p for p in bank if topic.lower() in p.lower()]
@@ -986,6 +993,16 @@ def generate_lesson(mode: str, level: str, category: str = "", topic: str = "",
             "question_type": q_type,
             "structure_hint": struct_hint
         }
+
+    if mode == "conversation":
+        from .practice_bank import CONVERSATIONS
+        cefr = {"b": ("A1", "A2"), "i": ("B1",), "a": ("B2",)}[lvl]
+        pool = [c for c in CONVERSATIONS if c["level"] in cefr and (not category or c["topic"] == category)] or CONVERSATIONS
+        c = random.choice(pool)
+        return {"exercise_id": f"conversation:{c['id']}", "mode": "conversation", "level": c["level"], "category": c["topic"],
+                "title": c["title"], "scene": c["scene"], "speakers": list(dict.fromkeys(sp for sp, _, _ in c["lines"])),
+                "sentences": [{"speaker": sp, "vi": vi, "reference_en": en, "hint": ""} for sp, vi, en in c["lines"]],
+                "ielts_prompt": "", "min_words": 0}
 
     if mode == "paragraph":
         content_type = category if category in PARAGRAPH_BANK else random.choice(list(PARAGRAPH_BANK))
