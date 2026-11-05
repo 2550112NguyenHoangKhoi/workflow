@@ -64,6 +64,28 @@ export function buildStudyPlanIcs(plan, { days = 14, hour = 19 } = {}) {
   return lines.join('\r\n') + '\r\n';
 }
 
+/**
+ * Roadmap steps that carry a due_date (from a deadline) → one evening session per step on its
+ * date. Steps without a date are skipped. Uses the study plan builder's event format.
+ */
+export function buildRoadmapIcs(items, { title = 'Lộ trình học', hour = 19 } = {}) {
+  const stamp = fmtUtc(new Date());
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Workflow//Roadmap//VI', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    fold(`X-WR-CALNAME:${esc(title)}`)];
+  (items || []).filter(it => it.due_date).forEach((it, i) => {
+    const [y, m, d] = it.due_date.split('-').map(Number);
+    const begin = new Date(y, m - 1, d, hour, 0, 0);
+    const end = new Date(begin.getTime() + estimateToMinutes(it.estimated_time) * 60000);
+    lines.push('BEGIN:VEVENT', `UID:${stamp}-rm${i}@workflow.local`, `DTSTAMP:${stamp}`,
+      `DTSTART:${fmtLocal(begin)}`, `DTEND:${fmtLocal(end)}`,
+      fold(`SUMMARY:${esc(`📚 Bước ${it.step_number ?? i + 1}: ${it.title}`)}`),
+      fold(`DESCRIPTION:${esc(it.description || '')}`),
+      'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Đến giờ học', 'TRIGGER:-PT10M', 'END:VALARM', 'END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n') + '\r\n';
+}
+
 export function downloadIcs(text, filename) {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/calendar;charset=utf-8' }));
   const a = document.createElement('a');

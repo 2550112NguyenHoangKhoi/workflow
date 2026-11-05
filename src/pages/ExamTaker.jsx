@@ -88,6 +88,8 @@ function ExamTaker() {
   const submittedRef = useRef(false);
 
   const [sourceDoc, setSourceDoc] = useState(null);
+  const [essayFeedback, setEssayFeedback] = useState({}); // question index → grading result
+  const [cardsMade, setCardsMade] = useState(null);
   const [sourcePage, setSourcePage] = useState(0);
   const [sourceMode, setSourceMode] = useState('pdf'); // 'pdf' | 'text'
   const [pdfDoc, setPdfDoc] = useState(null);
@@ -218,11 +220,42 @@ function ExamTaker() {
   const doSubmitRef = useRef(doSubmit);
   doSubmitRef.current = doSubmit;
 
+  async function gradeEssay(q, i) {
+    setEssayFeedback(f => ({ ...f, [i]: { loading: true } }));
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/essay/grade', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q.question, answer: answers[i] || '', reference: q.answer || '', api_key: getEngineKey() }),
+      });
+      const data = await res.json();
+      setEssayFeedback(f => ({ ...f, [i]: res.ok ? data : { error: data.detail || 'Không chấm được.' } }));
+    } catch { setEssayFeedback(f => ({ ...f, [i]: { error: 'Không kết nối được máy chủ.' } })); }
+  }
+
+  // Missed questions → flashcards (question on the front, the right answer + why on the back).
+  async function wrongToFlashcards() {
+    const cards = questions.map((q, i) => ({ q, i })).filter(({ q, i }) => isGradeable(q) && !isCorrect(q, i)).map(({ q }) => {
+      const right = (q.type === 'mcq' || q.type === 'true_false') ? (q.options || []).find(o => o.id === q.correct_option_id)?.text : q.answer;
+      return { front: q.question, back: [right && `Đáp án: ${right}`, q.explanation].filter(Boolean).join('\n\n') };
+    }).filter(c => c.back);
+    if (!cards.length) { setCardsMade(0); return; }
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/flashcards', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cards, document_id: sourceDoc?.id ?? null }),
+      });
+      const data = await res.json();
+      setCardsMade(res.ok ? data.count : -1);
+    } catch { setCardsMade(-1); }
+  }
+
   function reset() {
     submittedRef.current = false;
     setAnswers({});
     setSubmitted(false);
     setScore({ correct: 0, total: 0 });
+    setEssayFeedback({});
+    setCardsMade(null);
     setSeconds((config.duration_minutes || 45) * 60);
   }
 
@@ -384,6 +417,30 @@ function ExamTaker() {
                 {q.explanation}
               </div>
             )}
+            {q.type === 'essay' && submitted && (answers[i] || '').trim() && (() => {
+              const fb = essayFeedback[i];
+              if (!fb) return (
+                <button onClick={() => gradeEssay(q, i)} style={{ marginTop: 12, backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: 12, padding: '8px 14px', fontWeight: 700, cursor: 'pointer' }}>
+                  Chấm bài tự luận
+                </button>
+              );
+              if (fb.loading) return <div style={{ marginTop: 12, color: 'var(--text-muted)' }}>Đang chấm…</div>;
+              if (fb.error) return <div style={{ marginTop: 12, color: '#EF4444' }}>{fb.error}</div>;
+              return (
+                <div data-testid="essay-feedback" style={{ marginTop: 12, border: '2px solid var(--border-medium)', borderRadius: 12, padding: 12, backgroundColor: 'var(--bg-primary)' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.08em', color: 'var(--brand-primary)' }}>NHẬN XÉT {fb.engine === 'ai' ? 'CỦA AI' : '(OFFLINE)'}</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 900, color: fb.score >= 70 ? '#059669' : fb.score >= 50 ? '#D97706' : '#DC2626' }}>{fb.score}/100 · {fb.grade}</div>
+                  <div style={{ color: 'var(--text-navy)', margin: '4px 0 8px' }}>{fb.feedback}</div>
+                  {(fb.criteria || []).map((c, k) => (
+                    <div key={k} style={{ display: 'flex', gap: 6, fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 4 }}>
+                      {c.met ? <CheckCircle2 size={16} color="#059669" style={{ flexShrink: 0 }} /> : <XCircle size={16} color="#DC2626" style={{ flexShrink: 0 }} />}
+                      <span><b style={{ color: 'var(--text-navy)' }}>{c.criterion}</b> {c.note}</span>
+                    </div>
+                  ))}
+                  {fb.suggestions?.length > 0 && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 6 }}>Gợi ý: {fb.suggestions.join(' ')}</div>}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -507,6 +564,11 @@ function ExamTaker() {
               <button onClick={reset} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: 20, padding: '10px 16px', fontWeight: 700, cursor: 'pointer', width: '100%' }}>
                 <RotateCcw size={16} /> Làm lại bài thi
               </button>
+              {score.correct < score.total && (
+                <button onClick={wrongToFlashcards} disabled={cardsMade !== null && cardsMade >= 0} style={{ marginTop: 8, width: '100%', borderRadius: 20, padding: '9px 14px', fontWeight: 700, cursor: 'pointer', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-navy)' }}>
+                  {cardsMade === null ? 'Biến câu sai thành flashcard' : cardsMade > 0 ? `✓ Đã tạo ${cardsMade} flashcard` : cardsMade === 0 ? 'Không có thẻ mới' : 'Không tạo được'}
+                </button>
+              )}
             </div>
           )}
 

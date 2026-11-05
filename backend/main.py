@@ -933,8 +933,8 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     # Context comes from the DB whenever we know the document/project: the focused document
     # first, then the project's other documents, so project chat sees every source.
     context = ""
+    docs = []
     if request.project_id or request.document_id:
-        docs = []
         if request.document_id:
             focused = db.query(models.Document).filter(models.Document.id == request.document_id).first()
             if focused:
@@ -1000,7 +1000,57 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
         msg = crud.save_chat_message(db, project_id=request.project_id, role="assistant", content=response_text, persona=request.persona, document_id=request.document_id)
         msg_id = msg.id
 
-    return {"id": msg_id, "response": response_text}
+    citations = []
+    try:
+        if request.project_id or request.document_id:
+            citations = _cite_pages(response_text, docs)
+    except Exception as e:
+        print(f"[chat] citation lookup failed: {e}")
+    return {"id": msg_id, "response": response_text, "citations": citations}
+
+
+def _cite_pages(answer: str, docs) -> list:
+    """Pages an answer comes from: [{doc_id, filename, page, quote}]. Sentences quoted from the
+    source are located exactly; otherwise the closest pages by TF-IDF (AI paraphrases)."""
+    pages = []
+    for d in docs:
+        try:
+            for i, t in enumerate(json.loads(d.pages_data) if d.pages_data else []):
+                if (t or "").strip():
+                    pages.append((d, i + 1, t))
+        except Exception:
+            continue
+    if not pages or not (answer or "").strip():
+        return []
+    norm = lambda x: re.sub(r"\W+", "", x).lower()
+    normed = [norm(t) for _, _, t in pages]
+    plain = re.sub(r"[*_`#>\[\]]", "", answer)
+    out, seen = [], set()
+    for sent in re.split(r"(?<=[.!?])\s+|\n+", plain):
+        probe = norm(sent)
+        if len(probe) < 30:
+            continue
+        for k, text in enumerate(normed):
+            if probe[:60] in text or probe[-60:] in text:
+                d, page, _ = pages[k]
+                if (d.id, page) not in seen:
+                    seen.add((d.id, page))
+                    out.append({"doc_id": d.id, "filename": d.filename, "page": page, "quote": sent.strip().lstrip("-• ").strip()[:300]})
+                break
+        if len(out) >= 4:
+            return out
+    if out:
+        return out
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    vec = TfidfVectorizer(max_features=20000, sublinear_tf=True)
+    m = vec.fit_transform([t for _, _, t in pages[:600]] + [plain])
+    sims = cosine_similarity(m[-1], m[:-1]).ravel()
+    for k in sims.argsort()[::-1][:2]:
+        if sims[k] >= 0.12:
+            d, page, _ = pages[k]
+            out.append({"doc_id": d.id, "filename": d.filename, "page": page, "quote": ""})
+    return out
 
 @app.get("/api/projects/{project_id}/messages")
 async def get_project_messages_api(project_id: int, db: Session = Depends(get_db)):
@@ -1743,6 +1793,34 @@ async def generate_notes(request: TopicRequest):
     from nlp.notes import extract_notes
     return extract_notes(request.topic_or_text)
 
+class FlashcardIn(BaseModel):
+    front: str
+    back: str
+
+
+class FlashcardsCreate(BaseModel):
+    cards: list[FlashcardIn]
+    document_id: int | None = None
+    project_id: int | None = None
+
+
+@app.post("/api/flashcards")
+def create_flashcards(req: FlashcardsCreate, db: Session = Depends(get_db)):
+    """Save hand-made cards: a passage selected in the PDF, or the questions missed in a quiz
+    ("biến câu sai thành flashcard"). Duplicates of an existing front are skipped."""
+    existing = {f.front.strip().lower() for f in db.query(models.Flashcard).filter(
+        models.Flashcard.document_id == req.document_id).all()} if req.document_id else set()
+    created = []
+    for c in req.cards[:100]:
+        front, back = c.front.strip()[:500], c.back.strip()[:4000]
+        if not front or not back or front.lower() in existing:
+            continue
+        existing.add(front.lower())
+        f = crud.create_flashcard(db, front=front, back=back, project_id=req.project_id, document_id=req.document_id)
+        created.append({"id": f.id, "front": f.front, "back": f.back})
+    return {"created": created, "count": len(created)}
+
+
 @app.get("/api/flashcards/due")
 async def get_due_flashcards(project_id: int | None = None, document_id: int | None = None, db: Session = Depends(get_db)):
     cards = crud.get_due_flashcards(db, project_id=project_id, document_id=document_id)
@@ -1800,6 +1878,142 @@ async def generate_concept_map_endpoint(request: TopicRequest, db: Session = Dep
             print(f"[map] AI failed, falling back to offline: {e}")
     from nlp.concept_map import generate_concept_map
     return generate_concept_map(request.topic_or_text)
+
+
+class SynthesisRequest(BaseModel):
+    document_ids: list[int] = []
+    project_id: int | None = None
+    format: str = "outline"         # outline | notes | table | custom
+    instruction: str = ""
+    api_key: str | None = None
+    save: bool = True
+
+
+_SYNTH_PROMPTS = {
+    "outline": ("Tổng hợp các nguồn thành một đề cương phân cấp rõ ràng (heading Markdown #, ##, ###). "
+                "Mỗi mục có 2–3 câu giải thích, có ví dụ cho khái niệm quan trọng, công thức viết bằng LaTeX "
+                "($...$ hoặc $$...$$), kết thúc bằng phần \"Tổng kết\"."),
+    "notes": ("Soạn một bài học hoàn chỉnh từ các nguồn: tiêu đề, mục tiêu học tập (3–5 ý), nội dung chia phần có "
+              "giải thích, ví dụ, công thức LaTeX, bảng so sánh nếu có khái niệm tương tự, phần \"Lưu ý quan trọng\" "
+              "(điểm dễ nhầm), tóm tắt 5–7 dòng và 5–10 câu hỏi ôn tập."),
+    "table": ("Tổng hợp các nguồn thành bảng so sánh Markdown (cột: Tiêu chí, từng nội dung, Nhận xét; ít nhất 8 dòng), "
+              "sau bảng là phân tích ưu/nhược điểm, kết luận và ứng dụng thực tế."),
+}
+
+
+@app.post("/api/synthesize")
+async def synthesize_endpoint(req: SynthesisRequest, db: Session = Depends(get_db)):
+    """AI Tổng hợp: combine the selected sources into an outline, a full lesson, a comparison
+    table or the learner's own request. Markdown + LaTeX; saved as a "notes" artifact."""
+    from nlp.synthesis import synthesize
+    q = db.query(models.Document)
+    if req.document_ids:
+        docs = q.filter(models.Document.id.in_(req.document_ids)).all()
+    elif req.project_id:
+        docs = crud.get_documents(db, project_id=req.project_id)
+    else:
+        raise HTTPException(status_code=422, detail="Chọn ít nhất một tài liệu.")
+    docs = [d for d in docs if (d.content or "").strip()]
+    if not docs:
+        raise HTTPException(status_code=422, detail="Các tài liệu đã chọn chưa có nội dung văn bản.")
+    if req.format == "custom" and not req.instruction.strip():
+        raise HTTPException(status_code=422, detail="Nhập yêu cầu tổng hợp.")
+    sources = [{"title": d.filename, "text": d.content} for d in docs]
+
+    result, engine = None, "offline"
+    current_key = get_api_key(req.api_key)
+    if current_key:
+        try:
+            task = req.instruction.strip() if req.format == "custom" else _SYNTH_PROMPTS.get(req.format, _SYNTH_PROMPTS["outline"])
+            body = "\n\n".join(f"### Nguồn: {d.filename}\n{d.content[:max(4000, 24000 // len(docs))]}" for d in docs)
+            prompt = (f"{task}\nViết bằng ngôn ngữ của tài liệu, chỉ dùng thông tin trong các nguồn. Trả về Markdown.\n\n{body}")
+            config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite", capabilities=FAST_CAPS)
+            md = await agent_run(config, prompt, structured=False, timeout=60)
+            if md and len(str(md).strip()) > 80:
+                labels = {"outline": "Đề cương", "notes": "Bài học", "table": "Bảng so sánh", "custom": "Tổng hợp"}
+                result = {"title": f"{labels.get(req.format, 'Tổng hợp')} · " + (docs[0].filename if len(docs) == 1 else f"{len(docs)} tài liệu"),
+                          "markdown": str(md).strip()}
+                engine = "ai"
+        except Exception as e:
+            print(f"[synthesize] AI failed, falling back to offline: {e}")
+    if not result:
+        result = synthesize(sources, req.format, req.instruction)
+    if req.save:
+        project_id = req.project_id or docs[0].project_id
+        crud.create_artifact(db, project_id=project_id, type="notes", title=result["title"],
+                             content=json.dumps({"title": result["title"], "markdown_content": result["markdown"]}, ensure_ascii=False),
+                             document_id=docs[0].id if len(docs) == 1 else None)
+    return {**result, "format": req.format, "engine": engine, "sources": [d.filename for d in docs]}
+
+
+class EssayGradeRequest(BaseModel):
+    question: str
+    answer: str
+    reference: str = ""
+    rubric: list[str] = []
+    api_key: str | None = None
+
+
+class EssayCriterion(BaseModel):
+    criterion: str
+    met: bool
+    note: str = ""
+
+
+class EssayGradeSchema(BaseModel):
+    score: int
+    grade: str
+    feedback: str
+    suggestions: list[str] = []
+    criteria: list[EssayCriterion] = []
+
+
+@app.post("/api/essay/grade")
+async def grade_essay_endpoint(req: EssayGradeRequest):
+    """Feedback on an essay answer (exam "Tự luận", review sets): score /100, letter grade,
+    per-criterion check against the rubric and suggestions."""
+    from nlp.essay_grade import grade_essay, DEFAULT_RUBRIC
+    rubric = [r for r in req.rubric if r.strip()] or DEFAULT_RUBRIC
+    current_key = get_api_key(req.api_key)
+    if current_key and len(req.answer.split()) >= 5:
+        try:
+            prompt = ("Chấm bài tự luận của học sinh theo rubric. Trả về score (0-100), grade (A-F), feedback ngắn, "
+                      "suggestions (gợi ý cải thiện) và criteria (mỗi tiêu chí: met true/false, note). Viết tiếng Việt.\n\n"
+                      f"Câu hỏi: {req.question}\nĐáp án tham khảo: {req.reference}\nRubric: {'; '.join(rubric)}\n\nBài làm: {req.answer}")
+            config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite", response_schema=EssayGradeSchema, capabilities=FAST_CAPS)
+            data = await agent_run(config, prompt, structured=True, timeout=30)
+            if data and isinstance(data.get("score"), (int, float)):
+                return {**data, "engine": "ai"}
+        except Exception as e:
+            print(f"[essay] AI failed, falling back to offline: {e}")
+    return {**grade_essay(req.question, req.answer, req.reference, rubric), "engine": "offline"}
+
+
+class FeedbackIn(BaseModel):
+    kind: str = "bug"
+    message: str
+    page: str | None = None
+    screenshot: str | None = None
+
+
+@app.post("/api/feedback")
+def create_feedback(req: FeedbackIn, db: Session = Depends(get_db)):
+    if not req.message.strip():
+        raise HTTPException(status_code=422, detail="Hãy mô tả lỗi hoặc góp ý.")
+    shot = req.screenshot if (req.screenshot or "").startswith("data:image/") and len(req.screenshot) < 6_000_000 else None
+    fb = models.Feedback(kind=req.kind if req.kind in ("bug", "idea") else "bug", message=req.message.strip()[:5000],
+                         page=(req.page or "")[:300], screenshot=shot)
+    db.add(fb)
+    db.commit()
+    db.refresh(fb)
+    return {"id": fb.id}
+
+
+@app.get("/api/feedback")
+def list_feedback(db: Session = Depends(get_db)):
+    rows = db.query(models.Feedback).order_by(models.Feedback.id.desc()).limit(100).all()
+    return [{"id": f.id, "kind": f.kind, "message": f.message, "page": f.page, "has_screenshot": bool(f.screenshot),
+             "created_at": f.created_at} for f in rows]
 
 
 class MindMapRequest(BaseModel):

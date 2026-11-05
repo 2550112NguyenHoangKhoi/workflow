@@ -230,3 +230,15 @@ class VocabReview(Base):
     correct = Column(Integer, default=0)         # 0/1
     points = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class Feedback(Base):
+    """"Báo lỗi hoặc gửi feedback": kept locally (single-user app; there is no server to send it to)."""
+    __tablename__ = "feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kind = Column(String, default="bug")        # bug | idea
+    message = Column(Text)
+    page = Column(String, nullable=True)        # route the user was on
+    screenshot = Column(Text, nullable=True)    # PNG data URL (optional)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

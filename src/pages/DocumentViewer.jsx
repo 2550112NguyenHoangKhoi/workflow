@@ -191,7 +191,7 @@ const DocumentViewer = () => {
         body: JSON.stringify(payload)
       });
       const data = await response.json();
-      setMessages(prev => [...prev, { role: 'assistant', text: data.response || '...' }]);
+      setMessages(prev => [...prev, { role: 'assistant', text: data.response || '...', citations: data.citations || [] }]);
     } catch (err) {
       console.error(err);
       setMessages(prev => [...prev, { role: 'assistant', text: '⚠️ Không kết nối được tới máy chủ. Hãy chắc chắn backend đang chạy ở cổng 8000.' }]);
@@ -207,6 +207,17 @@ const DocumentViewer = () => {
       if (g && Number(g.docId) === Number(docId)) { sessionStorage.removeItem('pdf_goto'); return g.page; }
     } catch { /* storage off */ }
     return undefined;
+  };
+
+  // Citation chip → show that page (switching document if needed) and mark the quote.
+  const openCitation = (c) => {
+    if (Number(c.doc_id) !== Number(activeDocId) && documents.some(d => d.id === c.doc_id)) {
+      try { sessionStorage.setItem('pdf_goto', JSON.stringify({ docId: c.doc_id, page: c.page })); } catch { /* storage off */ }
+      setActiveDocId(c.doc_id);
+      setTimeout(() => window.dispatchEvent(new CustomEvent('pdf-goto', { detail: { docId: c.doc_id, page: c.page, quote: c.quote } })), 1500);
+    } else {
+      window.dispatchEvent(new CustomEvent('pdf-goto', { detail: { docId: c.doc_id, page: c.page, quote: c.quote } }));
+    }
   };
 
   // "Hỏi AI về mục này" from the mind map (and text selected in the PDF) lands in this chat.
@@ -418,6 +429,17 @@ const DocumentViewer = () => {
                           </div>
                         )}
                       </div>
+                      {msg.role === 'assistant' && msg.citations?.length > 0 && (
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                          {msg.citations.map((c, ci) => (
+                            <button key={ci} data-testid="citation" title={c.quote || c.filename}
+                              onClick={() => openCitation(c)}
+                              style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--brand-primary)', backgroundColor: 'var(--surface-blush)', border: '1px solid var(--border-medium)', borderRadius: '10px', padding: '3px 9px', cursor: 'pointer' }}>
+                              📄 {documents.length > 1 ? `${c.filename.replace(/\.[^.]+$/, '')} · ` : ''}Trang {c.page}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       {/* Inline Action Pills for AI messages */}
                       {msg.role === 'assistant' && (
                         <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>

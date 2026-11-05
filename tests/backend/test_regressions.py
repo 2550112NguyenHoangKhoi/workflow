@@ -472,3 +472,55 @@ def test_mindmap_for_a_document_and_for_a_subject(client):
     assert m["links"] and {m["links"][0]["source"], m["links"][0]["target"]} == {t["id"] for t in topics}
     ids = {n["id"] for n in m["nodes"]}
     assert all(n["parent"] in ids for n in m["nodes"] if n["parent"])
+
+
+def test_study_tools_synthesis_essay_flashcards_citations_feedback(client):
+    pid = client.post("/api/projects", json={"name": "Tools"}).json()["id"]
+    ids = []
+    for name, text in [("ch2.txt", CHAPTER2),
+                       ("ch3.txt", "Chapter 3\nPUSHDOWN AUTOMATA\n3.1 Grammars\n" + "A context-free grammar generates a language from productions. " * 6 +
+                        "\n3.2 Stacks\n" + "A pushdown automaton is a finite automaton extended with a stack. For example it accepts a^n b^n. " * 5)]:
+        ids.append(client.post("/api/documents/upload", files={"file": (name, text.encode(), "text/plain")}, data={"project_id": pid}).json()["id"])
+
+    # AI Tổng hợp: outline / lesson / comparison table / custom, saved as a notes artifact.
+    for fmt, marker in [("outline", "## 2.2 Regular Expressions"), ("notes", "## Review questions"), ("table", "| **Key concepts** |")]:
+        r = client.post("/api/synthesize", json={"document_ids": ids, "format": fmt, **OFFLINE})
+        assert r.status_code == 200 and marker in r.json()["markdown"], (fmt, r.json()["markdown"][:400])
+    assert "0 words" not in client.post("/api/synthesize", json={"document_ids": ids, "format": "table", **OFFLINE}).json()["markdown"]
+    custom = client.post("/api/synthesize", json={"document_ids": ids, "format": "custom", "instruction": "stack", **OFFLINE}).json()
+    assert "stack" in custom["markdown"].lower()
+    assert client.post("/api/synthesize", json={"document_ids": ids, "format": "custom", **OFFLINE}).status_code == 422
+    assert any(a["type"] == "notes" for a in client.get(f"/api/projects/{pid}/artifacts").json())
+
+    # Essay grading: a good answer beats a vague one; criteria follow the rubric.
+    q = {"question": 'Trình bày và giải thích nhận định sau: "A pushdown automaton is a finite automaton extended with a stack."',
+         "reference": "A pushdown automaton is a finite automaton extended with a stack.", **OFFLINE}
+    good = client.post("/api/essay/grade", json={**q, "answer": "A pushdown automaton is a finite automaton that also has a stack, "
+                                                 "which gives it unbounded memory. For example it recognises a^n b^n by pushing a's and popping on b's."}).json()
+    vague = client.post("/api/essay/grade", json={**q, "answer": "It is a kind of machine used in computer science theory."}).json()
+    assert good["score"] > vague["score"] + 25 and len(good["criteria"]) == 3 and good["criteria"][2]["met"]
+
+    # Hand-made flashcards (PDF selection, missed quiz questions); duplicates skipped.
+    cards = [{"front": "What is a stack?", "back": "LIFO memory"}, {"front": "What is a stack?", "back": "dup"}]
+    assert client.post("/api/flashcards", json={"cards": cards, "document_id": ids[1]}).json()["count"] == 1
+
+    # Chat answers carry page citations.
+    pdf_id = client.post("/api/documents/upload", files={"file": ("slides.pdf", _two_page_pdf(), "application/pdf")}).json()["id"]
+    chat = client.post("/api/chat", json={"message": "What is a pushdown automaton?", "document_id": pdf_id, **OFFLINE}).json()
+    assert chat["citations"] and chat["citations"][0]["page"] == 2
+
+    # Feedback is stored (the button used to do nothing).
+    assert client.post("/api/feedback", json={"message": "Nút X không chạy", "page": "#/writing"}).status_code == 200
+    assert client.get("/api/feedback").json()[0]["page"] == "#/writing"
+
+
+def _two_page_pdf() -> bytes:
+    from reportlab.pdfgen import canvas
+    import io
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf)
+    c.drawString(72, 750, "Finite automata read input symbols and change state on each symbol they read.")
+    c.showPage()
+    c.drawString(72, 750, "A pushdown automaton is a finite automaton extended with a stack memory.")
+    c.save()
+    return buf.getvalue()

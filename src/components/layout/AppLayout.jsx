@@ -6,7 +6,7 @@ import ProjectStudioSidebar from './ProjectStudioSidebar';
 import TeamChatWidget from './TeamChatWidget';
 
 import Topbar from './Topbar';
-import { MessageSquarePlus } from 'lucide-react';
+import FeedbackModal from '../modals/FeedbackModal';
 
 const AppLayout = () => {
   const location = useLocation();
@@ -18,6 +18,7 @@ const AppLayout = () => {
   const projectMatch = location.pathname.match(/^\/project\/(\d+)/);
   const teamProjectId = projectMatch ? projectMatch[1] : null;
   const [selectedPersona, setSelectedPersona] = useState('Gia sư thân thiện');
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   // The Studio panel can collapse to a rail so a document gets the width. Default: collapsed
   // on screens too narrow for sidebar + document + chat + Studio side by side.
   const [studioCollapsed, setStudioCollapsed] = useState(() => {
@@ -33,8 +34,10 @@ const AppLayout = () => {
   });
   useEffect(() => {
     const open = () => { setStudioCollapsed(false); };
+    const fb = () => setIsFeedbackOpen(true);
     window.addEventListener('studio-open', open);
-    return () => window.removeEventListener('studio-open', open);
+    window.addEventListener('open-feedback', fb);
+    return () => { window.removeEventListener('studio-open', open); window.removeEventListener('open-feedback', fb); };
   }, []);
 
   return (
@@ -55,29 +58,8 @@ const AppLayout = () => {
       {/* Team chat lives bottom-right on project routes; feedback moves left to make room */}
       <TeamChatWidget projectId={teamProjectId} />
 
-      {/* Floating Feedback Button */}
-      <button style={{
-        position: 'absolute',
-        bottom: '24px',
-        right: teamProjectId ? 'auto' : '24px',
-        left: teamProjectId ? '24px' : 'auto',
-        backgroundColor: 'var(--btn-navy)',
-        color: 'white',
-        border: 'none',
-        borderRadius: '24px',
-        padding: '12px 24px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        fontWeight: 600,
-        fontSize: '0.875rem',
-        cursor: 'pointer',
-        boxShadow: 'var(--shadow-md)',
-        zIndex: 50
-      }}>
-        <MessageSquarePlus size={18} />
-        Báo lỗi hoặc gửi feedback
-      </button>
+      {/* Feedback (the floating button had no click handler and covered the chat input); opened from the top bar. */}
+      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
     </div>
   );
 };

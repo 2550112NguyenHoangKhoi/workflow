@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
-import { Check, Search, Upload, Calendar, AlertCircle, FileText, Network, PanelRightClose, PanelRightOpen, GitBranch, Layers, ClipboardList, NotebookPen, BookOpenText } from 'lucide-react';
+import { Check, Search, Upload, Calendar, AlertCircle, FileText, Network, PanelRightClose, PanelRightOpen, GitBranch, Sparkles, Layers, ClipboardList, NotebookPen, BookOpenText } from 'lucide-react';
 import UploadSourcesModal from '../modals/UploadSourcesModal';
 import SearchMaterialsModal from '../modals/SearchMaterialsModal';
 import CreateExamModal from '../modals/CreateExamModal';
@@ -12,8 +12,10 @@ import ArtifactViewerModal from '../modals/ArtifactViewerModal';
 import MindMapModal from '../modals/MindMapModal';
 import SmartNotesModal from '../modals/SmartNotesModal';
 import CreateStudyDocModal from '../modals/CreateStudyDocModal';
+import SynthesisModal from '../modals/SynthesisModal';
 import { getEngineKey } from '../../utils/engine';
 import NeedMoreInfo from '../NeedMoreInfo';
+import { buildRoadmapIcs, downloadIcs } from '../../utils/ics';
 
 const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona, collapsed = false, onToggle }) => {
   const { id } = useParams();
@@ -31,6 +33,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona, collapsed =
   const [isMindMapOpen, setIsMindMapOpen] = useState(false);
   const [isSmartNotesOpen, setIsSmartNotesOpen] = useState(false);
   const [isStudyDocOpen, setIsStudyDocOpen] = useState(false);
+  const [isSynthesisOpen, setIsSynthesisOpen] = useState(false);
 
   const [roadmapItems, setRoadmapItems] = useState([]);
   const [isGeneratingRoadmap, setIsGeneratingRoadmap] = useState(false);
@@ -246,6 +249,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona, collapsed =
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             {[
               { label: 'Sơ đồ tư duy', icon: GitBranch, onClick: () => setIsMindMapOpen(true) },
+              { label: 'AI Tổng hợp', icon: Sparkles, onClick: () => setIsSynthesisOpen(true) },
               { label: 'Bản đồ khái niệm', icon: Network, onClick: () => setIsConceptMapOpen(true) },
               { label: 'Flashcard', icon: Layers, onClick: () => setIsFlashcardOpen(true) },
               { label: 'Đề thi / Quiz', icon: ClipboardList, onClick: () => setIsExamOpen(true) },
@@ -277,6 +281,12 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona, collapsed =
         <div style={{ marginTop: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-navy)', letterSpacing: '0.05em' }}>GIÁO ÁN</h3>
+            {roadmapItems.some(it => it.due_date) && !roadmapQuestions && (
+              <button onClick={() => downloadIcs(buildRoadmapIcs(roadmapItems), 'lo-trinh-hoc.ics')} title="Tải lịch .ics (Google Calendar, Outlook, Apple Calendar)"
+                style={{ background: 'none', border: 'none', color: 'var(--brand-primary)', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', marginLeft: 'auto', marginRight: '8px' }}>
+                📅 Thêm vào lịch
+              </button>
+            )}
             {roadmapItems.length > 0 && !roadmapQuestions && (
               <button onClick={() => generateRoadmap()} disabled={isGeneratingRoadmap} style={{ background: 'none', border: 'none', color: 'var(--brand-primary)', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
                 {isGeneratingRoadmap ? 'Đang tạo…' : 'Tạo lại'}
@@ -361,6 +371,13 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona, collapsed =
                       {(item.due_date || item.estimated_time || item.needs_material) ? (
                         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
                           {item.due_date && <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--brand-primary)', backgroundColor: 'var(--surface-blush)', borderRadius: '10px', padding: '2px 8px' }}>📅 {new Date(item.due_date + 'T00:00:00').toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}</span>}
+                          {item.due_date && !isCompleted && (() => {
+                            const today = new Date(); today.setHours(0, 0, 0, 0);
+                            const due = new Date(item.due_date + 'T00:00:00');
+                            const days = Math.round((due - today) / 86400000);
+                            const [label, bg, fg] = days < 0 ? ['Quá hạn', '#FEE2E2', '#B91C1C'] : days === 0 ? ['Hôm nay', '#DCFCE7', '#166534'] : days <= 6 ? ['Tuần này', 'var(--accent-amber-bg)', 'var(--accent-amber-text)'] : [null];
+                            return label ? <span style={{ fontSize: '0.68rem', fontWeight: 800, color: fg, backgroundColor: bg, borderRadius: '10px', padding: '2px 8px' }}>{label}</span> : null;
+                          })()}
                           {item.estimated_time && <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--accent-amber-text)', backgroundColor: 'var(--accent-amber-bg)', borderRadius: '10px', padding: '2px 8px' }}>⏱ {item.estimated_time}</span>}
                           {item.needs_material ? <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#B91C1C', backgroundColor: '#FEE2E2', borderRadius: '10px', padding: '2px 8px' }}>Thiếu tài liệu</span> : null}
                         </div>
@@ -511,6 +528,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona, collapsed =
     <ArtifactViewerModal isOpen={viewArtifactId !== null} artifactId={viewArtifactId} onClose={() => setViewArtifactId(null)} />
     <MindMapModal isOpen={isMindMapOpen} onClose={() => setIsMindMapOpen(false)} documentId={isProject ? null : id} projectId={projectId}
       onOpenConceptMap={() => { setIsMindMapOpen(false); setIsConceptMapOpen(true); }} />
+    <SynthesisModal isOpen={isSynthesisOpen} onClose={() => setIsSynthesisOpen(false)} projectId={projectId} documentId={isProject ? null : id} onSaved={fetchData} />
     <SmartNotesModal isOpen={isSmartNotesOpen} onClose={() => setIsSmartNotesOpen(false)} />
     <CreateStudyDocModal isOpen={isStudyDocOpen} onClose={() => setIsStudyDocOpen(false)} projectId={projectId} documentId={isProject ? null : id} onSuccess={fetchData} />
     </>
