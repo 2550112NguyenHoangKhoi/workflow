@@ -27,7 +27,7 @@ const PricingModal = ({ isOpen, onClose }) => {
       }
     } catch (error) {
       console.error("Upgrade error:", error);
-      setIsUpgraded(true);
+      alert("Không kết nối được máy chủ, chưa nâng cấp được gói.");
     } finally {
       setLoading(false);
     }
