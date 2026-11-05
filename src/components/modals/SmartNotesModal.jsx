@@ -5,8 +5,10 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { useEscape } from '../../utils/useEscape';
 
 const SmartNotesModal = ({ isOpen, onClose }) => {
+  useEscape(isOpen, onClose);
   const [markdown, setMarkdown] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);

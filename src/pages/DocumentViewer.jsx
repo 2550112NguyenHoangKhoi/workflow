@@ -274,13 +274,13 @@ const DocumentViewer = () => {
                   </div>
                   {activeDoc.has_file && activeDoc.filename.toLowerCase().endsWith('.pdf') ? (
                     <div style={{ flex: 1, position: 'relative', minHeight: '600px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '16px', border: '1px solid var(--border-medium)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ padding: '8px 16px', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-medium)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>PDF Viewer</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <a href={`http://127.0.0.1:8000/api/documents/${activeDoc.id}/file`} target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <div style={{ padding: '8px 16px', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-medium)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>PDF Viewer</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginLeft: 'auto' }}>
+                          <a href={`http://127.0.0.1:8000/api/documents/${activeDoc.id}/file`} target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
                             Mở trong tab mới ↗
                           </a>
-                          <button onClick={() => setIsExamModalOpen(true)} style={{ backgroundColor: 'var(--brand-primary)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '20px', fontSize: '0.875rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                          <button onClick={() => setIsExamModalOpen(true)} style={{ backgroundColor: 'var(--brand-primary)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '20px', fontSize: '0.875rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
                             <Sparkles size={16} /> Tạo đề thi ngay
                           </button>
                         </div>

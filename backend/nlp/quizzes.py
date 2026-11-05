@@ -1,4 +1,5 @@
 import random
+import re
 from typing import List, Dict
 import spacy
 from nltk.corpus import wordnet as wn
@@ -8,6 +9,18 @@ try:
 except Exception:
     nlp = None
 
+# A blank/option must be a plain word ("automaton", "NFA", "non-empty"), not "T(M" or
+# "Cambridge University\nPress" pulled out of a slide.
+_CLEAN_TERM = re.compile(r"[^\W\d_][^\W_]*(?:-[^\W\d_]+)*", re.UNICODE)
+
+def _wordlike(w: str) -> bool:
+    """A real word or acronym, not a variable ("S2", "R2", "S") or a sample string
+    ("aabaabbaab") from a formal-languages slide."""
+    if len(w) < 3 or any(c.isdigit() for c in w):
+        return False
+    return w.isupper() or len(set(w.lower())) >= 3
+
+
 # Nouns too generic to be a fair blank or a convincing wrong answer.
 GENERIC_NOUNS = {
     "place", "process", "product", "way", "part", "type", "kind", "form", "thing", "number",
@@ -15,6 +28,8 @@ GENERIC_NOUNS = {
     "time", "case", "point", "fact", "idea", "effect", "role", "group", "set", "lot", "variety",
     "range", "order", "step", "method", "aspect", "feature", "member", "piece", "item", "word",
     "people", "person", "something", "everything", "today", "year", "day", "information",
+    "section", "chapter", "problem", "exercise", "figure", "table", "page", "definition",
+    "question", "answer", "solution", "note", "remark", "following", "lecture", "slide",
 }
 
 
@@ -64,7 +79,8 @@ def extract_quiz(text: str, num_questions: int = 5) -> Dict:
     # Find sentences that contain at least one Named Entity or important noun
     # Sentences that open with a pronoun ("It produces …") lose their subject once taken out
     # of context, so they make unanswerable questions.
-    candidate_sentences = [sent for sent in doc.sents if len(sent.text.split()) > 8
+    from .preprocessor import is_prose
+    candidate_sentences = [sent for sent in doc.sents if len(sent.text.split()) > 8 and is_prose(sent.text, 7)
                            and sent[0].pos_ != 'PRON' and sent[0].lower_ not in ('this', 'these', 'that', 'those', 'such')]
     random.shuffle(candidate_sentences)
     
@@ -73,13 +89,25 @@ def extract_quiz(text: str, num_questions: int = 5) -> Dict:
     # Distractor pools drawn from THIS document, so wrong answers are plausible and on-topic
     # (they used to be a canned list: "London", "Microsoft", "Albert Einstein", ...).
     ents_by_label = {}
-    for ent in doc.ents:
-        ents_by_label.setdefault(ent.label_, {})[ent.text.lower()] = ent.text
+    def _clean_ent(text):
+        words = text.split()
+        if len(words) > 1 and text.isupper():  # "MICHAEL HUTH": a name from the references
+            return False
+        return (all(_CLEAN_TERM.fullmatch(w.strip(".,")) and _wordlike(w.strip(".,")) for w in words)
+                and len(words) <= 4)
+
+    # Answer pools come from real sentences only — not bibliography lines ("Mordechai Ben-Ari")
+    # or slide labels.
+    from .preprocessor import is_prose as _is_prose
+    prose_sents = [snt for snt in doc.sents if _is_prose(snt.text, 5)]
+    for ent in (e for snt in prose_sents for e in snt.ents):
+        if _clean_ent(ent.text):
+            ents_by_label.setdefault(ent.label_, {})[ent.text.lower()] = ent.text
     doc_terms = {}
-    for chunk in doc.noun_chunks:
+    for chunk in (c for snt in prose_sents for c in snt.noun_chunks):
         root = chunk.root
         if (root.pos_ in ('NOUN', 'PROPN') and len(root.text) > 3 and not root.is_stop
-                and root.lemma_.lower() not in GENERIC_NOUNS):
+                and _CLEAN_TERM.fullmatch(root.text) and _wordlike(root.text) and root.lemma_.lower() not in GENERIC_NOUNS):
             # Keep proper nouns / acronyms as written; common nouns lower-case (a sentence-initial
             # "Algae" must not be pasted mid-sentence as "requires Algae").
             keep = root.pos_ == 'PROPN' or root.text.isupper() or any(c.isupper() for c in root.text[1:])
@@ -112,7 +140,7 @@ def extract_quiz(text: str, num_questions: int = 5) -> Dict:
         target_text = ""
         
         # 1. Prefer Named Entities (ORG, PERSON, GPE, DATE)
-        valid_ents = [ent for ent in sent.ents if ent.label_ in ['ORG', 'PERSON', 'GPE', 'DATE', 'LOC']]
+        valid_ents = [ent for ent in sent.ents if ent.label_ in ['ORG', 'PERSON', 'GPE', 'DATE', 'LOC'] and _clean_ent(ent.text)]
         if valid_ents:
             target = random.choice(valid_ents)
             target_text = target.text
@@ -140,7 +168,7 @@ def extract_quiz(text: str, num_questions: int = 5) -> Dict:
         # 2. Fallback to Root Nouns
         if not target:
             nouns = [token for token in sent if token.pos_ in ['NOUN', 'PROPN'] and len(token.text) > 4
-                     and token.lemma_.lower() not in GENERIC_NOUNS]
+                     and _CLEAN_TERM.fullmatch(token.text) and _wordlike(token.text) and token.lemma_.lower() not in GENERIC_NOUNS]
             if nouns:
                 target = random.choice(nouns)
                 target_text = target.text
@@ -160,7 +188,11 @@ def extract_quiz(text: str, num_questions: int = 5) -> Dict:
         used_targets.add(target_text.lower())
         
         # Build the question
-        question_text = " ".join(sent.text.replace(target_text, "_______", 1).split())
+        # Whole-word blank only: "states" must not become "_______s" for the target "state".
+        blanked = re.sub(r"(?<!\w)" + re.escape(target_text) + r"(?!\w)", "_______", sent.text, count=1)
+        if blanked == sent.text:
+            continue
+        question_text = " ".join(blanked.split())
         
         # Ensure we have exactly 3 distractors
         if len(distractors) > 3:

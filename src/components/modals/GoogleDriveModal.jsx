@@ -4,8 +4,10 @@ import {
   isConfigured, isConnected, connectDrive, listChildren, importFileToLibrary, restoreSession, MISSING_CLIENT_MSG,
 } from '../../utils/googleDrive';
 import { readUploadResult } from '../../utils/uploads';
+import { useEscape } from '../../utils/useEscape';
 
 const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
+  useEscape(isOpen, onClose);
   // --- Local folder bulk import (no Google login needed) ---
   const folderInputRef = useRef(null);
   const [uploading, setUploading] = useState(null); // {done,total} | null

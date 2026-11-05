@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { X, Upload } from 'lucide-react';
 import { readUploadResult } from '../../utils/uploads';
+import { useEscape } from '../../utils/useEscape';
 
 const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
+  useEscape(isOpen, onClose);
   const [file, setFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [school, setSchool] = useState('ĐHBK-HCM');

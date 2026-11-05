@@ -358,9 +358,12 @@ function ExamTaker() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
               <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-navy)' }}>Giải thích chi tiết:</span>
               {q.source_ref && (
-                <span style={{ backgroundColor: 'var(--surface-blush)', color: 'var(--brand-primary)', fontSize: '0.75rem', padding: '2px 8px', borderRadius: 999, border: '1px solid #E5D5C5' }}>
-                  {q.source_ref}
-                </span>
+                // Jumps the source viewer (right column) to the cited page.
+                <button type="button" title="Mở trang này trong tài liệu nguồn"
+                  onClick={() => { const n = parseInt(String(q.source_ref).match(/\d+/)?.[0], 10); if (n) setSourcePage(Math.max(0, Math.min((totalPages || n) - 1, n - 1))); }}
+                  style={{ backgroundColor: 'var(--surface-blush)', color: 'var(--brand-primary)', fontSize: '0.75rem', padding: '2px 8px', borderRadius: 999, border: '1px solid #E5D5C5', cursor: 'pointer' }}>
+                  {q.source_ref} ↗
+                </button>
               )}
             </div>
             

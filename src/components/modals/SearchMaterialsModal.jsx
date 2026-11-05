@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { X, Search } from 'lucide-react';
 import { getEngineKey } from '../../utils/engine';
 import { readUploadResult } from '../../utils/uploads';
+import { useEscape } from '../../utils/useEscape';
 
 const SearchMaterialsModal = ({ isOpen, onClose }) => {
+  useEscape(isOpen, onClose);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);

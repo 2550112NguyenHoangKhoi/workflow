@@ -46,13 +46,23 @@ def _key_concepts(text: str, n: int = 5, exclude: str = "") -> list[str]:
                 import spacy
                 _spacy = spacy.load("en_core_web_sm", disable=["ner"])
             counts, first = Counter(), {}
+            from .quizzes import GENERIC_NOUNS
+            # The topic itself is not a key point: its words, singulars and acronym
+            # ("Deterministic finite automaton" → deterministic, finite, automaton, dfa).
+            tw = re.findall(r"\w+", ex)
+            topic_words = {w for w in tw} | {w.rstrip("s") for w in tw}
+            if len(tw) >= 2:
+                topic_words.add("".join(w[0] for w in tw))
             for chunk in _spacy(text[:20000]).noun_chunks:
-                toks = [t for t in chunk if t.pos_ not in ("DET", "PRON", "NUM", "PUNCT") and not t.is_stop]
+                # Single letters are variables ("automaton M", "string w"), not part of a concept.
+                toks = [t for t in chunk if t.pos_ not in ("DET", "PRON", "NUM", "PUNCT", "SYM") and not t.is_stop
+                        and len(t.text) > 1 and re.fullmatch(r"[^\W\d_]+(?:[-/][^\W\d_]+)*", t.text)]
                 if not toks or toks[-1].pos_ not in ("NOUN", "PROPN"):
                     continue
                 toks = toks[-3:]  # keep the head phrase: "the green pigment chlorophyll" → 3 words max
                 phrase = " ".join(t.lemma_.lower() if t is toks[-1] and t.pos_ == "NOUN" else t.text.lower() for t in toks)
-                if len(phrase) < 3 or phrase == ex or phrase in STOPWORDS:
+                if (len(phrase) < 3 or phrase in STOPWORDS or phrase in GENERIC_NOUNS
+                        or set(phrase.split()) <= topic_words):
                     continue
                 counts[phrase] += 1
                 first.setdefault(phrase, len(first))
@@ -77,10 +87,46 @@ def _stem(w: str) -> str:
     return w
 
 
+def _focus(context: str, topic: str, keep: int = 30) -> str:
+    """The part of a long document that is about `topic`: its most similar sentences (TF-IDF),
+    with the topic's acronym counted too ("Deterministic finite automaton" ↔ "DFA"). Key points
+    for "DFA" used to come from the whole deck (grammar, language, …)."""
+    if not topic or len(context) < 3000:
+        return context
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+        sents = [x.strip() for x in re.split(r"(?<=[.!?])\s+|\n+", context) if len(x.split()) >= 4]
+        words = re.findall(r"\w+", topic)
+        query = topic + (" " + "".join(w[0] for w in words).upper() if len(words) >= 2 else "")
+        m = TfidfVectorizer(stop_words="english").fit_transform(sents + [query])
+        sims = cosine_similarity(m[-1], m[:-1]).flatten()
+        # Where the topic is *defined* ("A deterministic finite automaton is …", "DFA: …") is
+        # the best source of key points: take that sentence and the lines that follow it.
+        # Scattered matching sentences mostly compared the topic with others (DFA vs NFA).
+        defines = re.compile(r"\b(is|are|consists of|is defined as|là|gồm)\b|:\s", re.I)
+        order = [int(i) for i in sims.argsort()[::-1] if sims[int(i)] > 0]
+        if not order:
+            return context
+        best = order[0]
+        names = [topic.lower()] + ([query.split()[-1].lower()] if len(words) >= 2 else [])
+        exact = [i for i in order[:40] if any(re.search(r"\b" + re.escape(n) + r"s?\b", sents[i].lower()) for n in names)]
+        from .preprocessor import is_prose
+        alt = "|".join(re.escape(n) for n in names)
+        definition = re.compile(r"^\W*(?:\S+\s){0,4}?(?:" + alt + r")s?\b[^.?]{0,60}?\b(is|are|consists?|involves?|denotes?|means|là|gồm)\b", re.I)
+        picked = next((i for i in exact if definition.search(sents[i]) and is_prose(sents[i], 6)), None)
+        if picked is None:
+            picked = next((i for i in exact + order[:8] if defines.search(sents[i]) and is_prose(sents[i], 6)), best)
+        best = picked
+        return "\n".join(sents[best:best + 12])
+    except Exception:
+        return context
+
+
 def make_prompt(topic: str, context: str = "", level: str = "") -> dict:
     concept = topic if topic else "Chủ đề"
     if context:
-        kws = _key_concepts(context, 5, exclude=topic)
+        kws = _key_concepts(_focus(context, topic), 5, exclude=topic)
         key_points = kws if len(kws) >= 3 else kws + ["định nghĩa", "ví dụ thực tế", "tại sao quan trọng"]
         key_points = key_points[:6]
     else:

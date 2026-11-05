@@ -709,10 +709,42 @@ async def get_usage():
 
 # --- Endpoints ---
 
+def _definition_term(question: str) -> str:
+    """'What is an alphabet?' → 'alphabet'; 'Automaton là gì?' → 'automaton'; else ''."""
+    q = (question or "").strip().rstrip("?？ ").lower()
+    m = (re.match(r"^(?:what\s+(?:is|are)|define|definition of|explain)\s+(?:an?\s+|the\s+)?(.{2,40})$", q)
+         or re.match(r"^(.{2,40}?)\s+là\s+gì$", q) or re.match(r"^(?:định nghĩa|thế nào là)\s+(.{2,40})$", q))
+    return m.group(1).strip() if m else ""
+
+
 _LINE_WRAP = re.compile(r"(?<![.!?…:;])[ \t]*\n[ \t]*(?=[a-zđàáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ0-9(])")
 
 
-def offline_doc_answer(message: str, db: Session, context: str = "") -> str:
+_FOLLOWUPS = {
+    "explain": re.compile(r"^\s*(giải thích lại|giải thích thêm|giải thích chi tiết hơn|explain (it )?again|explain more)\W*$", re.I),
+    "example": re.compile(r"^\s*(cho (mình |tôi )?(một )?ví dụ|ví dụ\??|give (me )?an? example|example\??)\W*$", re.I),
+}
+_EXAMPLE_MARK = re.compile(r"\b(for example|for instance|e\.g\.|example|such as|consider|ví dụ|chẳng hạn|xét)\b", re.I)
+
+
+def _followup_mode(message: str) -> str:
+    return next((m for m, rx in _FOLLOWUPS.items() if rx.match(message or "")), "")
+
+
+def _previous_question(db, project_id, document_id) -> str:
+    """The learner's last real question in this chat (skipping follow-up commands)."""
+    q = db.query(models.ChatMessage).filter(models.ChatMessage.role == "user")
+    if document_id:
+        q = q.filter(models.ChatMessage.document_id == document_id)
+    elif project_id:
+        q = q.filter(models.ChatMessage.project_id == project_id)
+    for msg in q.order_by(models.ChatMessage.id.desc()).limit(20):
+        if msg.content and not _followup_mode(msg.content):
+            return msg.content
+    return ""
+
+
+def offline_doc_answer(message: str, db: Session, context: str = "", mode: str = "answer") -> str:
     """Offline chat: answer from the active (context) or latest document via TF-IDF sentence retrieval."""
     try:
         source_text = context.strip() if context and len(context.strip()) > 30 else ""
@@ -743,9 +775,54 @@ def offline_doc_answer(message: str, db: Session, context: str = "") -> str:
         # For answering questions
         if message and message.strip() and not any(kw in message.lower() for kw in ["tóm tắt", "summary", "summarize"]):
             try:
-                matrix = TfidfVectorizer(stop_words=stop_words).fit_transform(sentences + [message])
+                # English: stem words so "minimize" finds "minimization", "states" finds "state".
+                if stop_words == "english":
+                    from nltk.stem import PorterStemmer
+                    from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+                    _stem = PorterStemmer().stem
+                    analyzer = lambda d: [_stem(w) for w in re.findall(r"[^\W\d_]{2,}", d.lower()) if w not in ENGLISH_STOP_WORDS]
+                    vectorizer = TfidfVectorizer(analyzer=analyzer)
+                else:
+                    vectorizer = TfidfVectorizer(stop_words=stop_words)
+                matrix = vectorizer.fit_transform(sentences + [message])
                 sims = cosine_similarity(matrix[-1], matrix[:-1]).flatten()
-                ranked = [int(i) for i in sims.argsort()[::-1] if sims[int(i)] > 0.01][:4]
+                # Boosts first, then penalties (so a boosted exercise question still sinks).
+                # "What is X?" / "X là gì?" / "define X": sentences that define X rise.
+                term = _definition_term(message)
+                if term:
+                    # The term as the subject, near the start: "An alphabet Σ is …", "DFA: …".
+                    pat = re.compile(r"^\W*(?:\S+\s){0,2}?" + re.escape(term) + r"\w{0,2}\b(?:\s*:|[^.:]{0,40}?\b(?:is|are|means|refers to|là|được gọi là)\b)", re.I)
+                    # "δ : Q × Σ → Q is a transition function" — the term defined at the end
+                    # (but not "there is a regular expression").
+                    tail = re.compile(r"(?<!there )(?<!There )\b(?:is|are|called|là)\s+(?:an?\s+|the\s+)?" + re.escape(term) + r"\w{0,2}\b", re.I)
+                    sims = sims + [0.5 if pat.search(x) else 0.35 if tail.search(x) else 0.0 for x in sentences]
+                # Slides are full of fragments ("On the alphabet Σ = {a, b}", "NFA DFA 4.") that
+                # score high on TF-IDF because they are short: prefer real sentences.
+                from nlp.preprocessor import is_prose
+                prose = [is_prose(x, 4) for x in sentences]
+                if any(prose):
+                    sims = sims * [1.0 if ok else 0.25 for ok in prose]
+                # A question from the slides ("Which string does not belong to L4?") is not an answer.
+                question_like = re.compile(r"^\W*(?:but\s+|and\s+|so\s+)?(?:which|what|how|why|when|where|is|are|do|does|can|could|will|give|find|show|prove)\b", re.I)
+                sims = sims * [0.4 if x.rstrip().endswith(("?", "?")) or question_like.match(x) else 1.0 for x in sentences]
+                # "It can be extended …" has lost its subject; prefer sentences that name it.
+                sims = sims * [0.6 if re.match(r"^\W*(?:it|this|these|they|that)\b", x, re.I) else 1.0 for x in sentences]
+                if mode == "example":
+                    # Only sentences that are (or introduce) an example, ranked by relevance.
+                    near_ex = [bool(_EXAMPLE_MARK.search(x)) or (k > 0 and bool(_EXAMPLE_MARK.search(sentences[k - 1])))
+                               for k, x in enumerate(sentences)]
+                    if any(near_ex[k] and sims[k] > 0.01 for k in range(len(sentences))):
+                        sims = sims * [1.0 if e else 0.0 for e in near_ex]
+                ranked, seen = [], set()
+                limit = 2 if mode == "explain" else 4
+                for i in (int(i) for i in sims.argsort()[::-1]):
+                    if sims[i] <= 0.01 or len(ranked) == limit:
+                        break
+                    key = re.sub(r"\W+", " ", sentences[i].lower()).strip()
+                    if key in seen:
+                        continue  # the same line repeated on several slides
+                    seen.add(key)
+                    ranked.append(i)
                 if ranked:
                     # A hit is often followed by a sentence that continues it through a pronoun
                     # ("Glycolysis … happens in the cytoplasm. It splits glucose into pyruvate.")
@@ -755,7 +832,15 @@ def offline_doc_answer(message: str, db: Session, context: str = "") -> str:
                         if i + 1 < len(sentences) and anaphor.match(sentences[i + 1]) and i + 1 not in ranked:
                             return f"{sentences[i]} {sentences[i + 1]}"
                         return sentences[i]
+                    if mode == "explain":
+                        # Re-explain = the best passages with the sentences around them.
+                        blocks = [" ".join(sentences[j] for j in range(max(0, i - 1), min(len(sentences), i + 3))
+                                           if is_prose(sentences[j], 3) or j == i) for i in ranked]
+                        body = "\n\n".join(blocks)
+                        return f"📚 [Offline · giải thích chi tiết hơn cho: “{message[:80]}”]\n\n{body}"
                     answer = "\n".join("- " + with_followup(i) for i in ranked)
+                    if mode == "example":
+                        return f"📚 [Offline · ví dụ trong {label} cho: “{message[:80]}”]\n\n{answer}"
                     return f"📚 [Offline · trích từ {label}]\n\n{answer}"
             except Exception:
                 pass
@@ -764,7 +849,9 @@ def offline_doc_answer(message: str, db: Session, context: str = "") -> str:
         try:
             doc_matrix = TfidfVectorizer(stop_words=stop_words).fit_transform(sentences)
             centrality = (doc_matrix * doc_matrix.T).toarray().sum(axis=1)
-            top = sorted(sorted(range(len(sentences)), key=lambda i: centrality[i], reverse=True)[:5])
+            from nlp.preprocessor import is_prose as _prose
+            pool = [i for i in range(len(sentences)) if _prose(sentences[i])] or list(range(len(sentences)))
+            top = sorted(sorted(pool, key=lambda i: centrality[i], reverse=True)[:5])
             summary = "\n".join("- " + sentences[i] for i in top)
             return f"📝 [Offline · tóm tắt {label}]\n\n{summary}"
         except Exception:
@@ -806,8 +893,10 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
             project = crud.get_project(db, request.project_id)
             if project:
                 docs += [d for d in project.documents if d.id != request.document_id]
+        # Offline retrieval searches the whole text; only the AI prompt is capped (offline chat
+        # used to be blind to everything after the first 30k characters of a long deck).
         context = "\n\n---\n\n".join(
-            f"[{d.filename}]\n{d.content}" for d in docs if (d.content or "").strip())[:30000]
+            f"[{d.filename}]\n{d.content}" for d in docs if (d.content or "").strip())
     if not context:
         context = request.context or ""
             
@@ -841,14 +930,20 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
             config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite", capabilities=FAST_CAPS)
             prompt = (
                 f"{persona_prompt}\n\nUsing the document context below, answer the question.\n"
-                f"Context:\n{context}\n\nQuestion: {message_text}"
+                f"Context:\n{context[:30000]}\n\nQuestion: {message_text}"
             )
             response_text = await agent_run(config, prompt, structured=False)
         except Exception as e:
             print(f"[chat] AI failed, falling back to offline: {e}")
             
     if not response_text:
-        response_text = offline_doc_answer(message_text, db, context)
+        mode = _followup_mode(message_text)
+        question = message_text
+        if mode:
+            # "Giải thích lại" / "Cho ví dụ" refer to the learner's previous question; matched
+            # literally they found nothing and returned a generic summary.
+            question = _previous_question(db, request.project_id, request.document_id) or message_text
+        response_text = offline_doc_answer(question, db, context, mode=mode or "answer")
 
     msg_id = None
     if request.project_id or request.document_id:
@@ -996,7 +1091,8 @@ def upload_document(
             import pdfplumber
             try:
                 with pdfplumber.open(path) as pdf:
-                    pages = [(page.extract_text() or "") + "\n" for page in pdf.pages]
+                    from nlp.pdf_text import extract_pages
+                    pages = [t + "\n" for t in extract_pages(pdf)]
             except Exception:
                 raise HTTPException(status_code=422, detail="Không đọc được file PDF (file hỏng hoặc có mật khẩu).")
             text = "".join(pages)
@@ -1927,7 +2023,8 @@ def _fetch_drive_text(file_id: str, api_key: str | None = None, access_token: st
                 tmp.write(data)
                 tmp.close()
                 with pdfplumber.open(tmp.name) as pdf:
-                    return "\n".join(p.extract_text() or "" for p in pdf.pages)
+                    from nlp.pdf_text import extract_pages
+                    return "\n".join(extract_pages(pdf))
             finally:
                 os.unlink(tmp.name)
         return data.decode("utf-8", errors="ignore")
@@ -2113,6 +2210,12 @@ async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
 
     data["questions"] = _normalize_exam_questions(data.get("questions", []))
 
+    # Link the exam to its source document even when it came from ticked library sources
+    # (no document_id): the exam page shows that document beside the questions and its
+    # "Trang N" citations open it; it used to say "no source document".
+    linked_doc_id = req.document_id or next(
+        (int(src.value) for src in req.sources if src.type == "document" and str(src.value).isdigit()), None)
+
     cfg = {
         "duration_minutes": req.duration_minutes,
         "difficulty": req.difficulty,
@@ -2129,7 +2232,7 @@ async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
         type="exam",
         title=req.title or data.get("title", "Đề thi"),
         content=json.dumps({"config": cfg, "questions": data["questions"]}, ensure_ascii=False),
-        document_id=req.document_id,
+        document_id=linked_doc_id,
         owner_email=req.owner_email,
     )
     return {"id": artifact.id, "title": artifact.title, "config": cfg, "questions": data["questions"]}
@@ -3420,7 +3523,8 @@ async def extract_text(file: UploadFile = File(...)):
                 tmp.write(raw)
                 tmp.close()
                 with pdfplumber.open(tmp.name) as pdf:
-                    text = "\n".join(p.extract_text() or "" for p in pdf.pages)
+                    from nlp.pdf_text import extract_pages
+                    text = "\n".join(extract_pages(pdf))
             finally:
                 os.unlink(tmp.name)
         elif suffix == ".docx":

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { User, X, Mail, Award, Clock } from 'lucide-react';
+import { useEscape } from '../../utils/useEscape';
 
 const UserProfileModal = ({ isOpen, onClose, user }) => {
+  useEscape(isOpen, onClose);
   const [stats, setStats] = useState({ document_count: 0, project_count: 0, last_login: null });
 
   useEffect(() => {

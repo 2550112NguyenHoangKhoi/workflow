@@ -46,12 +46,15 @@ def _as_short_answer(q):
 
 
 def _as_essay(q):
-    statement = q["question"].replace("_______", _correct_text(q), 1)
+    term = (q.get("terms") or {}).get(q.get("correct_option_id")) or _correct_text(q)
+    statement = q["question"].replace("_______", term, 1)
+    # The reference answer is what the source says (it used to be the MCQ explanation,
+    # "The correct missing entity or term from the source text is …").
     return {
         "type": "essay",
         "question": f'Trình bày và giải thích nhận định sau: "{statement}"',
-        "answer": q.get("explanation", ""),
-        "explanation": q.get("explanation", ""),
+        "answer": f"Ý chính cần nêu (theo tài liệu): {statement}",
+        "explanation": f"Bài làm tốt cần giải thích được vai trò của '{term}' trong nhận định trên và nêu ví dụ minh hoạ.",
     }
 
 
@@ -82,11 +85,19 @@ def _find_page(pages, question_text):
     probe = max(probe, key=len).strip() if probe else ""
     if not probe:
         return None
-    norm = lambda s: re.sub(r"\s+", " ", s).lower()
+    # Letters/digits only: text cleaning adds periods after headings and joins wrapped lines,
+    # so a whitespace-only normalisation missed the page for many slide questions.
+    norm = lambda s: re.sub(r"\W+", "", s).lower()
     probe = norm(probe)
-    for page_no, page_text in pages:
-        if page_no and probe in norm(page_text):
-            return page_no
+    normed = [(no, norm(t)) for no, t in pages if no]
+    # Whole sentence first; a sentence running across a page break is on no single page, so
+    # then cite where it starts (or, failing that, where it ends).
+    for candidate in (probe, probe[:50], probe[-50:]):
+        if len(candidate) < 20:
+            continue
+        for page_no, text in normed:
+            if candidate in text:
+                return page_no
     return None
 
 

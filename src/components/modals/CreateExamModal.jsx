@@ -5,8 +5,10 @@ import { getSelectedSources, extractFileText, getOwnerEmail } from '../../utils/
 import ArtifactViewerModal from './ArtifactViewerModal';
 import { getEngineKey } from '../../utils/engine';
 import { getDriveApiKey, getAccessToken, restoreSession } from '../../utils/googleDrive';
+import { useEscape } from '../../utils/useEscape';
 
 const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) => {
+  useEscape(isOpen, onClose);
   const navigate = useNavigate();
   const activeDocId = documentId || (() => { const match = window.location.hash.match(/#\/document\/([^/]+)/); return match ? parseInt(match[1], 10) : null; })();
   const [title, setTitle] = useState(`Đề thi ôn tập ${new Date().toLocaleDateString('vi-VN')}`);

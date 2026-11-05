@@ -6,8 +6,10 @@ import remarkBreaks from 'remark-breaks';
 import { getSelectedSources, extractFileText, getOwnerEmail } from '../../utils/examSources';
 import { getEngineKey } from '../../utils/engine';
 import { getDriveApiKey, getAccessToken, restoreSession } from '../../utils/googleDrive';
+import { useEscape } from '../../utils/useEscape';
 
 const CreateStudyDocModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) => {
+  useEscape(isOpen, onClose);
   const activeDocId = documentId || (() => { const match = window.location.hash.match(/#\/document\/([^/]+)/); return match ? parseInt(match[1], 10) : null; })();
   const [title, setTitle] = useState(`Tài liệu phòng thi ${new Date().toLocaleDateString('vi-VN')}`);
   const [description, setDescription] = useState("");

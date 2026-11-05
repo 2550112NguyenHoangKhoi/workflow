@@ -5,6 +5,7 @@ import { toPng } from 'html-to-image';
 import dagre from 'dagre';
 import '@xyflow/react/dist/style.css';
 import { getEngineKey, engineLabel } from '../../utils/engine';
+import { useEscape } from '../../utils/useEscape';
 
 // Layout and rendering must agree on node size, or dagre spaces nodes for a box much larger
 // than what's drawn and fitView has to zoom far out (unreadable labels).
@@ -59,6 +60,7 @@ const layoutToFit = (nodes, edges, viewW = 950, viewH = 560) => {
 };
 
 const ConceptMapModal = ({ isOpen, onClose }) => {
+  useEscape(isOpen, onClose);
   const [nodes, setNodes] = useState([]);
   const [layoutVersion, setLayoutVersion] = useState(0);
   const [edges, setEdges] = useState([]);

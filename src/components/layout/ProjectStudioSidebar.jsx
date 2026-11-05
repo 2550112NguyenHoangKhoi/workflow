@@ -247,7 +247,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                     disabled={isGeneratingRoadmap}
                     style={{ flex: 1, backgroundColor: 'var(--bg-tertiary)', color: 'var(--brand-primary)', border: '1px solid var(--border-medium)', padding: '10px 16px', borderRadius: '12px', fontWeight: 700, fontSize: '0.8rem', cursor: isGeneratingRoadmap ? 'not-allowed' : 'pointer', opacity: isGeneratingRoadmap ? 0.7 : 1 }}
                   >
-                    {isGeneratingRoadmap ? 'Đang tạo...' : 'Dùng LLM'}
+                    {isGeneratingRoadmap ? 'Đang tạo...' : 'Tạo roadmap nhanh'}
                   </button>
                 </div>
               </div>
@@ -383,7 +383,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                   textAlign: 'center'
                 }}
               >
-                {isGeneratingRoadmap ? 'Đang tạo...' : 'Dùng LLM'}
+                {isGeneratingRoadmap ? 'Đang tạo...' : 'Tạo roadmap nhanh'}
               </button>
             </div>
             )}

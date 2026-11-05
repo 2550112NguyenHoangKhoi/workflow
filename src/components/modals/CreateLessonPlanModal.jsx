@@ -1,14 +1,26 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, UploadCloud, BookOpen, Loader2, RotateCcw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { useEscape } from '../../utils/useEscape';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { getEngineKey } from '../../utils/engine';
 import { readUploadResult } from '../../utils/uploads';
 
 const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) => {
+  useEscape(isOpen, onClose);
   const activeDocId = documentId || (() => { const match = window.location.hash.match(/#\/document\/([^/]+)/); return match ? parseInt(match[1], 10) : null; })();
-  const [title, setTitle] = useState("Giáo án 1 tiết - Tiêu hóa ở dạ dày");
+  // Default title from the open document (it was hard-coded to "Tiêu hóa ở dạ dày").
+  const [title, setTitle] = useState("");
+  useEffect(() => {
+    if (!isOpen || title) return;
+    if (!documentId) { setTitle(`Giáo án ${new Date().toLocaleDateString('vi-VN')}`); return; }
+    fetch(`http://127.0.0.1:8000/api/documents/${documentId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setTitle(`Giáo án - ${(d?.filename || 'tài liệu').replace(/\.[^.]+$/, '')}`))
+      .catch(() => setTitle('Giáo án'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, documentId]);
   const [description, setDescription] = useState("");
   const [target, setTarget] = useState("");
   const [length, setLength] = useState("Chuẩn giáo án 45 phút");

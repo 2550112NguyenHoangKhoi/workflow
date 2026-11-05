@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, ArrowRight, ArrowLeft, Download, Shuffle, Star, RotateCcw, Sparkles, Check } from 'lucide-react';
 import { getEngineKey } from '../../utils/engine';
+import { renderInline } from '../../utils/inlineMarkdown';
+import { useEscape } from '../../utils/useEscape';
 
 const FlashcardReviewModal = ({ isOpen, onClose }) => {
+  useEscape(isOpen, onClose);
   const [cards, setCards] = useState([]);
   const [order, setOrder] = useState([]);        // indices into `cards`, for shuffle
   const [pos, setPos] = useState(0);              // position within `order`
@@ -232,12 +235,12 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
                   {/* Front */}
                   <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', backgroundColor: 'var(--bg-tertiary)', border: '2px solid var(--border-medium)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                     <span style={{ position: 'absolute', top: 12, left: 16, fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)' }}>CÂU HỎI</span>
-                    <h3 style={{ fontSize: '1.4rem', color: 'var(--text-navy)', fontWeight: 700, margin: 0 }}>{currentCard?.front}</h3>
+                    <h3 style={{ fontSize: '1.4rem', color: 'var(--text-navy)', fontWeight: 700, margin: 0 }}>{renderInline(currentCard?.front)}</h3>
                   </div>
                   {/* Back */}
                   <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)', backgroundColor: 'var(--btn-navy)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
                     <span style={{ position: 'absolute', top: 12, left: 16, fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.05em', color: 'rgba(255,255,255,0.5)' }}>ĐÁP ÁN</span>
-                    <p style={{ fontSize: '1.25rem', color: 'white', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{currentCard?.back}</p>
+                    <p style={{ fontSize: '1.25rem', color: 'white', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{renderInline(currentCard?.back)}</p>
                   </div>
                 </div>
               </div>

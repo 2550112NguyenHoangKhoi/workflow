@@ -321,3 +321,78 @@ def test_offline_exam_questions_read_cleanly():
         if q["type"] == "mcq":
             opts = {o["text"].lower() if isinstance(o, dict) else o.lower() for o in q["options"]}
             assert not opts & {"place", "process", "product", "way", "part"}
+
+
+def test_slide_pdf_text_extraction():
+    """LaTeX slides: words were glued ("Westudythefollowing"), math letters were Unicode
+    italics (𝑎), subscripts split onto their own line, and the running footer repeated on every
+    page. Uses a generated PDF with tight spacing, a subscript and a footer."""
+    import io
+    import pdfplumber
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    from nlp.pdf_text import extract_pages
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    for page in range(4):
+        t = c.beginText(60, 780); t.setFont("Helvetica", 11); t.setCharSpace(-0.6)
+        t.textOut(f"We study the following topics in this chapter, part {'ABCD'[page]}.")
+        c.drawText(t)
+        c.setFont("Helvetica", 11); c.drawString(60, 740, "State q"); c.setFont("Helvetica", 8); c.drawString(97, 738.5, "1")  # LaTeX-like subscript
+        c.setFont("Helvetica", 11); c.drawString(104, 740, f"is initial. Page {page}")
+        c.drawString(60, 60, "MATHEMATICAL MODELING Methods and Application")
+        c.showPage()
+    c.save()
+    with pdfplumber.open(io.BytesIO(buf.getvalue())) as pdf:
+        pages = extract_pages(pdf)
+    assert "We study the following topics" in pages[0]
+    assert "q1" in pages[0].replace(" ", "")  and "\n1\n" not in pages[0]
+    assert all("Methods and Application" not in p for p in pages)
+    import unicodedata
+    assert unicodedata.normalize("NFKC", "𝑎𝑢𝜀") == "auε"
+
+
+def test_offline_tools_on_slide_debris():
+    """Chat, notes and quizzes skipped definitions and served slide debris instead."""
+    from nlp.preprocessor import is_prose
+    assert not is_prose("NFA DFA 4.") and not is_prose("On the alphabet Σ = {a, b}")
+    assert not is_prose("Finite Automata- Basic Problems, in Section 2.5.")
+    assert not is_prose("Mathematical Logic for Computer Science, Chapter 15 Third Edition, Springer-Verlag (2012).")
+    assert is_prose("An alphabet Σ is a finite and non-empty set of symbols (or characters).")
+    db = SessionLocal()
+    try:
+        text = ("On the alphabet Σ = {a, b}\nOn the alphabet Σ = {a, b}\nSet alphabet Σ = {0, 1}\n"
+                "An alphabet Σ is a finite and non-empty set of symbols (or characters).\n"
+                "Which alphabet is used in the next exercise?\nA string over Σ is a finite sequence of symbols.")
+        answer = main.offline_doc_answer("What is an alphabet?", db, context=text)
+    finally:
+        db.close()
+    first = answer.split("\n")[2]
+    assert "finite and non-empty set of symbols" in first
+
+
+def test_roadmap_follows_numbered_sections():
+    from nlp.roadmap import offline_roadmap
+    text = "\n".join(f"2.{i} {name}\nThis section explains {name.lower()} with several worked examples and exercises."
+                     for i, name in enumerate(["Overview", "Regular Expressions", "Finite Automata", "Minimization"], 1))
+    titles = [s["title"] for s in offline_roadmap(text)]
+    assert titles[1:5] == ["2.1 Overview", "2.2 Regular Expressions", "2.3 Finite Automata", "2.4 Minimization"]
+
+
+def test_chat_followup_pills_use_previous_question(client):
+    d = client.post("/api/documents/upload", files={"file": ("ex.txt", (
+        "A finite automaton is a machine with a finite set of states. "
+        "For example, a turnstile is a finite automaton with two states, locked and unlocked. "
+        "Regular expressions describe regular languages. ").encode(), "text/plain")}).json()
+    client.post("/api/chat", json={"message": "What is a finite automaton?", "document_id": d["id"], **OFFLINE})
+    r = client.post("/api/chat", json={"message": "Cho ví dụ", "document_id": d["id"], **OFFLINE}).json()
+    assert "turnstile" in r["response"]
+
+
+def test_exam_from_library_sources_links_the_document(client):
+    from conftest import TEXT
+    d = client.post("/api/documents/upload", files={"file": ("src.txt", TEXT, "text/plain")}).json()
+    ex = client.post("/api/exams/generate", json={"num_questions": 3, "question_types": ["mcq"],
+                     "sources": [{"type": "document", "value": str(d["id"])}], **OFFLINE}).json()
+    art = client.get(f"/api/artifacts/{ex['id']}").json()
+    assert art.get("document_id") == d["id"]

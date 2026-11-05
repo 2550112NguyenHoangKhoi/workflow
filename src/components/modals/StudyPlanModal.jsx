@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { X, Calendar, Loader2, Clock, BookOpen } from 'lucide-react';
 import { getEngineKey } from '../../utils/engine';
 import { buildStudyPlanIcs, downloadIcs, durationToDays } from '../../utils/ics';
+import { useEscape } from '../../utils/useEscape';
 
 const StudyPlanModal = ({ isOpen, onClose }) => {
+  useEscape(isOpen, onClose);
   const [pathData, setPathData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);

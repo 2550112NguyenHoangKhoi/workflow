@@ -1,3 +1,4 @@
+import re
 import json
 
 from core.agent import LocalAgentConfig, FAST_CAPS, DEFAULT_MODEL, agent_run
@@ -36,10 +37,56 @@ def _parse_items(response_text) -> list | None:
     return out or None
 
 
+_HEADING = re.compile(r"(?m)^\s*(\d{1,2}(?:\.\d{1,2}){1,2})\.?\s+([A-ZÀ-Ỹ][^\n]{3,90})$")
+
+
+def _section_outline(text: str) -> list:
+    """Numbered headings ("2.4 Finite Automata", "2.4.1 Nondeterministic …") as
+    [(number, title, subsection titles, first sentence)], top level only, document order.
+    Lecture slides and textbooks carry their own structure; the roadmap should follow it."""
+    from .preprocessor import is_prose
+    found = []  # (number, title, end offset)
+    for m in _HEADING.finditer(text or ""):
+        num, title = m.group(1), re.sub(r"\s+\d+$", "", m.group(2)).strip()  # drop trailing page no.
+        if title.endswith((".", ",", ";")) or sum(c.isalpha() for c in title) < 4:
+            continue
+        found.append((num, title, m.end()))
+    if not found:
+        return []
+    top_depth = min(n.count(".") for n, _, _ in found)
+    sections, seen = [], set()
+    for i, (num, title, end) in enumerate(found):
+        if num.count(".") != top_depth or num in seen:
+            continue
+        seen.add(num)
+        subs = [t for n, t, _ in found[i + 1:] if n.startswith(num + ".")]
+        nxt = next((e for n, _, e in found[i + 1:] if n.count(".") == top_depth and n != num), len(text))
+        from .preprocessor import clean_text
+        body = clean_text(text[end:nxt][:4000])  # re-join wrapped lines before picking a sentence
+        first = next((" ".join(x.split()) for x in re.split(r"(?<=[.!?])\s+|\n", body) if is_prose(x, 6)), "")
+        sections.append((num, title, list(dict.fromkeys(subs)), first))
+    return sections if len(sections) >= 3 else []
+
+
 def offline_roadmap(text_content: str) -> list:
-    """Deterministic roadmap from the document itself: overview → one step per key concept
-    (ordered as the concept extractor ranks them) → review. Used without an AI engine."""
+    """Deterministic roadmap from the document itself. With numbered sections (slides,
+    textbooks): overview → one step per section → review. Otherwise: overview → one step per
+    key concept → review. Used without an AI engine."""
     vn = is_vietnamese(text_content or "")
+    outline = _section_outline(text_content or "")
+    if outline:
+        def desc(subs, first):
+            parts = []
+            if subs:
+                parts.append(("Gồm: " if vn else "Covers: ") + "; ".join(subs[:4]) + ".")
+            if first:
+                parts.append(first[:180])
+            return " ".join(parts) or ("Đọc kỹ phần này và làm ví dụ." if vn else "Work through this section and its examples.")
+        head = ({"title": "Tổng quan tài liệu", "description": "Đọc lướt toàn bộ tài liệu, nắm cấu trúc và mục tiêu chính."} if vn
+                else {"title": "Overview", "description": "Skim the whole document; note its structure and main goals."})
+        tail = ({"title": "Ôn tập & tự kiểm tra", "description": "Làm quiz/flashcard, tự giải thích lại các khái niệm bằng lời của bạn."} if vn
+                else {"title": "Review & self-test", "description": "Take a quiz / flashcards and explain each concept in your own words."})
+        return [head] + [{"title": f"{num} {title}", "description": desc(subs, first)} for num, title, subs, first in outline[:10]] + [tail]
     concepts = []
     try:
         from .concept_map import generate_concept_map

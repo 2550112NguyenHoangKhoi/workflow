@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Check } from 'lucide-react';
+import { renderInline } from '../../utils/inlineMarkdown';
+import { useEscape } from '../../utils/useEscape';
 
 const DueFlashcardModal = ({ isOpen, onClose }) => {
+  useEscape(isOpen, onClose);
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -171,12 +174,12 @@ const DueFlashcardModal = ({ isOpen, onClose }) => {
                 }}
               >
                 {!isFlipped ? (
-                  <h3 style={{ fontSize: '1.5rem', color: 'var(--text-navy)', fontWeight: 700, margin: 0 }}>{currentCard?.front}</h3>
+                  <h3 style={{ fontSize: '1.5rem', color: 'var(--text-navy)', fontWeight: 700, margin: 0 }}>{renderInline(currentCard?.front)}</h3>
                 ) : (
                   <div>
-                    <h3 style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '16px', opacity: 0.7 }}>{currentCard?.front}</h3>
+                    <h3 style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '16px', opacity: 0.7 }}>{renderInline(currentCard?.front)}</h3>
                     <div style={{ height: '1px', width: '40px', backgroundColor: 'var(--border-medium)', margin: '0 auto 16px' }} />
-                    <p style={{ fontSize: '1.25rem', color: 'var(--text-navy)', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{currentCard?.back}</p>
+                    <p style={{ fontSize: '1.25rem', color: 'var(--text-navy)', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{renderInline(currentCard?.back)}</p>
                   </div>
                 )}
               </div>

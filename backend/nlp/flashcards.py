@@ -9,12 +9,40 @@ except Exception as e:
     print("Warning: en_core_web_sm not found. Flashcard algorithm might fail if spaCy is not installed.")
     nlp = None
 
+_BAD_LEAD = {"if", "but", "what", "when", "where", "which", "who", "why", "how", "there", "its", "it",
+             "this", "that", "these", "those", "so", "then", "and", "or", "because", "while", "here",
+             "they", "we", "you", "he", "she", "such", "also", "thus", "hence", "note"}
+
+
+_VAGUE = {"next", "following", "previous", "first", "second", "third", "last", "other", "same",
+          "former", "latter", "above", "below", "converse", "rest"}
+
+
+def _good_term(term: str) -> bool:
+    """A flashcard front must name something: not "If there", "But what", "[its range"."""
+    t = term.strip()
+    words = t.split()
+    if not words or words[0].lower().strip("[(") in _BAD_LEAD or "?" in t or "\n" in t:
+        return False
+    core = [w.lower() for w in words if w.lower() not in ("a", "an", "the")]
+    if not core or core[0] in _VAGUE:  # "The next part", "the following"
+        return False
+    if t.count("(") != t.count(")") or t.count("[") != t.count("]") or t.count("{") != t.count("}"):
+        return False
+    return any(c.isalpha() for c in t)
+
+
+def _cap(text: str) -> str:
+    # str.capitalize() lower-cased the rest: "(Q, Σ, q, δ, F)" became "(q, σ, q, δ, f)".
+    return text[:1].upper() + text[1:]
+
+
 def extract_flashcards(text: str, max_cards: int = 10) -> List[Dict[str, str]]:
     """
     Extracts candidate terms and their definitions to generate flashcards.
     Uses dependency parsing and regex patterns.
     """
-    from .preprocessor import clean_text, split_into_sentences_spacy
+    from .preprocessor import clean_text, split_into_sentences_spacy, is_prose
     from .vietnamese import is_vietnamese
     text = clean_text(text)
 
@@ -46,10 +74,10 @@ def extract_flashcards(text: str, max_cards: int = 10) -> List[Dict[str, str]]:
                 definition = match.group(2).strip()
                 
                 # Clean up terms
-                if len(term.split()) <= 4 and term.lower() not in seen_terms:
+                if len(term.split()) <= 4 and term.lower() not in seen_terms and _good_term(term) and len(definition.split()) >= 3:
                     flashcards.append({
                         "front": f"What is the definition of **{term}**?",
-                        "back": definition.capitalize()
+                        "back": _cap(" ".join(definition.split()))
                     })
                     seen_terms.add(term.lower())
                 break
@@ -80,9 +108,10 @@ def extract_flashcards(text: str, max_cards: int = 10) -> List[Dict[str, str]]:
                     if not subject_chunk:
                         subject_chunk = subject.text
                         
-                    if subject_chunk.lower() not in seen_terms and len(subject_chunk.split()) <= 4:
+                    if (subject_chunk.lower() not in seen_terms and len(subject_chunk.split()) <= 4
+                            and _good_term(subject_chunk) and is_prose(sent.text)):
                         # Blank out the subject from the sentence to create the front
-                        front_text = sent.text.replace(subject_chunk, "_______", 1)
+                        front_text = " ".join(sent.text.replace(subject_chunk, "_______", 1).split())
                         flashcards.append({
                             "front": front_text,
                             "back": subject_chunk
@@ -100,7 +129,7 @@ def extract_flashcards(text: str, max_cards: int = 10) -> List[Dict[str, str]]:
         for chunk in doc.noun_chunks:
             text_clean = chunk.text.strip().lower()
             # Only single words or two words
-            if 1 <= len(text_clean.split()) <= 2 and text_clean not in seen_terms:
+            if 1 <= len(text_clean.split()) <= 2 and text_clean not in seen_terms and _good_term(text_clean):
                 candidates.append(text_clean)
         
         # Try to look them up using FreeDictionaryAPI to get real definitions
@@ -123,7 +152,7 @@ def extract_flashcards(text: str, max_cards: int = 10) -> List[Dict[str, str]]:
                             if definition:
                                 flashcards.append({
                                     "front": f"What is the definition of **{term}**?",
-                                    "back": definition.capitalize()
+                                    "back": _cap(definition)
                                 })
                                 seen_terms.add(term)
             except Exception:
