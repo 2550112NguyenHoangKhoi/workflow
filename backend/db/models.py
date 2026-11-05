@@ -77,7 +77,6 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     name = Column(String)
     picture = Column(String, nullable=True)
-    status = Column(String, default="free")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     last_login = Column(DateTime, default=datetime.datetime.utcnow)
 

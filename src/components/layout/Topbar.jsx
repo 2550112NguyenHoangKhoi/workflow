@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Moon, Sun, User, LogOut, Sparkles, Users } from 'lucide-react';
 import { signInWithGoogle, signOutGoogle, getStoredUser, isAuthConfigured } from '../../utils/googleAuth';
-import PricingModal from '../modals/PricingModal';
 import UserProfileModal from '../modals/UserProfileModal';
 import ProjectCollaborationModal from '../modals/ProjectCollaborationModal';
 import ArtifactViewerModal from '../modals/ArtifactViewerModal';
@@ -22,7 +21,6 @@ const Topbar = () => {
   const [user, setUser] = useState(getStoredUser());
   const [menuOpen, setMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isCollabOpen, setIsCollabOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -241,7 +239,6 @@ const Topbar = () => {
       </div>
 
       <ArtifactViewerModal isOpen={viewArtifactId !== null} artifactId={viewArtifactId} onClose={() => setViewArtifactId(null)} />
-      <PricingModal isOpen={isPricingOpen} onClose={() => setIsPricingOpen(false)} />
       <UserProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} />
       <ProjectCollaborationModal isOpen={isCollabOpen} onClose={() => setIsCollabOpen(false)} projectId={projectId} documentId={documentId} />
     </header>

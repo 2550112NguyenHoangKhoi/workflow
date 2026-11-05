@@ -6,10 +6,11 @@
 > **Not fixed, needs a decision or outside action:**
 > - Personal DB (P2): untracked, but still in **git history**. Purging it needs a history rewrite and a force-push to `main`.
 > - Google Drive API key in the bundle (P2): restrict the key in Google Cloud Console (HTTP referrers + Drive API only). That can't be fixed in code.
-> - Pricing / Premium: the false "success" on error is fixed, but "Upgrade" is still free and gates nothing. Hide it, or wire up payments?
 > - Collaboration (invites / members / team chat / shares): needs a shared server. That's an architecture decision, so it's left as-is.
 > - Login bypass (hard-coded local user): kept on purpose (commit 9968c97). The user is now registered in the backend.
 > - README release link points to `nguyenhoangkhoi2312/workflow`. Is that intended?
+>
+> **Removed:** pricing / Premium plans (modal, `/api/user/upgrade`, user `status`). This is a non-commercial app.
 >
 > **Corrections to the original audit:**
 > - #15 (vocabulary review) is intended behaviour, not a bug. Due "learning" words are reviewed via "Ôn từ mới", and the bank top-up is deliberate.

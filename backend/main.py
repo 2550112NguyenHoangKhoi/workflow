@@ -53,11 +53,6 @@ def patch_database_schema(engine):
     inspector = inspect(engine)
     
     with engine.begin() as conn:
-        if "users" in inspector.get_table_names():
-            cols = [c["name"] for c in inspector.get_columns("users")]
-            if "status" not in cols:
-                conn.execute(text("ALTER TABLE users ADD COLUMN status VARCHAR DEFAULT 'free'"))
-
         if "chat_messages" in inspector.get_table_names():
             cols = [c["name"] for c in inspector.get_columns("chat_messages")]
             if "document_id" not in cols:
@@ -299,26 +294,11 @@ class QuizSubmitRequest(BaseModel):
     score: int
     total_questions: int
 
-class UpgradeRequest(BaseModel):
-    email: str
-
 class RoadmapItemUpdate(BaseModel):
     completed: bool | None = None
     active: bool | None = None
 
 # --- Folder Endpoints ---
-@app.post("/api/user/upgrade")
-def upgrade_user(req: UpgradeRequest, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.email == req.email).first()
-    if not db_user:
-        db_user = models.User(email=req.email, name=req.email.split('@')[0], status="premium")
-        db.add(db_user)
-    else:
-        db_user.status = "premium"
-    db.commit()
-    db.refresh(db_user)
-    return {"status": "premium", "email": req.email}
-
 @app.post("/api/auth/login")
 def login(user_data: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user_data.email).first()
