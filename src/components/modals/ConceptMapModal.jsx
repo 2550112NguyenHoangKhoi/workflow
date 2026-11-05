@@ -102,7 +102,7 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
               }
             }
             setActiveDoc(doc);
-            generateMap(doc.content);
+            generateMap(doc.content, parsedProjId, parsedDocId);
           } else {
             setError("Chưa có tài liệu. Vui lòng Upload tài liệu trước!");
           }
@@ -117,7 +117,7 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
     }
   }, [isOpen]);
 
-  const generateMap = async (textContent) => {
+  const generateMap = async (textContent, pId = projId, dId = docId) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -129,8 +129,8 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
         body: JSON.stringify({ 
           topic_or_text: textContent,
           api_key: getEngineKey(),
-          project_id: projId,
-          document_id: docId
+          project_id: pId,
+          document_id: dId
         })
       });
       

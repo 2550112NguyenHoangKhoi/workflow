@@ -93,6 +93,30 @@ patch_database_schema(engine)
 # Create DB tables
 models.Base.metadata.create_all(bind=engine)
 
+
+def add_missing_columns(engine):
+    """create_all() never alters existing tables, so a column added to a model later is
+    missing from users' existing databases. Add any missing nullable/defaulted column."""
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        for table in models.Base.metadata.sorted_tables:
+            if table.name not in tables:
+                continue
+            have = {c["name"] for c in inspector.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in have or col.primary_key:
+                    continue
+                ddl = f'ALTER TABLE {table.name} ADD COLUMN {col.name} {col.type.compile(engine.dialect)}'
+                default = getattr(col.default, "arg", None)
+                if isinstance(default, (int, float)) and not isinstance(default, bool):
+                    ddl += f" DEFAULT {default}"
+                conn.execute(text(ddl))
+
+
+add_missing_columns(engine)
+
 # --- PyInstaller Runtime Bootstrap ---
 def setup_runtime_paths():
     if getattr(sys, "frozen", False):
@@ -200,7 +224,16 @@ class FlashcardList(BaseModel):
     flashcards: list[Flashcard]
 
 class LearningPathRequest(BaseModel):
-    topic: str
+    topic: str = ""
+    document_id: int | None = None
+    project_id: int | None = None
+    force: bool = False
+    subject: str | None = None
+    goal: str | None = None
+    deadline: str | None = None
+    hours_per_week: float | None = None
+    level: str | None = None
+    syllabus: str | None = None
 
 class ModuleTopic(BaseModel):
     title: str
@@ -260,6 +293,26 @@ class TopicRequest(BaseModel):
     document_id: int | None = None
     page_ranges: list[int] | None = None
     
+class RoadmapRequest(BaseModel):
+    """Roadmap generation. The optional fields are the learner's answers to the questions
+    returned with status "need_more_info"; `force` = build from the current sources anyway."""
+    topic_or_text: str = ""
+    api_key: str | None = None
+    force: bool = False
+    subject: str | None = None
+    goal: str | None = None
+    deadline: str | None = None
+    hours_per_week: float | None = None
+    level: str | None = None
+    syllabus: str | None = None
+
+    def extra(self) -> dict:
+        return {k: v for k, v in {
+            "subject": self.subject, "goal": self.goal, "deadline": self.deadline,
+            "hours_per_week": self.hours_per_week, "level": self.level, "syllabus": self.syllabus,
+            "force": self.force}.items() if v not in (None, "", False)}
+
+
 class ReviewRequest(BaseModel):
     id: int | None = None
     interval: int
@@ -488,36 +541,54 @@ async def get_project_roadmap(project_id: int, db: Session = Depends(get_db)):
     roadmap = crud.get_roadmap(db, project_id=project_id)
     if not roadmap:
         return {"items": []}
-    return {"items": [{"id": i.id, "step_number": i.step_number, "title": i.title, "description": i.description, "completed": i.completed, "active": i.active} for i in sorted(roadmap.items, key=lambda x: x.step_number)]}
+    return {"items": [{"id": i.id, "step_number": i.step_number, "title": i.title, "description": i.description, "completed": i.completed, "active": i.active, "due_date": i.due_date, "estimated_time": i.estimated_time, "needs_material": i.needs_material or 0} for i in sorted(roadmap.items, key=lambda x: x.step_number)]}
+
+async def _roadmap_or_questions(db, req, text_content: str, *, n_docs: int, subject_hint: str = "",
+                                project_id: int | None = None, document_id: int | None = None):
+    """Build and store a roadmap, or — when the sources don't cover the subject — return the
+    questions to ask instead (status "need_more_info"; nothing is stored)."""
+    from nlp.coverage import assess
+    from nlp.roadmap import generate_roadmap
+    extra = req.extra()
+    check = assess(text_content, subject=req.subject or "", n_docs=n_docs, extra=extra)
+    if not check["sufficient"]:
+        for q in check["questions"]:
+            if q["id"] == "subject" and not q.get("default"):
+                q["default"] = subject_hint
+        return {"status": "need_more_info", **check}
+    items = await generate_roadmap(text_content, api_key=get_api_key(req.api_key), extra=extra)
+    if project_id is not None:
+        crud.create_roadmap(db, project_id=project_id, items=items)
+    else:
+        for rm in db.query(models.Roadmap).filter(models.Roadmap.document_id == document_id).all():
+            db.delete(rm)
+        db.commit()
+        rm = models.Roadmap(document_id=document_id)
+        db.add(rm)
+        db.commit()
+        db.refresh(rm)
+        crud.add_roadmap_items(db, rm, items)
+    return {"status": "ok", "message": "Đã tạo giáo án", "caveats": check["reasons"], "steps": len(items)}
+
 
 @app.post("/api/projects/{project_id}/roadmap/generate")
-async def generate_project_roadmap(project_id: int, req: TopicRequest, db: Session = Depends(get_db)):
+async def generate_project_roadmap(project_id: int, req: RoadmapRequest, db: Session = Depends(get_db)):
     project = crud.get_project(db, project_id=project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    # 1. Gather all document texts
-    docs = crud.get_documents(db, project_id=project_id)
-    text_content = ""
-    for doc in docs:
-        if doc.content:
-            text_content += doc.content + "\n\n"
-    if not text_content.strip():
+    docs = [d for d in crud.get_documents(db, project_id=project_id) if (d.content or "").strip()]
+    text_content = "\n\n".join(d.content for d in docs)
+    if not text_content.strip() and not (req.syllabus or "").strip():
         raise HTTPException(status_code=422, detail="Dự án chưa có tài liệu nào có nội dung để lập giáo án.")
-
-    # 2. Call roadmap generator
-    from nlp.roadmap import generate_roadmap
-    items = await generate_roadmap(text_content, api_key=get_api_key(req.api_key))
-    
-    # 3. Save to DB
-    crud.create_roadmap(db, project_id=project_id, items=items)
-    return {"status": "ok", "message": "Đã tạo giáo án"}
+    return await _roadmap_or_questions(db, req, text_content, n_docs=len(docs),
+                                       subject_hint=project.name or "", project_id=project_id)
 
 @app.get("/api/documents/{document_id}/roadmap")
 async def get_document_roadmap(document_id: int, db: Session = Depends(get_db)):
     roadmap = db.query(models.Roadmap).filter(models.Roadmap.document_id == document_id).first()
     if not roadmap:
         return {"items": []}
-    return {"items": [{"id": i.id, "step_number": i.step_number, "title": i.title, "description": i.description, "completed": i.completed, "active": i.active} for i in sorted(roadmap.items, key=lambda x: x.step_number)]}
+    return {"items": [{"id": i.id, "step_number": i.step_number, "title": i.title, "description": i.description, "completed": i.completed, "active": i.active, "due_date": i.due_date, "estimated_time": i.estimated_time, "needs_material": i.needs_material or 0} for i in sorted(roadmap.items, key=lambda x: x.step_number)]}
 
 @app.patch("/api/roadmap/items/{item_id}")
 async def update_roadmap_item_endpoint(item_id: int, req: RoadmapItemUpdate, db: Session = Depends(get_db)):
@@ -534,35 +605,14 @@ async def update_roadmap_item_endpoint(item_id: int, req: RoadmapItemUpdate, db:
     }
 
 @app.post("/api/documents/{document_id}/roadmap/generate")
-async def generate_document_roadmap(document_id: int, req: TopicRequest, db: Session = Depends(get_db)):
+async def generate_document_roadmap(document_id: int, req: RoadmapRequest, db: Session = Depends(get_db)):
     doc = db.query(models.Document).filter(models.Document.id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu.")
-    if not (doc.content or "").strip():
+    if not (doc.content or "").strip() and not (req.syllabus or "").strip():
         raise HTTPException(status_code=422, detail="Tài liệu chưa có nội dung văn bản để lập giáo án.")
-    from nlp.roadmap import generate_roadmap
-    items = await generate_roadmap(doc.content, api_key=get_api_key(req.api_key))
-    
-    old_roadmaps = db.query(models.Roadmap).filter(models.Roadmap.document_id == document_id).all()
-    for rm in old_roadmaps:
-        db.query(models.RoadmapItem).filter(models.RoadmapItem.roadmap_id == rm.id).delete()
-        db.delete(rm)
-    db.commit()
-    
-    db_roadmap = models.Roadmap(document_id=document_id)
-    db.add(db_roadmap)
-    db.commit()
-    db.refresh(db_roadmap)
-    for i, item in enumerate(items):
-        db_item = models.RoadmapItem(
-            roadmap_id=db_roadmap.id,
-            step_number=i + 1,
-            title=item.get("title", ""),
-            description=item.get("description", "")
-        )
-        db.add(db_item)
-    db.commit()
-    return {"status": "ok", "message": "Đã tạo giáo án cho tài liệu"}
+    return await _roadmap_or_questions(db, req, doc.content or "", n_docs=1,
+                                       subject_hint=os.path.splitext(doc.filename or "")[0].replace("_", " "), document_id=document_id)
 
 @app.get("/api/documents/{document_id}/members")
 def get_document_members(document_id: int, db: Session = Depends(get_db)):
@@ -1269,6 +1319,7 @@ async def get_document(document_id: int, db: Session = Depends(get_db)):
         "id": doc.id,
         "filename": doc.filename,
         "kind": doc.kind,
+        "project_id": doc.project_id,
         "page_count": doc.page_count or len(pages),
         "content": doc.content,
         "pages": pages,
@@ -1320,20 +1371,65 @@ async def remove_document(document_id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/generate_path")
 async def generate_path(request: LearningPathRequest, x_api_key: str | None = Header(default=None), db: Session = Depends(get_db)):
+    """Study plan (modules → topics) for the open document / project. It used to receive only
+    the file name and, offline, returned a generic "What is X? / History and Evolution"
+    template for any subject. Now it plans from the sources, and asks for more information
+    (status "need_more_info") when they don't cover the subject."""
+    from nlp.coverage import assess
+    from nlp.roadmap import offline_roadmap, apply_extra, _extra_prompt
+    extra = RoadmapRequest(**{k: getattr(request, k) for k in
+                              ("force", "subject", "goal", "deadline", "hours_per_week", "level", "syllabus")}).extra()
+    docs = []
+    if request.project_id:
+        docs = [d for d in crud.get_documents(db, project_id=request.project_id) if (d.content or "").strip()]
+    elif request.document_id:
+        d = db.query(models.Document).filter(models.Document.id == request.document_id).first()
+        docs = [d] if d and (d.content or "").strip() else []
+    text_content = "\n\n".join(d.content for d in docs)
+    subject_hint = request.subject or request.topic.split(" - ")[0].strip()
+    check = assess(text_content, subject=request.subject or "", n_docs=len(docs), extra=extra)
+    if not check["sufficient"]:
+        for q in check["questions"]:
+            if q["id"] == "subject" and not q.get("default"):
+                q["default"] = subject_hint
+        return {"status": "need_more_info", **check}
+
     current_key = get_api_key(x_api_key)
     if current_key:
         try:
             config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite",
                                       response_schema=LearningPathSchema, capabilities=FAST_CAPS)
-            prompt = f"Create a comprehensive, step-by-step learning path for the topic: '{request.topic}'. Break it down into logical modules, and each module should have specific topics with descriptions and estimated study times."
+            prompt = (f"Create a step-by-step learning path for: '{request.subject or request.topic}'. "
+                      "Base it on the learner's material below; break it into logical modules, each with "
+                      "specific topics, descriptions and estimated study times. Answer in the material's language."
+                      + _extra_prompt(extra) + f"\n\nMaterial:\n{text_content[:12000]}")
             data = await agent_run(config, prompt, structured=True, timeout=40)
             if data and data.get("modules"):
-                return data
+                return {"status": "ok", "caveats": check["reasons"], **data}
         except Exception as e:
             print(f"Error generating learning path, falling back to offline: {e}")
 
-    from nlp.concept_map import generate_offline_learning_path
-    return generate_offline_learning_path(request.topic, db=db)
+    steps = offline_roadmap(text_content, extra)
+    from nlp.vietnamese import is_vietnamese
+    vn = is_vietnamese(text_content or (extra.get("syllabus") or "")) or not text_content
+    size = max(2, -(-len(steps) // 3))
+    modules = []
+    for k in range(0, len(steps), size):
+        chunk = steps[k:k + size]
+        modules.append({
+            "title": (f"Giai đoạn {len(modules) + 1}: " if vn else f"Module {len(modules) + 1}: ") + chunk[0]["title"],
+            "topics": [{"title": st["title"], "description": st.get("description", ""),
+                        "estimated_time": st.get("estimated_time") or ("45 phút" if vn else "45 mins"),
+                        **({"due_date": st["due_date"]} if st.get("due_date") else {}),
+                        **({"needs_material": 1} if st.get("needs_material") else {})} for st in chunk],
+        })
+    name = request.subject or subject_hint or ("Môn học" if vn else "Course")
+    return {"status": "ok", "caveats": check["reasons"],
+            "title": (f"Lộ trình: {name}" if vn else f"Learning path: {name}"),
+            "description": ("Lập từ tài liệu bạn đã tải lên" if vn else "Planned from your uploaded sources")
+                           + (" và đề cương bạn cung cấp." if vn and extra.get("syllabus") else "."),
+            "modules": modules}
+
 
 import json
 from ddgs import DDGS
@@ -1704,6 +1800,102 @@ async def generate_concept_map_endpoint(request: TopicRequest, db: Session = Dep
             print(f"[map] AI failed, falling back to offline: {e}")
     from nlp.concept_map import generate_concept_map
     return generate_concept_map(request.topic_or_text)
+
+
+class MindMapRequest(BaseModel):
+    document_id: int | None = None
+    project_id: int | None = None
+    api_key: str | None = None
+    scope: str = "auto"   # auto | document | subject
+
+
+class MindMapNodeSchema(BaseModel):
+    id: str
+    label: str
+    parent: str | None = None
+    definition: str = ""
+
+
+class MindMapLinkSchema(BaseModel):
+    source: str
+    target: str
+    label: str = ""
+
+
+class MindMapSchema(BaseModel):
+    title: str
+    nodes: list[MindMapNodeSchema]
+    links: list[MindMapLinkSchema] = []
+
+
+@app.post("/api/mindmap")
+async def generate_mindmap_endpoint(req: MindMapRequest, db: Session = Depends(get_db)):
+    """Mind map of one document (its sections → subsections → key concepts) or, when the
+    sources cover a whole subject (several documents, or one book with several chapters), of
+    the subject: one branch per topic plus links between topics that share concepts."""
+    from nlp.mindmap import build_mindmap
+    if req.project_id:
+        project = crud.get_project(db, req.project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        docs = [d for d in crud.get_documents(db, project_id=req.project_id) if (d.content or "").strip()]
+        subject = project.name or ""
+    elif req.document_id:
+        d = db.query(models.Document).filter(models.Document.id == req.document_id).first()
+        if not d:
+            raise HTTPException(status_code=404, detail="Document not found")
+        docs, subject = ([d] if (d.content or "").strip() else []), ""
+    else:
+        raise HTTPException(status_code=422, detail="Cần document_id hoặc project_id.")
+    if not docs:
+        raise HTTPException(status_code=422, detail="Chưa có tài liệu có nội dung để vẽ sơ đồ.")
+
+    def pages_of(d):
+        try:
+            return json.loads(d.pages_data) if d.pages_data else None
+        except Exception:
+            return None
+    sources = [{"title": d.filename, "text": d.content, "doc_id": d.id, "pages": pages_of(d)} for d in docs]
+    offline = build_mindmap(sources, subject=subject, scope=req.scope)
+
+    current_key = get_api_key(req.api_key)
+    if current_key:
+        try:
+            outline = "\n".join(("  " * n["depth"]) + "- " + n["label"] for n in offline["nodes"])
+            kind = ("a subject-level mind map: the subject at the centre, one branch per topic/chapter, "
+                    "and links between topics that are related (label = how)" if offline["mode"] == "subject"
+                    else "a mind map of this one document: its title at the centre, main sections as branches, "
+                         "sub-ideas and key concepts as leaves")
+            prompt = (f"Build {kind}. Use the outline extracted from the sources as the skeleton; fix bad "
+                      "labels, keep the source language, give each node a one-sentence definition from the text. "
+                      "Return nodes with id, label, parent (null for the root) and definition, and links "
+                      f"(source, target, label).\n\nOutline:\n{outline[:4000]}\n\nSources:\n"
+                      + "\n\n".join(d.content[:6000] for d in docs)[:20000])
+            config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite",
+                                      response_schema=MindMapSchema, capabilities=FAST_CAPS)
+            data = await agent_run(config, prompt, structured=True, timeout=45)
+            nodes = (data or {}).get("nodes") or []
+            ids = {n["id"] for n in nodes}
+            roots = [n for n in nodes if not n.get("parent") or n["parent"] not in ids]
+            if len(nodes) >= 3 and len(roots) == 1:
+                depth = {}
+                def dep(n, seen=()):
+                    if n["id"] in depth:
+                        return depth[n["id"]]
+                    p = next((m for m in nodes if m["id"] == n.get("parent")), None)
+                    depth[n["id"]] = 0 if p is None or p["id"] in seen else dep(p, seen + (n["id"],)) + 1
+                    return depth[n["id"]]
+                for n in nodes:
+                    n["depth"] = dep(n)
+                    n["kind"] = "root" if n["depth"] == 0 else ("topic" if offline["mode"] == "subject" and n["depth"] == 1 else "section" if n["depth"] == 1 else "concept")
+                    if n is roots[0]:
+                        n["parent"] = None
+                links = [l for l in (data.get("links") or []) if l["source"] in ids and l["target"] in ids]
+                return {"mode": offline["mode"], "title": data.get("title") or offline["title"],
+                        "nodes": nodes, "links": links, "hint": offline.get("hint", ""), "engine": "ai"}
+        except Exception as e:
+            print(f"[mindmap] AI failed, falling back to offline: {e}")
+    return {**offline, "engine": "offline"}
 
 
 @app.post("/api/suggestions")

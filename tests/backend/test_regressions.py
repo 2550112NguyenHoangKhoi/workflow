@@ -1,4 +1,5 @@
 """Regression tests for the bugs fixed in the 2026-11 audit (see AUDIT.md)."""
+import json
 import datetime
 import os
 import runpy
@@ -115,7 +116,11 @@ def test_unreadable_uploads_are_rejected(client):
 
 
 def test_offline_roadmap_is_built_from_the_document(client, doc):
-    assert client.post(f"/api/documents/{doc['id']}/roadmap/generate", json={"topic_or_text": "g", **OFFLINE}).status_code == 200
+    # Four sentences are too little to plan from: it asks first; "use what I have" builds it.
+    first = client.post(f"/api/documents/{doc['id']}/roadmap/generate", json={"topic_or_text": "g", **OFFLINE}).json()
+    assert first["status"] == "need_more_info"
+    assert client.post(f"/api/documents/{doc['id']}/roadmap/generate",
+                       json={"topic_or_text": "g", "force": True, **OFFLINE}).json()["status"] == "ok"
     titles = [i["title"] for i in client.get(f"/api/documents/{doc['id']}/roadmap").json()["items"]]
     assert len(titles) >= 3 and any("Photosynthesis" in t for t in titles)
     empty = client.post("/api/documents/upload", files={"file": ("e.txt", b"   ")}).json()["id"]
@@ -396,3 +401,74 @@ def test_exam_from_library_sources_links_the_document(client):
                      "sources": [{"type": "document", "value": str(d["id"])}], **OFFLINE}).json()
     art = client.get(f"/api/artifacts/{ex['id']}").json()
     assert art.get("document_id") == d["id"]
+
+
+CHAPTER2 = "Chapter 2\nAUTOMATA THEORY\n" + "\n".join(
+    f"2.{i} {name}\n" + " ".join(f"The {name.lower()} topic is studied with worked example number {k} and an exercise."
+                                for k in range(12))
+    for i, name in enumerate(["Overview", "Regular Expressions", "Finite Automata", "Minimization"], 1)) + \
+    "\nReferences: Chapter 1,2,4 [2nd ed., Cambridge University Press 2004]\nChapter 15 Third Edition, Springer (2012)."
+
+
+def test_roadmap_asks_for_more_info_when_sources_cover_one_chapter(client):
+    """A single chapter (or a thin handout) is not enough to plan a subject: the generator
+    returns questions instead of a roadmap, then uses the answers (dates, syllabus gaps)."""
+    from nlp.coverage import assess, chapters_in
+    assert chapters_in(CHAPTER2) == [2]          # bibliography lines are not chapters
+    assert assess(CHAPTER2)["reasons"][0]["code"] == "single_chapter"
+    assert assess("Too short.")["sufficient"] is False
+
+    r = client.post("/api/documents/upload", files={"file": ("ch2.txt", CHAPTER2.encode(), "text/plain")})
+    did = r.json()["id"]
+    body = client.post(f"/api/documents/{did}/roadmap/generate", json=OFFLINE).json()
+    assert body["status"] == "need_more_info"
+    assert {q["id"] for q in body["questions"]} >= {"subject", "goal", "deadline", "syllabus"}
+    assert client.get(f"/api/documents/{did}/roadmap").json()["items"] == []   # nothing stored
+
+    answers = {"goal": "Thi cuối kỳ", "deadline": "2099-01-31", "hours_per_week": 6,
+               "syllabus": "Chương 1. Sets and logic\nChương 2. Finite automata\nChương 3. Turing machines"}
+    body = client.post(f"/api/documents/{did}/roadmap/generate", json={**OFFLINE, **answers}).json()
+    assert body["status"] == "ok"
+    items = client.get(f"/api/documents/{did}/roadmap").json()["items"]
+    titles = [i["title"] for i in items]
+    assert "Chương 2. Finite automata" in titles and "Làm đề thi thử" in titles
+    assert all(i["due_date"] for i in items) and items[-1]["due_date"] < "2099-01-31"
+    missing = {i["title"] for i in items if i["needs_material"]}
+    assert "Chương 3. Turing machines" in missing and "Chương 2. Finite automata" not in missing
+
+    forced = client.post(f"/api/documents/{did}/roadmap/generate", json={**OFFLINE, "force": True}).json()
+    assert forced["status"] == "ok" and forced["caveats"]
+
+    # The "Roadmap" study plan used to plan from the file name alone (a generic template).
+    path = client.post("/api/generate_path", json={"topic": "ch2", "document_id": did}).json()
+    assert path["status"] == "need_more_info"
+    path = client.post("/api/generate_path", json={"topic": "ch2", "document_id": did, "force": True}).json()
+    assert "History and Evolution" not in json.dumps(path)
+    assert any("Finite Automata" in t["title"] for m in path["modules"] for t in m["topics"])
+
+
+def test_mindmap_for_a_document_and_for_a_subject(client):
+    # One document → its sections are the branches.
+    did = client.post("/api/documents/upload", files={"file": ("ch2.txt", CHAPTER2.encode(), "text/plain")}).json()["id"]
+    m = client.post("/api/mindmap", json={"document_id": did, **OFFLINE}).json()
+    assert m["mode"] == "document" and m["hint"]
+    root = [n for n in m["nodes"] if n["parent"] is None]
+    assert len(root) == 1 and root[0]["label"] == "Automata Theory"
+    branches = [n["label"] for n in m["nodes"] if n["parent"] == root[0]["id"]]
+    assert branches == ["2.1 Overview", "2.2 Regular Expressions", "2.3 Finite Automata", "2.4 Minimization"]
+
+    # A project with several chapters → the subject at the centre, one branch per topic,
+    # and cross-links between topics sharing concepts.
+    pid = client.post("/api/projects", json={"name": "Automata"}).json()["id"]
+    ch3 = ("Chapter 3\nPUSHDOWN AUTOMATA\n3.1 Grammars\n" + "A context-free grammar generates a language from productions. " * 8 +
+           "\n3.2 Pushdown automata\n" + "A pushdown automaton is a finite automaton with a stack that accepts a language. " * 8 +
+           "\n3.3 Regular Expressions\n" + "Every regular expression describes a regular language accepted by a finite automaton. " * 6)
+    for name, text in [("ch2.txt", CHAPTER2), ("ch3.txt", ch3)]:
+        client.post("/api/documents/upload", files={"file": (name, text.encode(), "text/plain")}, data={"project_id": pid})
+    m = client.post("/api/mindmap", json={"project_id": pid, **OFFLINE}).json()
+    assert m["mode"] == "subject" and m["title"] == "Automata"
+    topics = [n for n in m["nodes"] if n["kind"] == "topic"]
+    assert [t["label"] for t in topics] == ["Automata Theory", "Pushdown Automata"]
+    assert m["links"] and {m["links"][0]["source"], m["links"][0]["target"]} == {t["id"] for t in topics}
+    ids = {n["id"] for n in m["nodes"]}
+    assert all(n["parent"] in ids for n in m["nodes"] if n["parent"])

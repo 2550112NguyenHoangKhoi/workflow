@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import StudioSidebar from './StudioSidebar';
@@ -18,6 +18,24 @@ const AppLayout = () => {
   const projectMatch = location.pathname.match(/^\/project\/(\d+)/);
   const teamProjectId = projectMatch ? projectMatch[1] : null;
   const [selectedPersona, setSelectedPersona] = useState('Gia sư thân thiện');
+  // The Studio panel can collapse to a rail so a document gets the width. Default: collapsed
+  // on screens too narrow for sidebar + document + chat + Studio side by side.
+  const [studioCollapsed, setStudioCollapsed] = useState(() => {
+    try {
+      const v = localStorage.getItem('workflow_studio_collapsed');
+      if (v === '1' || v === '0') return v === '1';
+    } catch { /* storage off */ }
+    return typeof window !== 'undefined' && window.innerWidth < 1600;
+  });
+  const toggleStudio = () => setStudioCollapsed(c => {
+    try { localStorage.setItem('workflow_studio_collapsed', c ? '0' : '1'); } catch { /* storage off */ }
+    return !c;
+  });
+  useEffect(() => {
+    const open = () => { setStudioCollapsed(false); };
+    window.addEventListener('studio-open', open);
+    return () => window.removeEventListener('studio-open', open);
+  }, []);
 
   return (
     <div className="app-container" style={{ position: 'relative' }}>
@@ -25,12 +43,12 @@ const AppLayout = () => {
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
         <Topbar />
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <div className="main-content" style={{ flex: 1, overflowY: 'auto' }}>
+          <div className="main-content" style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
             <main className="content-area animate-fade-in" style={{ padding: '0', display: 'flex', flexDirection: 'column', height: '100%' }}>
               <Outlet context={{ selectedPersona }} />
             </main>
           </div>
-          {isDocumentView ? <ProjectStudioSidebar selectedPersona={selectedPersona} setSelectedPersona={setSelectedPersona} /> : (showStudio && <StudioSidebar />)}
+          {isDocumentView ? <ProjectStudioSidebar selectedPersona={selectedPersona} setSelectedPersona={setSelectedPersona} collapsed={studioCollapsed} onToggle={toggleStudio} /> : (showStudio && <StudioSidebar />)}
         </div>
       </div>
       

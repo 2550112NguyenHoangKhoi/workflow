@@ -3,6 +3,7 @@ import { X, Calendar, Loader2, Clock, BookOpen } from 'lucide-react';
 import { getEngineKey } from '../../utils/engine';
 import { buildStudyPlanIcs, downloadIcs, durationToDays } from '../../utils/ics';
 import { useEscape } from '../../utils/useEscape';
+import NeedMoreInfo from '../NeedMoreInfo';
 
 const StudyPlanModal = ({ isOpen, onClose }) => {
   useEscape(isOpen, onClose);
@@ -10,6 +11,7 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeDoc, setActiveDoc] = useState(null);
+  const [questions, setQuestions] = useState(null);
 
   const [duration, setDuration] = useState('14 ngày');
   const [targetLevel, setTargetLevel] = useState('Thành thạo');
@@ -18,10 +20,11 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
     if (!isOpen) {
       setPathData(null);
       setError(null);
+      setQuestions(null);
     }
   }, [isOpen]);
 
-  const generatePath = async () => {
+  const generatePath = async (answers = {}) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -60,22 +63,35 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
       const topicName = latestDoc.filename ? latestDoc.filename.replace(/\.[^/.]+$/, "") : "General Topic";
       
       // 2. Generate Path
+      const days = durationToDays(duration);
+      const deadline = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
       const res = await fetch('http://127.0.0.1:8000/api/generate_path', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'x-api-key': getEngineKey()
         },
-        body: JSON.stringify({ 
-          topic: `${topicName} - Thời lượng: ${duration}, Mục tiêu: ${targetLevel}`
+        // The plan is built from the sources (document or whole project), not from the file name.
+        body: JSON.stringify({
+          topic: topicName,
+          document_id: projId ? null : latestDoc.id,
+          project_id: projId,
+          deadline, goal: targetLevel,
+          ...answers,
         })
       });
-      
+
       if (!res.ok) throw new Error("Failed to generate study plan");
-      
+
       const data = await res.json();
-      setPathData(data);
-      
+      if (data.status === 'need_more_info') {
+        setQuestions(data);
+        setPathData(null);
+      } else {
+        setQuestions(null);
+        setPathData(data);
+      }
+
     } catch (err) {
       setError(err.message);
     } finally {
@@ -124,6 +140,10 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
             </div>
           ) : error ? (
             <div style={{ color: 'red', textAlign: 'center', fontWeight: 600 }}>{error}</div>
+          ) : questions ? (
+            <NeedMoreInfo assessment={questions} busy={isLoading}
+              onSubmit={(answers) => generatePath(answers)}
+              onForce={() => generatePath({ force: true })} />
           ) : !pathData ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '400px', margin: '0 auto', backgroundColor: 'var(--bg-tertiary)', padding: '32px', borderRadius: '16px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)' }}>
               <h3 style={{ fontSize: '1.25rem', color: 'var(--text-navy)', textAlign: 'center', margin: 0 }}>Quick Check-in</h3>
@@ -145,7 +165,7 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
                 <option value="Ôn thi cấp tốc">Ôn thi cấp tốc</option>
               </select>
 
-              <button onClick={generatePath} style={{ marginTop: '16px', backgroundColor: 'var(--brand-primary)', color: 'white', padding: '12px', borderRadius: '8px', border: 'none', fontWeight: 600, cursor: 'pointer' }}>
+              <button onClick={() => generatePath()} style={{ marginTop: '16px', backgroundColor: 'var(--brand-primary)', color: 'white', padding: '12px', borderRadius: '8px', border: 'none', fontWeight: 600, cursor: 'pointer' }}>
                 Tạo lộ trình học tập
               </button>
             </div>
@@ -183,7 +203,9 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#D97706', fontWeight: 600, backgroundColor: 'var(--accent-amber-bg)', padding: '4px 8px', borderRadius: '12px', width: 'fit-content' }}>
                             <Clock size={12} />
                             {topic.estimated_time}
+                            {topic.due_date && <span style={{ marginLeft: 6 }}>· 📅 {new Date(topic.due_date + 'T00:00:00').toLocaleDateString('vi-VN')}</span>}
                           </div>
+                          {topic.needs_material ? <div style={{ marginTop: 6, fontSize: '0.72rem', fontWeight: 700, color: '#B91C1C' }}>Thiếu tài liệu cho phần này</div> : null}
                         </div>
                       </div>
                     ))}

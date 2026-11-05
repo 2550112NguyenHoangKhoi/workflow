@@ -42,6 +42,9 @@ class RoadmapItem(Base):
     description = Column(String, nullable=True)
     completed = Column(Integer, default=0) # 0 or 1 for boolean
     active = Column(Integer, default=0) # 0 or 1 for boolean
+    due_date = Column(String, nullable=True)      # ISO date when a deadline was given
+    estimated_time = Column(String, nullable=True)
+    needs_material = Column(Integer, default=0)   # 1 = syllabus topic with no uploaded source yet
 
     roadmap = relationship("Roadmap", back_populates="items")
 

@@ -27,7 +27,9 @@ e=r.json(); show("exam",r,dt,"\n".join(f"- [{x['type']}] {x['question'][:160]} |
 r,dt=post("/api/examdocs/generate",{"title":"Ôn thi automata","sources":[{"type":"document","value":str(did)}],"api_key":OFF}); show("exam study doc",r,dt,n=1200)
 for ep in ("generate_study_plan","generate_exam_prep"):
     r,dt=post(f"/api/{ep}",{"topic_or_text":"","document_id":did,"api_key":OFF}); show(ep,r,dt,n=1000)
-r,dt=post(f"/api/documents/{did}/roadmap/generate",{"topic_or_text":"","api_key":OFF}); r2,_=get(f"/api/documents/{did}/roadmap"); show("roadmap",r,dt,r2.text,1500)
+r,dt=post(f"/api/documents/{did}/roadmap/generate",{"topic_or_text":"","api_key":OFF}); show("roadmap check",r,dt,r.text,800)
+r,dt=post(f"/api/documents/{did}/roadmap/generate",{"topic_or_text":"","api_key":OFF,"force":True}); r2,_=get(f"/api/documents/{did}/roadmap"); show("roadmap",r,dt,r2.text,1500)
+r,dt=post("/api/mindmap",{"document_id":did,"api_key":OFF}); show("mind map",r,dt,"\n".join("  "*n["depth"]+n["label"] for n in r.json().get("nodes",[])) if r.ok else r.text,2500)
 r,dt=post("/api/score_difficulty",{"topic_or_text":d["content"][:20000],"api_key":OFF}); show("difficulty",r,dt,n=300)
 r,dt=post("/api/teachback/start",{"topic":"Deterministic finite automaton","document_id":did,"api_key":OFF}); tb=r.json(); show("teachback start",r,dt,n=600)
 expl="A deterministic finite automaton has a finite set of states, an input alphabet, a transition function that gives exactly one next state for each state and symbol, a start state and a set of accepting states. It reads a string symbol by symbol and accepts it if it ends in an accepting state."

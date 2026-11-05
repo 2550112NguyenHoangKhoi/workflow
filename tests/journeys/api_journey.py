@@ -110,6 +110,9 @@ for ep in ("generate_study_plan", "generate_exam_prep"):
 
 # ---------- Roadmap ----------
 r = post(f"/api/documents/{did}/roadmap/generate", {"topic_or_text": "", "api_key": OFF})
+if r.ok and r.json().get("status") == "need_more_info":  # thin source: answer the questions
+    check(any(q["id"] == "syllabus" for q in r.json()["questions"]), "thin source → asks for more info")
+    r = post(f"/api/documents/{did}/roadmap/generate", {"topic_or_text": "", "api_key": OFF, "goal": "Thi cuối kỳ", "deadline": "2099-01-01"})
 rm = j(get(f"/api/documents/{did}/roadmap"))
 steps = rm.get("items") or rm.get("roadmap") or rm if isinstance(rm, list) else (rm.get("items") or rm.get("roadmap") or [])
 check(r.ok and len(steps) >= 3, "document roadmap generated (≥3 steps)", str(rm)[:300])
@@ -117,7 +120,7 @@ proj = j(post("/api/projects", {"name": "Sinh học 10"}))
 pid = proj.get("id")
 with open(sys.argv[1], "rb") as f:
     requests.post(B + "/api/documents/upload", data={"project_id": str(pid)}, files={"file": ("bio2.pdf", f, "application/pdf")}, timeout=120)
-r = post(f"/api/projects/{pid}/roadmap/generate", {"topic_or_text": "Photosynthesis and respiration", "project_id": pid, "api_key": OFF})
+r = post(f"/api/projects/{pid}/roadmap/generate", {"topic_or_text": "Photosynthesis and respiration", "project_id": pid, "api_key": OFF, "force": True})
 check(r.ok, "project roadmap generated", r.text[:200])
 
 # ---------- Teach-back (omilearn: active learning / Feynman) ----------

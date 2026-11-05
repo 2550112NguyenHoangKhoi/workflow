@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useOutletContext } from 'react-router-dom';
-import { Users, ArrowRight, BrainCircuit, FileText, Sparkles } from 'lucide-react';
+import { Users, ArrowRight, BrainCircuit, FileText, Sparkles, PanelRightClose, PanelRightOpen, ExternalLink } from 'lucide-react';
 import PdfViewer from '../components/PdfViewer';
 import ProjectCollaborationModal from '../components/modals/ProjectCollaborationModal';
 import CreateExamModal from '../components/modals/CreateExamModal';
@@ -42,6 +42,21 @@ const DocumentViewer = () => {
   // 'omiguide' = persona-driven tutor; 'main' = plain AI chat (no persona prompt).
   const [chatMode, setChatMode] = useState('omiguide');
   const threadEndRef = useRef(null);
+  // Chat column: resizable (drag the divider) and collapsible so the source can use the
+  // whole width. It used to be a fixed 450px, which left a PDF ~90px wide on a laptop.
+  const readNum = (k, d) => { try { const v = Number(localStorage.getItem(k)); return v > 0 ? v : d; } catch { return d; } };
+  const [chatWidth, setChatWidth] = useState(() => readNum('workflow_chat_width', 380));
+  const [chatHidden, setChatHidden] = useState(() => { try { return localStorage.getItem('workflow_chat_hidden') === '1'; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem('workflow_chat_width', String(chatWidth)); localStorage.setItem('workflow_chat_hidden', chatHidden ? '1' : '0'); } catch { /* storage off */ } }, [chatWidth, chatHidden]);
+  const startResize = (e) => {
+    e.preventDefault();
+    const startX = e.clientX, startW = chatWidth;
+    const move = (ev) => setChatWidth(Math.min(720, Math.max(300, startW - (ev.clientX - startX))));
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); document.body.style.cursor = ''; };
+    document.body.style.cursor = 'col-resize';
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
 
   // Fetch documents with filtering if project route
   useEffect(() => {
@@ -185,6 +200,24 @@ const DocumentViewer = () => {
     }
   };
 
+  // A page jump requested before navigating here (mind map node in another document).
+  const pendingPage = (docId) => {
+    try {
+      const g = JSON.parse(sessionStorage.getItem('pdf_goto') || 'null');
+      if (g && Number(g.docId) === Number(docId)) { sessionStorage.removeItem('pdf_goto'); return g.page; }
+    } catch { /* storage off */ }
+    return undefined;
+  };
+
+  // "Hỏi AI về mục này" from the mind map (and text selected in the PDF) lands in this chat.
+  const sendRef = useRef(null);
+  sendRef.current = sendMessage;
+  useEffect(() => {
+    const onAsk = (e) => { if (e.detail?.text) { setChatHidden(false); sendRef.current(e.detail.text); } };
+    window.addEventListener('chat-ask', onAsk);
+    return () => window.removeEventListener('chat-ask', onAsk);
+  }, []);
+
   // Quiz/flashcard pills open the real generators; the others are chat prompts.
   // Sources the chat actually uses: the whole project on a project page; otherwise the
   // selected document plus its project's other documents (it used to count the whole library).
@@ -205,18 +238,18 @@ const DocumentViewer = () => {
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: 'var(--surface-blush)', padding: '0' }}>
 
       {/* Header */}
-      <div style={{ padding: '32px 48px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div style={{ padding: '14px 24px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--brand-primary)', fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.05em', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--brand-primary)', fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.05em', marginBottom: '4px' }}>
             <span style={{ fontSize: '1rem' }}>✧</span> THƯ VIỆN CÁ NHÂN
           </div>
-          <h2 style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <h2 style={{ fontSize: '1.35rem', fontWeight: 900, color: 'var(--text-navy)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', wordBreak: 'break-word' }}>
             {activeDoc ? activeDoc.filename : "Thư viện trống"}
             {documents.length > 0 && (
               <select
                 value={activeDocId || ''}
                 onChange={(e) => { setActiveDocId(Number(e.target.value)); setMessages([]); }}
-                style={{ fontSize: '1rem', padding: '4px 8px', borderRadius: '8px', border: '1px solid var(--border-medium)', color: 'var(--text-navy)', fontWeight: 600, outline: 'none' }}
+                style={{ fontSize: '0.85rem', padding: '4px 8px', borderRadius: '8px', border: '1px solid var(--border-medium)', color: 'var(--text-navy)', backgroundColor: 'var(--bg-tertiary)', fontWeight: 600, outline: 'none', maxWidth: '260px' }}
               >
                 {documents.map(d => (
                   <option key={d.id} value={d.id}>{d.filename}</option>
@@ -259,7 +292,7 @@ const DocumentViewer = () => {
       {/* Main Content Area: Split View */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {(!isProjectRoute || activeDoc) && (
-            <div style={{ flex: 1, borderRight: '1px solid var(--border-medium)', overflowY: 'auto', padding: '24px 48px', backgroundColor: 'var(--bg-primary)' }}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '0 12px 12px', backgroundColor: 'var(--bg-primary)', overflow: 'hidden' }}>
               {!activeDoc ? (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
@@ -268,27 +301,31 @@ const DocumentViewer = () => {
                   </div>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--brand-primary)', marginBottom: '12px' }}>
-                    <FileText size={14} /> NGUỒN · {activeDoc.filename}
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 4px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--brand-primary)', minWidth: 0, flex: '1 1 160px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                      <FileText size={14} style={{ flexShrink: 0 }} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>NGUỒN · {activeDoc.filename}</span>
+                    </div>
+                    {activeDoc.has_file && (
+                      <a href={`http://127.0.0.1:8000/api/documents/${activeDoc.id}/file`} target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                        <ExternalLink size={13} /> Mở tab mới
+                      </a>
+                    )}
+                    <button onClick={() => setIsExamModalOpen(true)} style={{ backgroundColor: 'var(--brand-primary)', color: 'white', border: 'none', padding: '6px 14px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      <Sparkles size={14} /> Tạo đề thi ngay
+                    </button>
+                    {chatHidden && (
+                      <button onClick={() => setChatHidden(false)} title="Hiện khung chat" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-navy)', border: '1px solid var(--border-medium)', padding: '5px 10px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        <PanelRightOpen size={14} /> Chat
+                      </button>
+                    )}
                   </div>
                   {activeDoc.has_file && activeDoc.filename.toLowerCase().endsWith('.pdf') ? (
-                    <div style={{ flex: 1, position: 'relative', minHeight: '600px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '16px', border: '1px solid var(--border-medium)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ padding: '8px 16px', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-medium)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>PDF Viewer</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginLeft: 'auto' }}>
-                          <a href={`http://127.0.0.1:8000/api/documents/${activeDoc.id}/file`} target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
-                            Mở trong tab mới ↗
-                          </a>
-                          <button onClick={() => setIsExamModalOpen(true)} style={{ backgroundColor: 'var(--brand-primary)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '20px', fontSize: '0.875rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
-                            <Sparkles size={16} /> Tạo đề thi ngay
-                          </button>
-                        </div>
-                      </div>
-                      <PdfViewer url={`http://127.0.0.1:8000/api/documents/${activeDoc.id}/file`} />
+                    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', borderRadius: '12px', border: '1px solid var(--border-medium)', overflow: 'hidden' }}>
+                      <PdfViewer url={`http://127.0.0.1:8000/api/documents/${activeDoc.id}/file`} docId={activeDoc.id} initialPage={pendingPage(activeDoc.id)} />
                     </div>
                   ) : (
-                    <div className="markdown-body" style={{ flex: 1, backgroundColor: 'var(--bg-tertiary)', padding: '32px', borderRadius: '16px', border: '1px solid var(--border-medium)' }}>
+                    <div className="markdown-body" style={{ flex: 1, minHeight: 0, overflowY: 'auto', backgroundColor: 'var(--bg-tertiary)', padding: '24px 32px', borderRadius: '12px', border: '1px solid var(--border-medium)' }}>
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
                         rehypePlugins={[rehypeKatex]}
@@ -297,17 +334,21 @@ const DocumentViewer = () => {
                       </ReactMarkdown>
                     </div>
                   )}
-                </div>
+                </>
               )}
             </div>
           )}
+          {(!isProjectRoute || activeDoc) && !chatHidden && (
+            <div onMouseDown={startResize} role="separator" aria-orientation="vertical" title="Kéo để đổi độ rộng khung chat"
+              style={{ width: '6px', cursor: 'col-resize', flexShrink: 0, backgroundColor: 'var(--border-light)', borderLeft: '1px solid var(--border-medium)' }} />
+          )}
         {/* Right Pane / Full Chat */}
-        <div style={{ width: (isProjectRoute && !activeDoc) ? '100%' : '450px', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--surface-plain)', position: 'relative' }}>
+        <div style={{ width: (isProjectRoute && !activeDoc) ? '100%' : `${chatWidth}px`, flexShrink: 0, display: (chatHidden && !(isProjectRoute && !activeDoc)) ? 'none' : 'flex', flexDirection: 'column', backgroundColor: 'var(--surface-plain)', position: 'relative' }}>
           
           {/* Chat Panel */}
           <>
               {/* Chat mode toggle — Chat chính (plain AI) vs Gia sư (persona tutor) */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 24px 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', padding: '12px 16px 0' }}>
                 <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--surface-grey)', padding: '4px', borderRadius: '24px' }}>
                   {[['main', 'Chat chính'], ['omiguide', 'Gia sư AI']].map(([mode, label]) => (
                     <button key={mode} onClick={() => setChatMode(mode)} style={{
@@ -319,6 +360,11 @@ const DocumentViewer = () => {
                     }}>{label}</button>
                   ))}
                 </div>
+                {activeDoc && (
+                  <button onClick={() => setChatHidden(true)} title="Ẩn khung chat (xem tài liệu toàn bộ chiều rộng)" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: 4 }}>
+                    <PanelRightClose size={18} />
+                  </button>
+                )}
               </div>
               {/* Chat Messages */}
               <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
