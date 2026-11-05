@@ -359,7 +359,63 @@ async def get_folders_api(db: Session = Depends(get_db)):
 
 @app.post("/api/folders")
 async def create_folder_api(folder: FolderCreate, db: Session = Depends(get_db)):
-    return crud.create_folder(db, name=folder.name)
+    name = (folder.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Tên thư mục không được để trống.")
+    return crud.create_folder(db, name=name)
+
+
+@app.patch("/api/folders/{folder_id}")
+def rename_folder_api(folder_id: int, folder: FolderCreate, db: Session = Depends(get_db)):
+    db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
+    if not db_folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    name = (folder.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Tên thư mục không được để trống.")
+    db_folder.name = name
+    db.commit()
+    return {"id": db_folder.id, "name": db_folder.name}
+
+
+@app.delete("/api/folders/{folder_id}")
+def delete_folder_api(folder_id: int, db: Session = Depends(get_db)):
+    """Delete a folder. Its projects are kept and become unfiled — never deleted with it."""
+    db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
+    if not db_folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    moved = db.query(models.Project).filter(models.Project.folder_id == folder_id).update({models.Project.folder_id: None})
+    db.delete(db_folder)
+    db.commit()
+    return {"status": "ok", "unfiled_projects": moved}
+
+
+class ProjectUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    folder_id: int | None = None
+    unfile: bool = False  # true = remove from its folder (folder_id=None is "unchanged")
+
+
+@app.patch("/api/projects/{project_id}")
+def update_project_api(project_id: int, req: ProjectUpdate, db: Session = Depends(get_db)):
+    project = crud.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if req.name is not None:
+        if not req.name.strip():
+            raise HTTPException(status_code=422, detail="Tên dự án không được để trống.")
+        project.name = req.name.strip()
+    if req.description is not None:
+        project.description = req.description
+    if req.unfile:
+        project.folder_id = None
+    elif req.folder_id is not None:
+        if not db.query(models.Folder).filter(models.Folder.id == req.folder_id).first():
+            raise HTTPException(status_code=404, detail="Folder not found")
+        project.folder_id = req.folder_id
+    db.commit()
+    return {"id": project.id, "name": project.name, "description": project.description, "folder_id": project.folder_id}
 
 # --- Project Endpoints ---
 
