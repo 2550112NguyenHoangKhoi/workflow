@@ -111,10 +111,49 @@ app.whenReady().then(() => {
   ipcMain.handle('workspace:select', async () => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
     if (result.canceled || !result.filePaths[0]) return null;
-    const selectedPath = result.filePaths[0];
+    const target = result.filePaths[0];
     const configPath = path.join(os.homedir(), '.workflow_config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ workspace_path: selectedPath }, null, 2));
-    return selectedPath;
+
+    // Where the data lives today: the previously chosen workspace, else Electron's userData.
+    let current = app.getPath('userData');
+    try {
+      const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (cfg.workspace_path) current = cfg.workspace_path;
+    } catch { /* no workspace chosen yet */ }
+
+    if (path.resolve(target) === path.resolve(current)) {
+      return { path: target, moved: false, existing: true };
+    }
+
+    // Copy the data into the new folder unless it already holds a Workflow database (then we
+    // simply switch to it). Copy (not move) so nothing is lost if the copy is interrupted.
+    const DB = 'workflow_local.db';
+    const targetHasDb = fs.existsSync(path.join(target, DB)) || fs.existsSync(path.join(target, 'omilearn_local.db'));
+    let moved = false;
+    if (!targetHasDb) {
+      try {
+        fs.mkdirSync(target, { recursive: true });
+        for (const name of [DB, 'usage.json']) {
+          const src = path.join(current, name);
+          if (fs.existsSync(src)) { fs.copyFileSync(src, path.join(target, name)); moved = true; }
+        }
+        const uploads = path.join(current, 'uploads');
+        if (fs.existsSync(uploads)) {
+          fs.cpSync(uploads, path.join(target, 'uploads'), { recursive: true, errorOnExist: false });
+          moved = true;
+        }
+      } catch (err) {
+        throw new Error(`Không sao chép được dữ liệu sang thư mục mới: ${err.message}`);
+      }
+    }
+    fs.writeFileSync(configPath, JSON.stringify({ workspace_path: target }, null, 2));
+    return { path: target, moved, existing: targetHasDb, from: current };
+  });
+
+  ipcMain.handle('app:relaunch', () => {
+    quitting = true;
+    app.relaunch();
+    app.exit(0);
   });
 
   createWindow();

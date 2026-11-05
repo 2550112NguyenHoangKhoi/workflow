@@ -82,13 +82,19 @@ const StudioSidebar = () => {
     const desktop = window.workflowDesktop;
     if (!desktop?.selectWorkspace) return alert("Chỉ đổi được thư mục lưu trữ trong ứng dụng desktop.");
     try {
-      const selectedPath = await desktop.selectWorkspace();
-      if (selectedPath) {
-        alert(`Workspace updated to:\n${selectedPath}\n\nPlease restart the application for the database to move.`);
+      const res = await desktop.selectWorkspace();
+      if (!res) return;
+      const what = res.existing
+        ? 'Thư mục này đã có dữ liệu Workflow — ứng dụng sẽ dùng dữ liệu đó.'
+        : res.moved
+          ? 'Đã sao chép tài liệu và cơ sở dữ liệu sang thư mục mới (bản cũ vẫn được giữ nguyên).'
+          : 'Thư mục mới sẽ bắt đầu với dữ liệu trống.';
+      if (window.confirm(`Thư mục lưu trữ: ${res.path}\n\n${what}\n\nKhởi động lại ứng dụng ngay để áp dụng?`)) {
+        await desktop.relaunch();
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to set workspace.");
+      alert(`Không đổi được thư mục lưu trữ.\n${err.message || ''}`);
     }
   };
 
