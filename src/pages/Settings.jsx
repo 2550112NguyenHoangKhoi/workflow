@@ -3,6 +3,8 @@ import { Key, Save, CheckCircle2, ShieldAlert, Server, Settings as SettingsIcon,
 import { getDriveApiKey, setDriveApiKey, DRIVE_KEY_STORAGE } from '../utils/googleDrive';
 import * as drive from '../utils/googleDrive';
 import { signInWithGoogle, signOutGoogle, getStoredUser } from '../utils/googleAuth';
+import { getReminderSettings, REMINDER_KEY, getStreak } from '../components/SmartReminder';
+import { BellRing } from 'lucide-react';
 
 // Three interchangeable engines power EVERY AI feature (chat, quiz, flashcards, notes, concept
 // map, roadmap...). The choice is encoded into localStorage['workflow_api_key'], which every
@@ -110,6 +112,13 @@ const Settings = () => {
   };
 
   // Storage folder (desktop app): where the database and uploaded files live.
+  const [reminders, setReminders] = useState(getReminderSettings());
+  const saveReminders = (next) => {
+    setReminders(next);
+    try { localStorage.setItem(REMINDER_KEY, JSON.stringify(next)); } catch { /* storage off */ }
+    window.dispatchEvent(new Event('reminders-changed'));
+    if (next.enabled && 'Notification' in window && !window.workflowDesktop && Notification.permission === 'default') Notification.requestPermission();
+  };
   const [dataDir, setDataDir] = useState('');
   const isDesktop = Boolean(window.workflowDesktop?.selectWorkspace);
   useEffect(() => {
@@ -321,6 +330,28 @@ const Settings = () => {
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', border: 'none', cursor: 'pointer', transition: 'all 0.3s ease'
         }}>
           {isSaved ? <><CheckCircle2 size={20} /> Đã lưu cài đặt</> : <><Save size={20} /> Lưu cài đặt</>}
+        </button>
+      </div>
+
+      <div data-testid="reminder-settings" style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '16px', padding: '32px', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+          <BellRing size={20} /> Nhắc nhở thông minh
+        </h3>
+        <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          Khi có flashcard đến hạn ôn, Workflow gửi thông báo kèm một câu hỏi trắc nghiệm — xem thông báo cũng ôn được bài. Trả lời giữ chuỗi ngày học (hiện tại: {getStreak()} ngày 🔥).
+        </p>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-navy)', fontWeight: 600 }}>
+          <input type="checkbox" checked={reminders.enabled} onChange={e => saveReminders({ ...reminders, enabled: e.target.checked })} /> Bật nhắc nhở bằng quiz
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
+          Nhắc mỗi
+          <select value={reminders.minutes} onChange={e => saveReminders({ ...reminders, minutes: Number(e.target.value) })} disabled={!reminders.enabled}
+            style={{ padding: '6px 8px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--surface-plain)', color: 'var(--text-ink)' }}>
+            {[15, 30, 60, 120, 240].map(m => <option key={m} value={m}>{m < 60 ? `${m} phút` : `${m / 60} giờ`}</option>)}
+          </select>
+        </label>
+        <button onClick={() => window.dispatchEvent(new Event('reminder-now'))} style={{ alignSelf: 'flex-start', padding: '8px 14px', borderRadius: '10px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-navy)', fontWeight: 600, cursor: 'pointer' }}>
+          Thử ngay
         </button>
       </div>
 

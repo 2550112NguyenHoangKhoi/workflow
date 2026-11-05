@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Calendar, Check } from 'lucide-react';
 import { renderInline } from '../../utils/inlineMarkdown';
 import { useEscape } from '../../utils/useEscape';
+import { bumpStreak } from '../SmartReminder';
 
 const DueFlashcardModal = ({ isOpen, onClose }) => {
   useEscape(isOpen, onClose);
@@ -79,6 +80,7 @@ const DueFlashcardModal = ({ isOpen, onClose }) => {
   const submitReview = async (quality) => {
     try {
       const currentState = cardStates[currentIndex];
+      bumpStreak(); // a review keeps the daily streak (smart reminders)
       const response = await fetch('http://127.0.0.1:8000/api/flashcards/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

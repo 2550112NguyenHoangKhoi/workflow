@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useOutletContext } from 'react-router-dom';
-import { Users, ArrowRight, BrainCircuit, FileText, Sparkles, PanelRightClose, PanelRightOpen, ExternalLink } from 'lucide-react';
+import { Users, ArrowRight, BrainCircuit, FileText, Sparkles, PanelRightClose, PanelRightOpen, ExternalLink, GitBranch, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import PdfViewer from '../components/PdfViewer';
 import ProjectCollaborationModal from '../components/modals/ProjectCollaborationModal';
 import CreateExamModal from '../components/modals/CreateExamModal';
@@ -37,6 +37,10 @@ const DocumentViewer = () => {
 
 
   const [messages, setMessages] = useState([]);
+  // Branching chat (omilearn "chat phi tuyến tính"): messages form a tree via parent ids; the
+  // visible thread is the path from the root to `leafId`.
+  const [leafId, setLeafId] = useState(null);
+  const [branchFrom, setBranchFrom] = useState(null); // assistant message a new branch starts from
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   // 'omiguide' = persona-driven tutor; 'main' = plain AI chat (no persona prompt).
@@ -114,11 +118,14 @@ const DocumentViewer = () => {
         const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
-          const formatted = data.messages.map(m => ({
-            role: m.role,
-            text: m.content
+          // Legacy rows have no parent: chain them in order.
+          const formatted = data.messages.map((m, i, arr) => ({
+            id: m.id, role: m.role, text: m.content,
+            parent: m.parent_id ?? (i > 0 ? arr[i - 1].id : null),
           }));
           setMessages(formatted);
+          setLeafId(formatted.length ? formatted[formatted.length - 1].id : null);
+          setBranchFrom(null);
         }
       } catch (err) {
         console.error("Failed to load chat history", err);
@@ -149,15 +156,45 @@ const DocumentViewer = () => {
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  // ── Branch tree ──
+  const byId = new Map(messages.map(m => [m.id, m]));
+  const childrenOf = new Map();
+  messages.forEach(m => {
+    const k = m.parent ?? 'root';
+    if (!childrenOf.has(k)) childrenOf.set(k, []);
+    childrenOf.get(k).push(m.id);
+  });
+  const thread = (() => {
+    const out = [];
+    let cur = byId.get(leafId ?? (messages.length ? messages[messages.length - 1].id : undefined));
+    const seen = new Set();
+    while (cur && !seen.has(cur.id)) { seen.add(cur.id); out.unshift(cur); cur = cur.parent != null ? byId.get(cur.parent) : null; }
+    return out;
+  })();
+  const deepest = (id) => { let cur = id; for (;;) { const ch = childrenOf.get(cur); if (!ch?.length) return cur; cur = ch[ch.length - 1]; } };
+  const branchCount = messages.filter(m => m.role === 'assistant' && !childrenOf.get(m.id)?.length).length;
+  const switchSibling = (msg, dir) => {
+    const sibs = childrenOf.get(msg.parent ?? 'root') || [];
+    const k = sibs.indexOf(msg.id);
+    const next = sibs[(k + dir + sibs.length) % sibs.length];
+    setLeafId(deepest(next));
+    setBranchFrom(null);
+  };
+
   const sendMessage = async (text) => {
     const content = (text ?? input).trim();
     if (!content || isTyping) return;
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', text: content }]);
+    const parent = branchFrom ?? (thread.length ? thread[thread.length - 1].id : null);
+    const tmpUser = `tmp-u-${Date.now()}`;
+    setMessages(prev => [...prev, { id: tmpUser, parent, role: 'user', text: content }]);
+    setLeafId(tmpUser);
+    setBranchFrom(null);
     setIsTyping(true);
-    
+
     // Construct the contextual payload
     const payload = {
+      parent_id: typeof parent === 'number' ? parent : null,
       message: content,
       // The backend loads the full document/project text itself from the ids below.
       context: '',
@@ -191,10 +228,16 @@ const DocumentViewer = () => {
         body: JSON.stringify(payload)
       });
       const data = await response.json();
-      setMessages(prev => [...prev, { role: 'assistant', text: data.response || '...', citations: data.citations || [] }]);
+      const userId = data.user_id ?? tmpUser;
+      const botId = data.id ?? `tmp-a-${Date.now()}`;
+      setMessages(prev => [...prev.map(m => (m.id === tmpUser ? { ...m, id: userId } : m)),
+        { id: botId, parent: userId, role: 'assistant', text: data.response || '...', citations: data.citations || [] }]);
+      setLeafId(botId);
     } catch (err) {
       console.error(err);
-      setMessages(prev => [...prev, { role: 'assistant', text: '⚠️ Không kết nối được tới máy chủ. Hãy chắc chắn backend đang chạy ở cổng 8000.' }]);
+      const botId = `tmp-a-${Date.now()}`;
+      setMessages(prev => [...prev, { id: botId, parent: tmpUser, role: 'assistant', text: '⚠️ Không kết nối được tới máy chủ. Hãy chắc chắn backend đang chạy ở cổng 8000.' }]);
+      setLeafId(botId);
     } finally {
       setIsTyping(false);
     }
@@ -360,6 +403,11 @@ const DocumentViewer = () => {
           <>
               {/* Chat mode toggle — Chat chính (plain AI) vs Gia sư (persona tutor) */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', padding: '12px 16px 0' }}>
+                {branchCount > 1 && (
+                  <span data-testid="branch-count" title="Mỗi nhánh là một hướng hỏi riêng; chuyển nhánh bằng ‹ › trên câu hỏi" style={{ marginRight: 'auto', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <GitBranch size={14} /> {branchCount} nhánh đang mở
+                  </span>
+                )}
                 <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--surface-grey)', padding: '4px', borderRadius: '24px' }}>
                   {[['main', 'Chat chính'], ['omiguide', 'Gia sư AI']].map(([mode, label]) => (
                     <button key={mode} onClick={() => setChatMode(mode)} style={{
@@ -379,7 +427,7 @@ const DocumentViewer = () => {
               </div>
               {/* Chat Messages */}
               <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {(isProjectRoute && !activeDoc && messages.length === 0) && (
+                {(isProjectRoute && !activeDoc && thread.length === 0) && (
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
                     <h1 style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--brand-primary)' }}>WORKFLOW AI</h1>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -393,13 +441,24 @@ const DocumentViewer = () => {
                     </p>
                   </div>
                 )}
-                {messages.map((msg, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                {thread.map((msg, idx) => (
+                  <div key={msg.id ?? idx} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                     <div style={{
                       maxWidth: '85%',
                       display: 'flex', flexDirection: 'column', gap: '4px',
                       alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start'
                     }}>
+                      {msg.role === 'user' && (childrenOf.get(msg.parent ?? 'root') || []).length > 1 && (() => {
+                        const sibs = childrenOf.get(msg.parent ?? 'root');
+                        return (
+                          <div data-testid="branch-switcher" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 700 }}>
+                            <GitBranch size={12} />
+                            <button onClick={() => switchSibling(msg, -1)} aria-label="Nhánh trước" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 0, display: 'flex' }}><ChevronLeft size={14} /></button>
+                            Nhánh {sibs.indexOf(msg.id) + 1}/{sibs.length}
+                            <button onClick={() => switchSibling(msg, 1)} aria-label="Nhánh sau" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 0, display: 'flex' }}><ChevronRight size={14} /></button>
+                          </div>
+                        );
+                      })()}
                       {msg.role === 'assistant' && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 800, color: 'var(--brand-primary)', marginBottom: '8px' }}>
                           <Sparkles size={14} /> Workflow
@@ -443,6 +502,13 @@ const DocumentViewer = () => {
                       {/* Inline Action Pills for AI messages */}
                       {msg.role === 'assistant' && (
                         <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+                          {typeof msg.id === 'number' && (
+                            <button data-testid="new-branch" onClick={() => { setBranchFrom(msg.id); setLeafId(msg.id); }}
+                              title="Hỏi tiếp từ câu trả lời này trong một nhánh riêng — không lẫn vào đoạn chat dài"
+                              style={{ backgroundColor: branchFrom === msg.id ? 'var(--brand-primary)' : 'var(--bg-tertiary)', color: branchFrom === msg.id ? 'white' : 'var(--text-navy)', border: '1px solid #D6C5B3', borderRadius: '20px', padding: '5px 12px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <GitBranch size={13} /> Nhánh mới
+                            </button>
+                          )}
                           {[
                             { label: 'Bắt đầu hỏi mình', action: () => sendMessage('Bắt đầu hỏi mình về nội dung này') },
                             { label: 'Tạo quiz nhanh', action: () => setIsExamModalOpen(true) },
@@ -484,6 +550,12 @@ const DocumentViewer = () => {
                     </button>
                   ))}
                 </div>
+                {branchFrom != null && (
+                  <div data-testid="branch-banner" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--brand-primary)', fontWeight: 700, marginBottom: '8px' }}>
+                    <GitBranch size={14} /> Câu hỏi tiếp theo mở một nhánh mới từ câu trả lời đã chọn.
+                    <button onClick={() => { setBranchFrom(null); setLeafId(deepest(branchFrom)); }} aria-label="Huỷ nhánh mới" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}><X size={14} /></button>
+                  </div>
+                )}
                 {/* Input Bar */}
                 <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '24px', border: '1px solid #D6C5B3', display: 'flex', alignItems: 'center', padding: '6px 6px 6px 16px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
                   <input
@@ -491,7 +563,7 @@ const DocumentViewer = () => {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
-                    placeholder="Hỏi Workflow..."
+                    placeholder={branchFrom != null ? 'Hỏi tiếp trong nhánh mới…' : 'Hỏi Workflow...'}
                     style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: '0.95rem', padding: '4px', color: 'var(--text-ink)' }}
                   />
                   <button

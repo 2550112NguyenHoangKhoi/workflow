@@ -7,6 +7,7 @@ import TeamChatWidget from './TeamChatWidget';
 
 import Topbar from './Topbar';
 import FeedbackModal from '../modals/FeedbackModal';
+import SmartReminder from '../SmartReminder';
 
 const AppLayout = () => {
   const location = useLocation();
@@ -60,6 +61,7 @@ const AppLayout = () => {
 
       {/* Feedback (the floating button had no click handler and covered the chat input); opened from the top bar. */}
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+      <SmartReminder />
     </div>
   );
 };

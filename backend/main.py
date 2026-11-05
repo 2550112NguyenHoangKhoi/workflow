@@ -183,6 +183,7 @@ class ChatRequest(BaseModel):
     project_id: int | None = None
     document_id: int | None = None
     persona: str | None = "friendly"
+    parent_id: int | None = None   # branching chat: the message this question follows
 
 class UserLogin(BaseModel):
     email: str
@@ -926,9 +927,14 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Message/content required")
         
     role = request.role or "user"
-    
+
+    # Branch history (root → parent) gives the AI the conversation of THIS branch only.
+    branch = _branch_path(db, request.parent_id) if request.parent_id else []
+    user_msg_id = None
     if request.project_id or request.document_id:
-        crud.save_chat_message(db, project_id=request.project_id, role=role, content=message_text, persona=request.persona, document_id=request.document_id)
+        um = crud.save_chat_message(db, project_id=request.project_id, role=role, content=message_text, persona=request.persona,
+                                    document_id=request.document_id, parent_id=request.parent_id)
+        user_msg_id = um.id
 
     # Context comes from the DB whenever we know the document/project: the focused document
     # first, then the project's other documents, so project chat sees every source.
@@ -978,9 +984,12 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     if current_key:
         try:
             config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite", capabilities=FAST_CAPS)
+            history = "".join(f"{'Người học' if m.role == 'user' else 'Trợ lý'}: {m.content[:800]}\n" for m in branch[-6:])
             prompt = (
                 f"{persona_prompt}\n\nUsing the document context below, answer the question.\n"
-                f"Context:\n{context[:30000]}\n\nQuestion: {message_text}"
+                f"Context:\n{context[:30000]}\n\n"
+                + (f"Conversation so far (this branch):\n{history}\n" if history else "")
+                + f"Question: {message_text}"
             )
             response_text = await agent_run(config, prompt, structured=False)
         except Exception as e:
@@ -992,12 +1001,14 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
         if mode:
             # "Giải thích lại" / "Cho ví dụ" refer to the learner's previous question; matched
             # literally they found nothing and returned a generic summary.
-            question = _previous_question(db, request.project_id, request.document_id) or message_text
+            question = (next((m.content for m in reversed(branch) if m.role == "user" and not _followup_mode(m.content)), "")
+                        if branch else _previous_question(db, request.project_id, request.document_id)) or message_text
         response_text = offline_doc_answer(question, db, context, mode=mode or "answer")
 
     msg_id = None
     if request.project_id or request.document_id:
-        msg = crud.save_chat_message(db, project_id=request.project_id, role="assistant", content=response_text, persona=request.persona, document_id=request.document_id)
+        msg = crud.save_chat_message(db, project_id=request.project_id, role="assistant", content=response_text, persona=request.persona,
+                                     document_id=request.document_id, parent_id=user_msg_id)
         msg_id = msg.id
 
     citations = []
@@ -1006,7 +1017,18 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
             citations = _cite_pages(response_text, docs)
     except Exception as e:
         print(f"[chat] citation lookup failed: {e}")
-    return {"id": msg_id, "response": response_text, "citations": citations}
+    return {"id": msg_id, "user_id": user_msg_id, "response": response_text, "citations": citations}
+
+
+def _branch_path(db, leaf_id: int | None, limit: int = 40) -> list:
+    """Messages from the root of a branch down to `leaf_id` (follows parent_id)."""
+    out, seen = [], set()
+    cur = db.query(models.ChatMessage).filter(models.ChatMessage.id == leaf_id).first() if leaf_id else None
+    while cur and cur.id not in seen and len(out) < limit:
+        seen.add(cur.id)
+        out.append(cur)
+        cur = db.query(models.ChatMessage).filter(models.ChatMessage.id == cur.parent_id).first() if cur.parent_id else None
+    return list(reversed(out))
 
 
 def _cite_pages(answer: str, docs) -> list:
@@ -1059,7 +1081,7 @@ async def get_project_messages_api(project_id: int, db: Session = Depends(get_db
         "messages": [
             {
                 "id": m.id, "role": m.role, "content": m.content, 
-                "persona": m.persona, "created_at": m.created_at.isoformat() if m.created_at else None
+                "persona": m.persona, "parent_id": m.parent_id, "created_at": m.created_at.isoformat() if m.created_at else None
             } for m in messages
         ]
     }
@@ -1071,7 +1093,7 @@ async def get_document_messages_api(document_id: int, db: Session = Depends(get_
         "messages": [
             {
                 "id": m.id, "role": m.role, "content": m.content, 
-                "persona": m.persona, "created_at": m.created_at.isoformat() if m.created_at else None
+                "persona": m.persona, "parent_id": m.parent_id, "created_at": m.created_at.isoformat() if m.created_at else None
             } for m in messages
         ]
     }
@@ -2238,6 +2260,7 @@ class TeachBackEvalRequest(BaseModel):
     explanation: str
     context: str | None = ""
     api_key: str | None = None
+    persona: str | None = None   # "child": the AI plays a curious child who asks back
 
 
 class WritingGradeRequest(_BaseModel):
@@ -3767,6 +3790,37 @@ def writing_progress(email: str | None = None, db=Depends(get_db)):
     }
 
 
+_WHISPER = None  # faster-whisper model, loaded on first use
+
+
+@app.post("/api/transcribe")
+async def transcribe_audio(file: UploadFile = File(...), lang: str = Form("vi")):
+    """Speech → text for voice input (teach-back, speaking, pronunciation) when the browser has
+    no speech recognition (the Electron app). Needs the optional faster-whisper package."""
+    import tempfile, shutil
+    suffix = os.path.splitext(file.filename or "")[1] or ".webm"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        path = tmp.name
+    try:
+        try:
+            from faster_whisper import WhisperModel
+        except ImportError:
+            raise HTTPException(status_code=501, detail=(
+                "Máy chưa có bộ nhận dạng giọng nói offline (pip install faster-whisper). "
+                "Bạn vẫn có thể gõ câu trả lời."))
+        global _WHISPER
+        if _WHISPER is None:
+            _WHISPER = WhisperModel("base", device="cpu", compute_type="int8")
+        segments, _info = _WHISPER.transcribe(path, language=(lang or "vi")[:2])
+        return {"text": " ".join(s.text.strip() for s in segments).strip()}
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
 @app.post("/api/teachback/start")
 async def teachback_start(req: TeachBackStartRequest, db: Session = Depends(get_db)):
     from nlp import teachback as tb_engine
@@ -3829,6 +3883,8 @@ async def teachback_evaluate(req: TeachBackEvalRequest):
                 "- misconceptions: danh sách các hiểu lầm (claim: người học nói gì, correction: sửa lại cho đúng)\n"
                 "- followup_question: câu hỏi bằng tiếng Việt để đào sâu\n"
                 "- feedback_vi: nhận xét chung, cụ thể, khích lệ (tiếng Việt)."
+                + ("\n- child_question: đóng vai một đứa trẻ tò mò đang được dạy, hỏi lại MỘT câu ngắn, hồn nhiên "
+                   "về chỗ còn mơ hồ nhất (tiếng Việt, xưng em)." if req.persona == "child" else "")
             )
             config = LocalAgentConfig(
                 api_key=current_key, model="gemini-3.1-flash-lite",

@@ -197,8 +197,8 @@ def delete_project(db: Session, project_id: int) -> bool:
         remove_document_files(doc_id)
     return True
 
-def save_chat_message(db: Session, project_id: int = None, role: str = "", content: str = "", persona: str = None, document_id: int = None):
-    msg = models.ChatMessage(project_id=project_id, role=role, content=content, persona=persona, document_id=document_id)
+def save_chat_message(db: Session, project_id: int = None, role: str = "", content: str = "", persona: str = None, document_id: int = None, parent_id: int = None):
+    msg = models.ChatMessage(project_id=project_id, role=role, content=content, persona=persona, document_id=document_id, parent_id=parent_id)
     db.add(msg)
     db.commit()
     db.refresh(msg)

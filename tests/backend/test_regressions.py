@@ -524,3 +524,23 @@ def _two_page_pdf() -> bytes:
     c.drawString(72, 750, "A pushdown automaton is a finite automaton extended with a stack memory.")
     c.save()
     return buf.getvalue()
+
+
+def test_branching_chat_and_child_teachback(client):
+    did = client.post("/api/documents/upload", files={"file": ("pda.txt", (
+        "A pushdown automaton is a finite automaton extended with a stack. "
+        "A context-free grammar is a grammar whose productions have one nonterminal on the left. "
+        "Closure properties: context-free languages are closed under union and concatenation.").encode(), "text/plain")}).json()["id"]
+    ask = lambda q, parent=None: client.post("/api/chat", json={"message": q, "document_id": did, "parent_id": parent, **OFFLINE}).json()
+    a1 = ask("What is a pushdown automaton?")
+    a2 = ask("What are closure properties?", a1["id"])
+    b1 = ask("Cho ví dụ", a1["id"])            # a second branch from the first answer
+    msgs = {m["id"]: m for m in client.get(f"/api/documents/{did}/messages").json()["messages"]}
+    assert msgs[a2["user_id"]]["parent_id"] == a1["id"] and msgs[b1["user_id"]]["parent_id"] == a1["id"]
+    assert msgs[b1["id"]]["parent_id"] == b1["user_id"]
+    # "Cho ví dụ" in the new branch refers to that branch's question, not the latest one overall.
+    assert "closure" not in b1["response"].lower()
+
+    from nlp.teachback import evaluate
+    r = evaluate("Pushdown automaton", ["stack", "finite automaton", "context-free language"], "It has a stack.")
+    assert r["child_question"] and r["gaps"]

@@ -18,4 +18,11 @@ contextBridge.exposeInMainWorld('workflowDesktop', {
     getToken: (cfg) => ipcRenderer.invoke('google:getToken', cfg), // null when signed out
     signOut: () => ipcRenderer.invoke('google:signOut'),
   },
+  // Native notification (smart reminders). onClick fires when the user clicks one.
+  notify: (opts) => ipcRenderer.invoke('notify:show', opts),
+  onNotificationClick: (cb) => {
+    const h = () => cb();
+    ipcRenderer.on('notify:clicked', h);
+    return () => ipcRenderer.removeListener('notify:clicked', h);
+  },
 });

@@ -139,6 +139,8 @@ class ChatMessage(Base):
     content = Column(String)
     persona = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    # Branching chat: the message this one answers / follows. NULL on legacy (linear) rows.
+    parent_id = Column(Integer, nullable=True)
 
     project = relationship("Project", back_populates="messages")
     document = relationship("Document")

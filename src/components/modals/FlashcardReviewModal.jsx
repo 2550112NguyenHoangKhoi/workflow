@@ -3,6 +3,7 @@ import { X, ArrowRight, ArrowLeft, Download, Shuffle, Star, RotateCcw, Sparkles,
 import { getEngineKey } from '../../utils/engine';
 import { renderInline } from '../../utils/inlineMarkdown';
 import { useEscape } from '../../utils/useEscape';
+import { bumpStreak } from '../SmartReminder';
 
 const FlashcardReviewModal = ({ isOpen, onClose }) => {
   useEscape(isOpen, onClose);
@@ -107,6 +108,7 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
     const currentState = cardStates[idx];
     if (currentState) {
       try {
+        bumpStreak(); // a review keeps the daily streak (smart reminders)
         const res = await fetch('http://127.0.0.1:8000/api/flashcards/review', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...currentState, quality })

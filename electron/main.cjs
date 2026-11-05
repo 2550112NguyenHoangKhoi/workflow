@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -170,6 +170,21 @@ app.whenReady().then(() => {
   ipcMain.handle('google:signIn', (_e, cfg = {}) => google.signIn({ clientId: cfg.clientId, clientSecret: cfg.clientSecret, scopes: SCOPES }));
   ipcMain.handle('google:getToken', (_e, cfg = {}) => google.getToken({ clientId: cfg.clientId, clientSecret: cfg.clientSecret }));
   ipcMain.handle('google:signOut', () => google.signOut());
+
+  // Smart reminders: a native notification carrying the quiz question; clicking it brings the
+  // app forward and tells the renderer to open the in-app quiz card.
+  ipcMain.handle('notify:show', (e, { title, body } = {}) => {
+    if (!Notification.isSupported()) return false;
+    const n = new Notification({ title: String(title || 'Workflow').slice(0, 120), body: String(body || '').slice(0, 400), silent: false });
+    const sender = e.sender;
+    n.on('click', () => {
+      const w = BrowserWindow.fromWebContents(sender);
+      if (w) { if (w.isMinimized()) w.restore(); w.show(); w.focus(); }
+      if (!sender.isDestroyed()) sender.send('notify:clicked');
+    });
+    n.show();
+    return true;
+  });
 
   ipcMain.handle('app:relaunch', () => {
     quitting = true;

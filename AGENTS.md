@@ -497,6 +497,9 @@ Columns: **ID**, **Where** (file and symbol), **Symptom**, **Root cause**, **Fix
 | F-16 | `ExamTaker` | — | "Biến câu sai thành flashcard" after submitting |
 | F-17 | `utils/ics.js:buildRoadmapIcs`, `ProjectStudioSidebar` | Dated roadmaps could not reach a calendar | "📅 Thêm vào lịch" (.ics) + Hôm nay / Tuần này / Quá hạn badges |
 | F-18 | `FeedbackModal.jsx`, `/api/feedback`, `models.Feedback`, Topbar icon | The floating "Báo lỗi hoặc gửi feedback" button had no click handler and covered the chat send button | Top-bar icon → bug/idea form, current page attached, optional screenshot, stored locally, "Sao chép để gửi email" |
+| F-19 | `ActiveLearning.jsx`, `nlp/teachback.py` (`child_question`), `VoiceInput.jsx`, `POST /api/transcribe` | Teach-back was a single text box | "Dạy bạn nhỏ" mode: multi-turn, the AI plays a child who asks about the next gap, "ĐỘ HIỂU CỦA BẠN NHỎ" meter, "Dừng buổi dạy & chấm"; mic input (browser SpeechRecognition, else MediaRecorder → faster-whisper if installed); XP + "độ nhớ" per concept (localStorage `workflow_teach_xp`); macOS `NSMicrophoneUsageDescription` |
+| F-20 | `SmartReminder.jsx`, Settings "Nhắc nhở thông minh", `electron/main.cjs` `notify:show` | `NotificationsBell` only listed shares | Every N minutes a due flashcard becomes an A/B/C question in a native (Electron) / web notification and an in-app card answered in place (graded into SM-2); daily streak (`workflow_streak`, also bumped by flashcard reviews) |
+| F-21 | `models.ChatMessage.parent_id`, `/api/chat` `parent_id`/`user_id`, `_branch_path`, `DocumentViewer` thread | Chat was one linear thread | Branching chat: "Nhánh mới" on any answer, ‹ Nhánh k/n › switcher, "N nhánh đang mở"; the AI prompt gets only that branch's history, and "Giải thích lại / Cho ví dụ" refer to the branch's own question |
 
 ### UI (U)
 
@@ -528,6 +531,7 @@ Columns: **ID**, **Where** (file and symbol), **Symptom**, **Root cause**, **Fix
 | 10 | `/api/user/stats` counts are global, not per user | `main.py:get_user_stats` | Filter by owner once documents have owners |
 | 11 | Source column in `DocumentViewer` is narrow (buttons wrap) | `DocumentViewer.jsx` layout | Responsive widths |
 | 12 | ~~`LIBRARY_ROOT`~~ — done (F-9): the user's own Drive + pinned folders | | |
+| 12b | Generic column migration | `main.py:add_missing_columns` | Adds any model column missing from an existing SQLite DB (nullable/defaulted only); keep new columns nullable |
 | 13 | Old ad-hoc test scripts need a live server | `backend/test_*.py`, `tests/e2e/` | Port to `tests/backend` style |
 | 14 | `datetime.utcnow()` deprecation warnings | `db/models.py`, `main.py` | `datetime.now(datetime.UTC)` (mind naive / aware comparisons) |
 

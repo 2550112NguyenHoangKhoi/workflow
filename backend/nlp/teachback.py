@@ -195,11 +195,24 @@ def evaluate(concept: str, key_points: list[str], explanation: str, context: str
         
     feedback_vi += "\n(Lưu ý: Đánh giá offline chỉ kiểm tra từ khóa. Hãy bật Cloud AI để nhận nhận xét chi tiết hơn.)"
     
+    # "Dạy bạn nhỏ" mode: the same check voiced as a curious child's next question.
+    import random as _r
+    if gaps:
+        child_question = _r.choice([
+            f"Ơ, thế “{gaps[0]}” là gì ạ? Anh/chị giảng thêm cho em với!",
+            f"Em vẫn chưa hiểu “{gaps[0]}” liên quan gì tới {concept} ạ?",
+            f"Nếu không có “{gaps[0]}” thì sao ạ?",
+        ])
+    elif word_count < 40:
+        child_question = "Em hiểu sơ sơ rồi, nhưng anh/chị cho em một ví dụ cụ thể được không ạ?"
+    else:
+        child_question = "Vì sao chỗ đó lại đúng ạ? Nếu đổi sang ví dụ khác thì còn đúng không?"
     return {
         "understanding_score": understanding_score,
         "covered": covered,
         "gaps": gaps,
         "misconceptions": misconceptions,
         "followup_question": followup_question,
+        "child_question": child_question,
         "feedback_vi": feedback_vi
     }
