@@ -44,7 +44,7 @@ FAST_CAPS = CapabilitiesConfig(enable_subagents=False, enabled_tools=[])
 # AI-token accounting: a small JSON file next to the backend (no DB schema change).
 # Tokens are estimated at ~4 chars/token from prompt + response; powers GET /api/usage
 # and the "AI TOKENS" widgets in the Sidebar / account dropdown.
-USAGE_FILE = os.path.join(os.path.dirname(__file__), "usage.json")
+from db.database import USAGE_FILE, UPLOAD_DIR  # per-user data dir, see db/database.py
 USAGE_QUOTA = 500_000
 
 def _read_usage():
@@ -94,7 +94,6 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 # Raw uploaded PDFs are kept here so the UI can render the real document (a true PDF
 # viewer) instead of only its extracted text. Served by GET /api/documents/{id}/file.
 from fastapi.responses import FileResponse
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 
 import sys
 from pathlib import Path

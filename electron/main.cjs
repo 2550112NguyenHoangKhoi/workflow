@@ -30,6 +30,9 @@ app.whenReady().then(() => {
   
   backendProcess = spawn(backendPath, [], {
     cwd: path.dirname(backendPath),
+    // Keep the DB, uploads and usage counter in the per-user data folder, never inside
+    // the (possibly read-only) app bundle.
+    env: { ...process.env, WORKFLOW_DATA_DIR: app.getPath('userData') },
   });
   
   backendProcess.stdout.on('data', (data) => console.log(`Backend stdout: ${data}`));
