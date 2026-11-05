@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Folder, FileText, Download, Loader2, Cloud, ChevronRight, CheckCircle2, AlertCircle, FolderUp } from 'lucide-react';
 import {
-  isConfigured, isConnected, connectDrive, listChildren, importFileToLibrary,
+  isConfigured, isConnected, connectDrive, listChildren, importFileToLibrary, restoreSession, MISSING_CLIENT_MSG,
 } from '../../utils/googleDrive';
 import { readUploadResult } from '../../utils/uploads';
 
@@ -48,7 +48,7 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
   const [connected, setConnected] = useState(isConnected());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [path, setPath] = useState([{ id: 'root', name: 'My Drive' }]);
+  const [path, setPath] = useState([{ id: 'root', name: 'Drive của tôi' }]);
   const [folders, setFolders] = useState([]);
   const [files, setFiles] = useState([]);
   const [importing, setImporting] = useState({});
@@ -60,6 +60,10 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
       setFolders(fo); setFiles(fi);
     } catch (err) { setError(err.message); } finally { setLoading(false); }
   };
+
+  useEffect(() => {
+    if (isOpen && !connected) restoreSession().then(setConnected);
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && connected) browse(path[path.length - 1].id);
@@ -150,13 +154,13 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
           </div>
 
           {!isConfigured() ? (
-            <div style={{ textAlign: 'center', padding: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Chưa cấu hình OAuth Client ID.</div>
+            <div style={{ textAlign: 'center', padding: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{MISSING_CLIENT_MSG}</div>
           ) : !connected ? (
             <div style={{ textAlign: 'center', padding: '8px 16px' }}>
               <button onClick={handleConnect} style={{ padding: '12px 24px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--brand-primary)', border: '1px solid var(--brand-primary)', borderRadius: '12px', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                 <Cloud size={18} /> Kết nối Google Drive
               </button>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>Cần thêm email của bạn vào "Test users" trong Google Cloud Console.</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>Đăng nhập bằng tài khoản Google của bạn (chỉ quyền đọc).</div>
             </div>
           ) : (
             <>

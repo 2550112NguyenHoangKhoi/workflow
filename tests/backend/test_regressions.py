@@ -212,3 +212,33 @@ def test_difficulty_ranks_texts_sensibly():
     k, b, a = (score_difficulty(t)["score"] for t in (kids, bio, academic))
     assert k < b < a
     assert score_difficulty(bio)["level"] == "Intermediate"  # was 'Advanced' (entity density x40)
+
+
+def test_drive_sources_use_the_users_google_token(monkeypatch):
+    """Exam sources from the user's private Drive: the OAuth token is sent, and Google Docs
+    are exported to text instead of the alt=media download (which Google rejects for Docs)."""
+    import io
+    import json as _json
+    import urllib.request
+    seen = []
+
+    class Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, timeout=None, context=None):
+        url = req.full_url if hasattr(req, "full_url") else req
+        seen.append((url, dict(req.header_items()) if hasattr(req, "header_items") else {}))
+        if "fields=" in url:
+            return Resp(_json.dumps({"id": "d1", "mimeType": "application/vnd.google-apps.document"}).encode())
+        return Resp("Nội dung tài liệu Google Docs".encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    text = main._fetch_drive_text("d1", api_key="", access_token="tok-123")
+    assert text == "Nội dung tài liệu Google Docs"
+    assert all(h.get("Authorization") == "Bearer tok-123" for _, h in seen)
+    assert "/d1/export?mimeType=text/plain" in seen[-1][0]
+    assert "supportsAllDrives=true" in seen[-1][0]

@@ -1576,6 +1576,7 @@ Corpus:
 # Studio: exams with full config, exam-room documents, sharing (drafted via 9Router)
 # ═══════════════════════════════════════════════════════════════════════════════
 from pydantic import BaseModel as _BaseModel
+import urllib.parse
 import urllib.request
 import tempfile
 
@@ -1605,6 +1606,9 @@ class ExamGenRequest(_BaseModel):
     document_id: int | None = None
     owner_email: str | None = None
     drive_api_key: str | None = None
+    # OAuth access token from the user's Google sign-in: lets exam sources come from
+    # their private Drive, not only public folders.
+    drive_access_token: str | None = None
 
 class ExamDocGenRequest(_BaseModel):
     title: str = "Tài liệu ôn thi"
@@ -1615,6 +1619,9 @@ class ExamDocGenRequest(_BaseModel):
     api_key: str | None = None
     owner_email: str | None = None
     drive_api_key: str | None = None
+    # OAuth access token from the user's Google sign-in: lets exam sources come from
+    # their private Drive, not only public folders.
+    drive_access_token: str | None = None
 
 class ShareRequest(_BaseModel):
     artifact_id: int | None = None
@@ -1819,26 +1826,39 @@ class ExamDocSchema(_BaseModel):
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _fetch_drive_text(file_id: str, api_key: str | None = None) -> str:
-    """Text of a public Drive file. The key comes from the user's Settings (sent with the
-    request); the .env value is only a fallback for local development."""
+def _fetch_drive_text(file_id: str, api_key: str | None = None, access_token: str | None = None) -> str:
+    """Text of a Drive file. Public files need only the API key (from the user's Settings;
+    the .env value is a local-dev fallback). With the user's OAuth access token, private
+    files in their own Drive work too. Google Docs/Slides/Sheets are exported to text."""
     try:
         key = (api_key or "").strip() or os.getenv("VITE_GOOGLE_DRIVE_API_KEY", "")
+        token = (access_token or "").strip()
         # macOS system Python lacks CA certs (CERTIFICATE_VERIFY_FAILED) — use certifi's bundle.
         import ssl, certifi
         ctx = ssl.create_default_context(cafile=certifi.where())
-        # The public library is built from Drive shortcuts; alt=media 403s on a shortcut id,
-        # so resolve to the target file first.
-        meta_url = f"https://www.googleapis.com/drive/v3/files/{file_id}?fields=id,shortcutDetails&key={key}"
+        base = "https://www.googleapis.com/drive/v3/files/"
+        common = "supportsAllDrives=true" + (f"&key={urllib.parse.quote(key)}" if key else "")
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+
+        def get(url):
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=60, context=ctx) as resp:
+                return resp.read()
+
+        # Library folders are often built from Drive shortcuts; alt=media 403s on a shortcut
+        # id, so resolve to the target first. The mime type decides download vs export.
+        mime = ""
         try:
-            with urllib.request.urlopen(meta_url, timeout=30, context=ctx) as resp:
-                meta = json.loads(resp.read().decode())
-            file_id = meta.get("shortcutDetails", {}).get("targetId") or file_id
+            meta = json.loads(get(f"{base}{file_id}?fields=id,mimeType,shortcutDetails&{common}").decode())
+            sc = meta.get("shortcutDetails") or {}
+            file_id = sc.get("targetId") or file_id
+            mime = sc.get("targetMimeType") or meta.get("mimeType") or ""
         except Exception:
             pass
-        url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media&key={key}"
-        with urllib.request.urlopen(url, timeout=60, context=ctx) as resp:
-            data = resp.read()
+        if mime.startswith("application/vnd.google-apps."):
+            export = "text/csv" if mime.endswith("spreadsheet") else "text/plain"
+            data = get(f"{base}{file_id}/export?mimeType={urllib.parse.quote(export)}&{common}")
+        else:
+            data = get(f"{base}{file_id}?alt=media&{common}")
         if data[:4] == b"%PDF":
             import pdfplumber
             tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
@@ -1854,7 +1874,7 @@ def _fetch_drive_text(file_id: str, api_key: str | None = None) -> str:
         return ""
 
 
-def _assemble_source_text(db, sources: list, document_id=None, drive_api_key=None) -> str:
+def _assemble_source_text(db, sources: list, document_id=None, drive_api_key=None, drive_access_token=None) -> str:
     parts = []
     for src in sources:
         try:
@@ -1863,7 +1883,7 @@ def _assemble_source_text(db, sources: list, document_id=None, drive_api_key=Non
             elif src.type == "document":
                 parts.append(get_document_text(db, int(src.value)))
             elif src.type == "drive":
-                parts.append(_fetch_drive_text(src.value, drive_api_key))
+                parts.append(_fetch_drive_text(src.value, drive_api_key, drive_access_token))
         except Exception:
             pass
     if document_id:
@@ -1873,7 +1893,7 @@ def _assemble_source_text(db, sources: list, document_id=None, drive_api_key=Non
             pass
     return "\n\n".join(filter(None, parts))[:60000]
 
-def _assemble_source_text_paged(db, sources: list, document_id=None, drive_api_key=None) -> str:
+def _assemble_source_text_paged(db, sources: list, document_id=None, drive_api_key=None, drive_access_token=None) -> str:
     """Like _assemble_source_text but, for `document` and top-level `document_id`
     sources that have per-page text (Document.pages_data JSON array), interleaves
     a `[Trang N]` marker before each page so the model can cite pages. Falls back
@@ -1904,7 +1924,7 @@ def _assemble_source_text_paged(db, sources: list, document_id=None, drive_api_k
                 else:
                     parts.append(get_document_text(db, doc_id))
             elif src.type == "drive":
-                parts.append(_fetch_drive_text(src.value, drive_api_key))
+                parts.append(_fetch_drive_text(src.value, drive_api_key, drive_access_token))
         except Exception:
             pass
     if document_id:
@@ -1985,7 +2005,7 @@ def _normalize_exam_questions(questions):
 async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
     from nlp.exam import extract_exam
 
-    text = _assemble_source_text_paged(db, req.sources, document_id=req.document_id, drive_api_key=req.drive_api_key)
+    text = _assemble_source_text_paged(db, req.sources, document_id=req.document_id, drive_api_key=req.drive_api_key, drive_access_token=req.drive_access_token)
     if not text.strip():
         text = f"{req.title}. {req.description}"
 
@@ -2116,7 +2136,7 @@ async def add_exam_questions(artifact_id: int, req: ExamAddQuestionsRequest, db=
 async def generate_examdoc(req: ExamDocGenRequest, db=Depends(get_db)):
     from nlp.concept_map import generate_offline_exam_prep
 
-    text = _assemble_source_text(db, req.sources, drive_api_key=req.drive_api_key)
+    text = _assemble_source_text(db, req.sources, drive_api_key=req.drive_api_key, drive_access_token=req.drive_access_token)
     if not text.strip():
         text = f"{req.title}. {req.description}"
 

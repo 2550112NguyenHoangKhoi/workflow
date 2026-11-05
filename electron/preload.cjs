@@ -11,4 +11,11 @@ contextBridge.exposeInMainWorld('workflowDesktop', {
   // Resolves to { path, moved, existing, from } or null if cancelled; data is copied over.
   selectWorkspace: () => ipcRenderer.invoke('workspace:select'),
   relaunch: () => ipcRenderer.invoke('app:relaunch'),
+  // Google sign-in through the system browser (loopback + PKCE, electron/googleOAuth.cjs).
+  // cfg = { clientId, clientSecret } of a "Desktop app" OAuth client from Settings.
+  google: {
+    signIn: (cfg) => ipcRenderer.invoke('google:signIn', cfg),
+    getToken: (cfg) => ipcRenderer.invoke('google:getToken', cfg), // null when signed out
+    signOut: () => ipcRenderer.invoke('google:signOut'),
+  },
 });

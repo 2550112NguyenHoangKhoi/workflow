@@ -4,7 +4,7 @@ import { X, UploadCloud, Sparkles, CheckCircle2, XCircle, RotateCcw, FileText } 
 import { getSelectedSources, extractFileText, getOwnerEmail } from '../../utils/examSources';
 import ArtifactViewerModal from './ArtifactViewerModal';
 import { getEngineKey } from '../../utils/engine';
-import { getDriveApiKey } from '../../utils/googleDrive';
+import { getDriveApiKey, getAccessToken, restoreSession } from '../../utils/googleDrive';
 
 const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) => {
   const navigate = useNavigate();
@@ -71,6 +71,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
         sources,
         api_key: getEngineKey(),
         drive_api_key: getDriveApiKey(),
+        drive_access_token: (await restoreSession()) ? getAccessToken() : null,
         project_id: projectId ? parseInt(projectId) : null,
         document_id: activeDocId ? parseInt(activeDocId) : null,
         owner_email: getOwnerEmail(),

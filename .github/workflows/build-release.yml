@@ -52,6 +52,9 @@ jobs:
       - name: Install Node dependencies
         run: npm install
 
+      - name: Desktop sign-in tests
+        run: node --test tests/electron/googleOAuth.test.cjs
+
       - name: Set App Version
         shell: bash
         run: |
@@ -72,6 +75,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.VITE_GOOGLE_OAUTH_CLIENT_ID }}
+          # Optional "Desktop app" client id (public); users can also enter it in Settings.
+          VITE_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.VITE_GOOGLE_DESKTOP_CLIENT_ID }}
 
       - name: Upload Release Artifact
         uses: softprops/action-gh-release@v2

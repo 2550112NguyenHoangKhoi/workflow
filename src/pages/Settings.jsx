@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Save, CheckCircle2, ShieldAlert, Server, Settings as SettingsIcon, Download, TerminalSquare, RefreshCw, XCircle, Sparkles, HardDrive, Cloud } from 'lucide-react';
+import { Key, Save, CheckCircle2, ShieldAlert, Server, Settings as SettingsIcon, Download, TerminalSquare, RefreshCw, XCircle, Sparkles, HardDrive, Cloud, Pin, LogIn, LogOut } from 'lucide-react';
 import { getDriveApiKey, setDriveApiKey, DRIVE_KEY_STORAGE } from '../utils/googleDrive';
+import * as drive from '../utils/googleDrive';
+import { signInWithGoogle, signOutGoogle, getStoredUser } from '../utils/googleAuth';
 
 // Three interchangeable engines power EVERY AI feature (chat, quiz, flashcards, notes, concept
 // map, roadmap...). The choice is encoded into localStorage['workflow_api_key'], which every
@@ -57,6 +59,43 @@ const Settings = () => {
     localStorage.setItem('workflow_api_key', signal);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
+  };
+
+  // Google account: OAuth client (entered by the user) + sign-in status + pinned folders.
+  const [gClient, setGClient] = useState(() => drive.getGoogleClient());
+  const [gSetupOpen] = useState(() => !drive.getGoogleClient().clientId); // open until configured
+  const [gSaved, setGSaved] = useState(false);
+  const [gConnected, setGConnected] = useState(drive.isConnected());
+  const [gUser, setGUser] = useState(getStoredUser());
+  const [gBusy, setGBusy] = useState(false);
+  const [gError, setGError] = useState('');
+  const [pinInput, setPinInput] = useState('');
+  const [pinned, setPinned] = useState(drive.getPinnedFolders());
+  useEffect(() => {
+    const sync = () => { setGConnected(drive.isConnected()); setPinned(drive.getPinnedFolders()); };
+    window.addEventListener(drive.AUTH_EVENT, sync);
+    drive.restoreSession().then(sync);
+    return () => window.removeEventListener(drive.AUTH_EVENT, sync);
+  }, []);
+  const saveGoogleClient = () => {
+    drive.setGoogleClient(gClient);
+    setGClient(drive.getGoogleClient());
+    setGSaved(true);
+    setTimeout(() => setGSaved(false), 2500);
+  };
+  const handleGoogleSignIn = async () => {
+    drive.setGoogleClient(gClient);
+    setGBusy(true); setGError('');
+    try { setGUser(await signInWithGoogle()); } catch (e) { setGError(e.message || String(e)); }
+    setGBusy(false);
+  };
+  const handleGoogleSignOut = async () => {
+    await signOutGoogle();
+    setGUser(null);
+  };
+  const handlePin = async () => {
+    setGError('');
+    try { await drive.pinFolder(pinInput); setPinInput(''); } catch (e) { setGError(e.message || String(e)); }
   };
 
   // Google Drive API key (entered by the user, kept only in this machine's localStorage).
@@ -287,10 +326,82 @@ const Settings = () => {
 
       <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '16px', padding: '32px', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+          <Cloud size={20} /> Tài khoản Google &amp; Google Drive
+        </h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: 0, lineHeight: 1.6 }}>
+          Đăng nhập Google để mọi thư mục trong Drive của bạn (Drive của tôi, Được chia sẻ với tôi, Drive dùng chung) hiện ở thanh bên
+          “Hub tài liệu”. Workflow chỉ xin quyền <strong>đọc</strong>.
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', padding: '12px 14px', borderRadius: '12px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-light)' }}>
+          <span data-testid="google-status" style={{ flex: 1, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+            {gConnected
+              ? <>Đã kết nối{gUser?.email ? <> với <strong>{gUser.email}</strong></> : ''}.</>
+              : 'Chưa kết nối Google.'}
+          </span>
+          {gConnected ? (
+            <button onClick={handleGoogleSignOut} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '10px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontWeight: 700, cursor: 'pointer' }}>
+              <LogOut size={15} /> Ngắt kết nối
+            </button>
+          ) : (
+            <button onClick={handleGoogleSignIn} disabled={gBusy || !gClient.clientId} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--brand-primary)', color: 'white', fontWeight: 700, cursor: gClient.clientId ? 'pointer' : 'not-allowed', opacity: gBusy || !gClient.clientId ? 0.6 : 1 }}>
+              <LogIn size={15} /> {gBusy ? (drive.isDesktop() ? 'Hoàn tất trong trình duyệt…' : 'Đang chờ Google…') : 'Đăng nhập Google'}
+            </button>
+          )}
+        </div>
+        {gError && <div style={{ fontSize: '0.85rem', color: 'var(--danger, #B91C1C)' }}>{gError}</div>}
+
+        <details open={gSetupOpen} style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 700, color: 'var(--text-navy)' }}>OAuth Client ID {gClient.clientId ? '(đã thiết lập)' : '(cần thiết lập một lần)'}</summary>
+          <ol style={{ margin: '8px 0', paddingLeft: '20px', lineHeight: 1.7, color: 'var(--text-muted)' }}>
+            <li>Google Cloud Console → <strong>APIs &amp; Services</strong> → bật <strong>Google Drive API</strong>.</li>
+            <li><strong>OAuth consent screen</strong>: chọn External, thêm email Gmail của bạn vào <strong>Test users</strong>.</li>
+            <li><strong>Credentials → Create credentials → OAuth client ID</strong> → loại{' '}
+              {drive.isDesktop()
+                ? <strong>Desktop app</strong>
+                : <><strong>Web application</strong>, thêm <code>{window.location.origin}</code> vào Authorized JavaScript origins</>}.</li>
+            <li>Dán Client ID{drive.isDesktop() ? ' và Client secret' : ''} vào đây.</li>
+          </ol>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <input value={gClient.clientId} onChange={(e) => setGClient({ ...gClient, clientId: e.target.value })}
+              placeholder="xxxxxxxx.apps.googleusercontent.com" autoComplete="off" aria-label="OAuth Client ID"
+              style={{ flex: '1 1 260px', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border-medium)', fontFamily: 'monospace', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }} />
+            {drive.isDesktop() && (
+              <input type="password" value={gClient.clientSecret} onChange={(e) => setGClient({ ...gClient, clientSecret: e.target.value })}
+                placeholder="Client secret (GOCSPX-…)" autoComplete="off" aria-label="OAuth Client secret"
+                style={{ flex: '1 1 200px', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border-medium)', fontFamily: 'monospace', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }} />
+            )}
+            <button onClick={saveGoogleClient} style={{ padding: '10px 18px', borderRadius: '10px', border: 'none', backgroundColor: gSaved ? '#3B6B59' : '#8A334B', color: 'white', fontWeight: 700, cursor: 'pointer' }}>
+              {gSaved ? 'Đã lưu' : 'Lưu'}
+            </button>
+          </div>
+        </details>
+
+        <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '12px' }}>
+          <div style={{ fontWeight: 700, color: 'var(--text-navy)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}><Pin size={15} /> Ghim thư mục Drive</div>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0 0 8px' }}>
+            Dán liên kết một thư mục bất kỳ (của bạn hoặc thư viện công khai của trường/lớp) để nó luôn hiện ở thanh bên.
+          </p>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <input value={pinInput} onChange={(e) => setPinInput(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" aria-label="Liên kết thư mục Drive"
+              style={{ flex: '1 1 260px', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }} />
+            <button onClick={handlePin} disabled={!pinInput.trim()} style={{ padding: '10px 18px', borderRadius: '10px', border: '1px solid var(--brand-primary)', backgroundColor: 'var(--bg-tertiary)', color: 'var(--brand-primary)', fontWeight: 700, cursor: 'pointer' }}>Ghim</button>
+          </div>
+          {pinned.length > 0 && (
+            <ul style={{ margin: '10px 0 0', paddingLeft: '18px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              {pinned.map(f => (
+                <li key={f.id}>{f.name} <button onClick={() => drive.unpinFolder(f.id)} style={{ background: 'none', border: 'none', color: 'var(--brand-primary)', cursor: 'pointer', fontSize: '0.8rem' }}>bỏ ghim</button></li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '16px', padding: '32px', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
           <Cloud size={20} /> Google Drive API Key
         </h3>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: 0, lineHeight: 1.6 }}>
-          Dùng để duyệt Thư viện Drive công khai và lấy nội dung file Drive làm nguồn đề thi. Key chỉ lưu trên máy này.
+          Không bắt buộc khi đã đăng nhập Google. Chỉ cần để mở thư mục Drive <em>công khai</em> khi chưa đăng nhập. Key chỉ lưu trên máy này.
           Tạo key tại <strong>Google Cloud Console → APIs &amp; Services → Credentials → Create credentials → API key</strong>,
           bật <strong>Google Drive API</strong> cho project, rồi giới hạn key chỉ dùng Drive API.
         </p>

@@ -169,19 +169,21 @@ Google Translate (deep-translator), YouTube transcripts, trafilatura (web pages)
 | `backend/requirements*.txt` | Runtime dependencies / optional OCR and Whisper. |
 | `backend/test_*.py`, `stress_test_nlp.py` | Old ad-hoc scripts (need a live server); not part of CI. |
 | `electron/main.cjs` | Desktop shell (§3). |
-| `electron/preload.cjs` | `contextBridge` → `window.workflowDesktop`. |
+| `electron/preload.cjs` | `contextBridge` → `window.workflowDesktop` (`apiToken`, `selectWorkspace`, `relaunch`, `google.{signIn,getToken,signOut}`). |
+| `electron/googleOAuth.cjs` | Desktop Google sign-in: OAuth for installed apps (system browser → loopback `127.0.0.1:<random>` + PKCE), refresh token encrypted with `safeStorage` in `userData/google-session.bin`. No Electron imports, tested by `tests/electron/googleOAuth.test.cjs` against a fake Google. |
 | `src/main.jsx` | Bootstraps React; dark-mode class; legacy key migration; **fetch wrapper adding `X-Workflow-Token`**. |
 | `src/App.jsx` | HashRouter routes + `AuthGuard`. |
 | `src/index.css` | Theme tokens (`:root` / `:root.dark-mode`), incl. `--surface-*`, `--text-ink`, `--text-slate*`. |
 | `src/utils/engine.js` | `getEngineKey()`, `engineLabel()`; the single source of the AI-engine signal. |
 | `src/utils/uploads.js` | `readUploadResult(res)`: interprets 422 `detail` / 200 `warning` from upload and URL endpoints. |
-| `src/utils/googleDrive.js` | Drive browse/import, GIS OAuth, `getDriveApiKey()`/`setDriveApiKey()` (user-entered key), `LIBRARY_ROOT` (public HUST folder). |
-| `src/utils/googleAuth.js` | Google sign-in (GIS token flow). |
+| `src/utils/googleDrive.js` | **The user's own Google Drive.** One consent (profile + `drive.readonly`). Desktop → `window.workflowDesktop.google` (loopback flow); browser → GIS popup, token in `sessionStorage`. `restoreSession()` (silent), `connectDrive()`, `listChildren(MY_DRIVE / SHARED_WITH_ME / id)` (paged, all drives), `listSharedDrives()`, `fileObjectUrl()` (private-file viewer), pinned folders (`pinFolder`/`unpinFolder`), `getGoogleClient()` (OAuth client from Settings, env fallback), `AUTH_EVENT`. Drive API key is optional (public folders while signed out). |
+| `src/utils/googleAuth.js` | Profile sign-in on top of `googleDrive.connectDrive()` + `getUserInfo()`. |
 | `src/utils/examSources.js` | Selected-sources store for exam generation, `extractFileText`, `getOwnerEmail`. |
 | `src/utils/ics.js` | Study plan → iCalendar file (`buildStudyPlanIcs`, `downloadIcs`). |
 | `src/pages/*` | Route pages (§8). |
 | `src/components/layout/*` | App shell: `AppLayout`, `Sidebar`, `Topbar`, `StudioSidebar` (library pages), `ProjectStudioSidebar` (document/project pages), `TeamChatWidget`, `NotificationsBell`. |
 | `src/components/modals/*` | Generators and viewers (§8). |
+| `tests/electron/` | `node --test tests/electron/googleOAuth.test.cjs` |
 | `tests/backend/` | **Regression suite** (`conftest.py` sets a temp data dir and disables the AI key). |
 | `tests/e2e/` | Older HTTP tests against a live server. |
 | `.github/workflows/build-release.yml` | Release pipeline. |
@@ -355,7 +357,10 @@ SQLite foreign keys are **not enforced**, so endpoints validate parent ids thems
 | `workflow_api_key` | engine signal; read **only** via `getEngineKey()` |
 | `workflow_gemini_key` | raw key remembered by Settings |
 | `workflow_engine_mode` | `ai` / `local` / `algorithm` |
-| `workflow_drive_api_key` | Drive key |
+| `workflow_drive_api_key` | Drive key (optional) |
+| `workflow_google_client` | `{clientId, clientSecret}` OAuth client (Settings → Tài khoản Google) |
+| `workflow_drive_pinned` | `[{id,name}]` folders pinned to the sidebar |
+| `sessionStorage.workflow_google_token` | browser build only: Google access token until expiry |
 | `workflow_dark_mode` | theme |
 | `vocab_limit`, `vocab_wrong_limit` | vocabulary review settings |
 | `workflow_notif_seen` | notifications read state |
@@ -458,6 +463,7 @@ Columns: **ID**, **Where** (file and symbol), **Symptom**, **Root cause**, **Fix
 | F-6 | `DocumentViewer.actionPills` | Quiz / flashcard pills sent text to chat | Open the generators |
 | F-7 | `electron/main.cjs:workspace:select`, `Settings` storage card, `/api/system/info` | Workspace change didn't move data; no button | Copies DB + uploads, offers relaunch; card in Settings |
 | F-8 | `main.py` folder/project PATCH/DELETE, `Sidebar.jsx` | Folders create-only; projects couldn't be renamed / moved / deleted | Endpoints + UI (folder icons, right-click project menu) |
+| F-9 | `Sidebar.jsx` (GOOGLE DRIVE section), `DocumentExplorer`, `DriveViewer`, `Settings` (Tài khoản Google card), `googleDrive.js`, `electron/googleOAuth.cjs`, `main.py:_fetch_drive_text` | Sidebar showed only a hard-coded third-party HUST folder; Google sign-in could not work in the packaged app (GIS rejects the `file://` origin and Google blocks sign-in inside Electron); token lost on reload; private files had no viewer/download; exam sources from private Drive or Google Docs came back empty; school filter chips filtered nothing | User's own Drive: My Drive / Shared with me / shared drives tree + pinned folders; desktop loopback+PKCE flow with encrypted refresh token; silent restore; blob viewer; `drive_access_token` + Docs export in the backend; type filter chips (PDF/TXT/MD) | ✅ backend + `tests/electron`; Playwright with mocked Google (web + desktop bridge) |
 
 ### UI (U)
 
@@ -486,7 +492,7 @@ Columns: **ID**, **Where** (file and symbol), **Symptom**, **Root cause**, **Fix
 | 9 | Team chat "teacher" tab shows the project's whole AI chat history | `TeamChatWidget.fetchAiMessages` → `/api/projects/{id}/messages` | Filter by persona or add a separate channel |
 | 10 | `/api/user/stats` counts are global, not per user | `main.py:get_user_stats` | Filter by owner once documents have owners |
 | 11 | Source column in `DocumentViewer` is narrow (buttons wrap) | `DocumentViewer.jsx` layout | Responsive widths |
-| 12 | `LIBRARY_ROOT` is someone else's public Drive folder | `src/utils/googleDrive.js` | Make it a setting or copy the folder |
+| 12 | ~~`LIBRARY_ROOT`~~ — done (F-9): the user's own Drive + pinned folders | | |
 | 13 | Old ad-hoc test scripts need a live server | `backend/test_*.py`, `tests/e2e/` | Port to `tests/backend` style |
 | 14 | `datetime.utcnow()` deprecation warnings | `db/models.py`, `main.py` | `datetime.now(datetime.UTC)` (mind naive / aware comparisons) |
 
@@ -517,7 +523,7 @@ The owner names two products as inspiration. Copy **features and mechanics, not 
 | **Branching (non-linear) chat**: each follow-up opens a branch | linear chat per document/project | `parent_id` on `chat_messages` + a thread/branch UI |
 | Active learning (teach-back) with XP and a "memory %" | `ActiveLearning` (understanding score) | XP/memory tracking over time |
 | Auto summary / flashcards / quizzes / spaced repetition | present | — |
-| Public HUST study library | `LIBRARY_ROOT` in `src/utils/googleDrive.js` **is omilearn's public Drive folder** | depends on a third party keeping it public; make it configurable or self-hosted (backlog #12) |
+| Public HUST study library | Removed (F-9). Any public library folder can be pinned by link in Settings | — |
 
 ---
 
