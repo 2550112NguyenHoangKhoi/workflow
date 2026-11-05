@@ -117,17 +117,41 @@ BASE_DIR = setup_runtime_paths()
 
 app = FastAPI()
 
-# Allow the local frontend (Vite dev server on :5173 / Electron) to call the
-# backend cross-origin at http://127.0.0.1:8000. Wildcard origin with
-# allow_credentials=False (browsers reject "*" + credentials).
+# CORS: only the app's own origins may call the backend from a browser context — the Vite
+# dev server, and the packaged Electron window (file:// pages send Origin "null").
+# Any other website the user visits gets no CORS headers, so it can't read local data.
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import hmac
+
+_ALLOWED_ORIGINS = [o.strip() for o in os.getenv(
+    "WORKFLOW_ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173,null").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Per-launch API token. The Electron shell generates one, passes it to this process and to
+# its own window; requests without it are refused. That blocks other local pages (incl.
+# sandboxed iframes, whose Origin is also "null") and form-POST CSRF. Unset when running
+# from source, so `uvicorn main:app` + `npm run dev` keep working without setup.
+_API_TOKEN = os.getenv("WORKFLOW_API_TOKEN", "")
+# <iframe>/<object> loads of a document's file can't carry headers; they only display it.
+_TOKEN_EXEMPT = re.compile(r"^/api/documents/\d+/file$")
+
+
+@app.middleware("http")
+async def _require_api_token(request, call_next):
+    if (_API_TOKEN and request.method != "OPTIONS" and request.url.path.startswith("/api/")
+            and not (request.method == "GET" and _TOKEN_EXEMPT.match(request.url.path))):
+        sent = request.headers.get("x-workflow-token", "")
+        if not hmac.compare_digest(sent, _API_TOKEN):
+            return JSONResponse({"detail": "Missing or invalid app token."}, status_code=401)
+    return await call_next(request)
 
 # --- Schemas ---
 class ChatRequest(BaseModel):

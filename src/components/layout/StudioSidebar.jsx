@@ -12,10 +12,6 @@ import ArtifactViewerModal from '../modals/ArtifactViewerModal';
 import { getOwnerEmail } from '../../utils/examSources';
 
 // Node.js APIs available because nodeIntegration is true
-const fs = window.require ? window.require('fs') : null;
-const path = window.require ? window.require('path') : null;
-const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
-const os = window.require ? window.require('os') : null;
 
 const StudioSidebar = () => {
   const navigate = useNavigate();
@@ -83,12 +79,11 @@ const StudioSidebar = () => {
   );
 
   const handleSelectWorkspace = async () => {
-    if (!ipcRenderer) return alert("Electron IPC not available in browser mode.");
+    const desktop = window.workflowDesktop;
+    if (!desktop?.selectWorkspace) return alert("Chỉ đổi được thư mục lưu trữ trong ứng dụng desktop.");
     try {
-      const selectedPath = await ipcRenderer.invoke('dialog:openDirectory');
+      const selectedPath = await desktop.selectWorkspace();
       if (selectedPath) {
-        const configPath = path.join(os.homedir(), '.workflow_config.json');
-        fs.writeFileSync(configPath, JSON.stringify({ workspace_path: selectedPath }, null, 2));
         alert(`Workspace updated to:\n${selectedPath}\n\nPlease restart the application for the database to move.`);
       }
     } catch (err) {

@@ -3,12 +3,17 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { spawn } = require('child_process');
+const crypto = require('crypto');
+const os = require('os');
 
 const BACKEND_PORT = 8000;
 const HEALTH_URL = `http://127.0.0.1:${BACKEND_PORT}/api/usage`;
 const STARTUP_TIMEOUT_MS = 90_000; // first launch unpacks spaCy/NLTK; can be slow
 
 let backendProcess = null;
+// Per-launch secret: the backend rejects API calls without it, so other local web pages
+// can't drive or read the user's data through http://127.0.0.1:8000.
+const API_TOKEN = crypto.randomBytes(24).toString('hex');
 let quitting = false;
 
 const LOADING_HTML = `data:text/html;charset=utf-8,${encodeURIComponent(`
@@ -18,7 +23,7 @@ const LOADING_HTML = `data:text/html;charset=utf-8,${encodeURIComponent(`
 
 function pingBackend() {
   return new Promise((resolve) => {
-    const req = http.get(HEALTH_URL, (res) => { res.resume(); resolve(res.statusCode === 200); });
+    const req = http.get(HEALTH_URL, { headers: { 'X-Workflow-Token': API_TOKEN } }, (res) => { res.resume(); resolve(res.statusCode === 200); });
     req.on('error', () => resolve(false));
     req.setTimeout(2000, () => { req.destroy(); resolve(false); });
   });
@@ -55,7 +60,7 @@ function startBackend() {
     cwd: path.dirname(backendPath),
     // Keep the DB, uploads and usage counter in the per-user data folder, never inside
     // the (possibly read-only) app bundle.
-    env: { ...process.env, WORKFLOW_DATA_DIR: app.getPath('userData'), WORKFLOW_PORT: String(BACKEND_PORT) },
+    env: { ...process.env, WORKFLOW_DATA_DIR: app.getPath('userData'), WORKFLOW_PORT: String(BACKEND_PORT), WORKFLOW_API_TOKEN: API_TOKEN },
     windowsHide: true,
   });
 
@@ -78,8 +83,12 @@ async function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
+      // The renderer shows AI output, web-search results and Markdown: never give it Node.
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      preload: path.join(__dirname, 'preload.cjs'),
+      additionalArguments: [`--workflow-token=${API_TOKEN}`],
     }
   });
 
@@ -99,12 +108,13 @@ async function createWindow() {
 app.whenReady().then(() => {
   startBackend();
 
-  // IPC Dialog Handler
-  ipcMain.handle('dialog:openDirectory', async () => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openDirectory']
-    });
-    return result.canceled ? null : result.filePaths[0];
+  ipcMain.handle('workspace:select', async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const selectedPath = result.filePaths[0];
+    const configPath = path.join(os.homedir(), '.workflow_config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ workspace_path: selectedPath }, null, 2));
+    return selectedPath;
   });
 
   createWindow();
