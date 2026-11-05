@@ -1085,6 +1085,20 @@ async def get_project_messages_api(project_id: int, db: Session = Depends(get_db
         ]
     }
 
+@app.delete("/api/projects/{project_id}/messages")
+def clear_project_messages(project_id: int, db: Session = Depends(get_db)):
+    n = db.query(models.ChatMessage).filter(models.ChatMessage.project_id == project_id).delete()
+    db.commit()
+    return {"deleted": n}
+
+
+@app.delete("/api/documents/{document_id}/messages")
+def clear_document_messages(document_id: int, db: Session = Depends(get_db)):
+    n = db.query(models.ChatMessage).filter(models.ChatMessage.document_id == document_id).delete()
+    db.commit()
+    return {"deleted": n}
+
+
 @app.get("/api/documents/{document_id}/messages")
 async def get_document_messages_api(document_id: int, db: Session = Depends(get_db)):
     messages = crud.get_chat_history(db, document_id=document_id)
@@ -1534,6 +1548,24 @@ def _web_search(query: str, max_results: int = 15) -> list:
     return []
 
 
+_TRUSTED_HOSTS = ("wikipedia.org", "britannica.com", "khanacademy.org", "coursera.org", "edx.org", "mit.edu", "ocw.mit.edu",
+                  "arxiv.org", "nature.com", "springer.com", "sciencedirect.com", "ieee.org", "acm.org", "jstor.org",
+                  "ncbi.nlm.nih.gov", "who.int", "openstax.org", "hocmai.vn", "vietjack.com", "moet.gov.vn")
+
+
+def _source_trust(url: str) -> dict:
+    """"✓ Tin cậy" for educational / academic / government sources (domain heuristics)."""
+    from urllib.parse import urlparse
+    host = (urlparse(url or "").hostname or "").lower()
+    if not host:
+        return {"trusted": False, "source": ""}
+    edu = re.search(r"\.(edu|gov|ac)(\.[a-z]{2})?$|\.edu\.vn$|\.gov\.vn$|\.ac\.vn$", host)
+    known = any(host == h or host.endswith("." + h) for h in _TRUSTED_HOSTS)
+    label = ("Trường đại học / học thuật" if edu and ".edu" in host or edu and ".ac" in host else
+             "Cơ quan nhà nước" if edu else "Nguồn học thuật uy tín" if known else "")
+    return {"trusted": bool(edu or known), "source": host.removeprefix("www."), "trust_reason": label}
+
+
 @app.post("/api/search")
 async def search_materials(request: SearchRequest, x_api_key: str | None = Header(default=None)):
     if not request.query or not request.query.strip():
@@ -1564,13 +1596,26 @@ async def search_materials(request: SearchRequest, x_api_key: str | None = Heade
             try:
                 data = await agent_run(config, prompt, structured=True, timeout=30)
                 if data and data.get("results"):
+                    for r in data["results"]:
+                        r.update(_source_trust(r.get("url", "")))
                     return data
             except Exception as e:  # keep the raw search results if curation fails
                 print(f"[search] AI curation failed, returning raw results: {e}")
 
-        # Fallback to top 5 if AI fails or no key
+        # Fallback (no key / AI failed): rank by TF-IDF similarity to the query (the score used
+        # to be a constant 80% for every result) and label trusted sources.
+        try:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.metrics.pairwise import cosine_similarity
+            docs_txt = [f"{r['title']} {r['snippet']}" for r in raw_results]
+            m = TfidfVectorizer(sublinear_tf=True).fit_transform(docs_txt + [request.query])
+            sims = cosine_similarity(m[-1], m[:-1]).ravel()
+        except Exception:
+            sims = [0.3] * len(raw_results)
+        order = sorted(range(len(raw_results)), key=lambda k: (-(sims[k] + (0.15 if _source_trust(raw_results[k]["url"])["trusted"] else 0))))
         fallback_results = []
-        for res in raw_results[:5]:
+        for k in order[:6]:
+            res = raw_results[k]
             url = res["url"]
             type_label = "Article"
             if "youtube.com" in url or "youtu.be" in url:
@@ -1587,7 +1632,8 @@ async def search_materials(request: SearchRequest, x_api_key: str | None = Heade
                 "url": url,
                 "snippet": res["snippet"],
                 "type": type_label,
-                "relevancy_score": 80
+                "relevancy_score": int(min(99, max(20, round(35 + 120 * float(sims[k]))))),
+                **_source_trust(url),
             })
             
         return {"results": fallback_results}
@@ -1901,8 +1947,14 @@ async def generate_concept_map_endpoint(request: TopicRequest, db: Session = Dep
     return generate_concept_map(request.topic_or_text)
 
 
+class SynthesisText(BaseModel):
+    title: str = ""
+    text: str
+
+
 class SynthesisRequest(BaseModel):
     document_ids: list[int] = []
+    texts: list[SynthesisText] = []   # canvas notes / other node contents
     project_id: int | None = None
     format: str = "outline"         # outline | notes | table | custom
     instruction: str = ""
@@ -1927,14 +1979,20 @@ async def synthesize_endpoint(req: SynthesisRequest, db: Session = Depends(get_d
     """AI Tổng hợp: combine the selected sources into an outline, a full lesson, a comparison
     table or the learner's own request. Markdown + LaTeX; saved as a "notes" artifact."""
     from nlp.synthesis import synthesize
+    from types import SimpleNamespace
     q = db.query(models.Document)
     if req.document_ids:
         docs = q.filter(models.Document.id.in_(req.document_ids)).all()
-    elif req.project_id:
+    elif req.project_id and not req.texts:
         docs = crud.get_documents(db, project_id=req.project_id)
+    elif req.texts:
+        docs = []
     else:
         raise HTTPException(status_code=422, detail="Chọn ít nhất một tài liệu.")
     docs = [d for d in docs if (d.content or "").strip()]
+    # Free texts (canvas notes, chat answers) are sources too.
+    docs += [SimpleNamespace(id=None, filename=t.title or "Ghi chú", content=t.text, project_id=req.project_id)
+             for t in req.texts if t.text.strip()]
     if not docs:
         raise HTTPException(status_code=422, detail="Các tài liệu đã chọn chưa có nội dung văn bản.")
     if req.format == "custom" and not req.instruction.strip():
@@ -1963,7 +2021,7 @@ async def synthesize_endpoint(req: SynthesisRequest, db: Session = Depends(get_d
         project_id = req.project_id or docs[0].project_id
         crud.create_artifact(db, project_id=project_id, type="notes", title=result["title"],
                              content=json.dumps({"title": result["title"], "markdown_content": result["markdown"]}, ensure_ascii=False),
-                             document_id=docs[0].id if len(docs) == 1 else None)
+                             document_id=docs[0].id if len(docs) == 1 and docs[0].id else None)
     return {**result, "format": req.format, "engine": engine, "sources": [d.filename for d in docs]}
 
 
@@ -2035,6 +2093,50 @@ def list_feedback(db: Session = Depends(get_db)):
     rows = db.query(models.Feedback).order_by(models.Feedback.id.desc()).limit(100).all()
     return [{"id": f.id, "kind": f.kind, "message": f.message, "page": f.page, "has_screenshot": bool(f.screenshot),
              "created_at": f.created_at} for f in rows]
+
+
+class CanvasIn(BaseModel):
+    scope: str
+    data: dict
+
+
+@app.get("/api/canvas")
+def get_canvas(scope: str, db: Session = Depends(get_db)):
+    """Canvas workspace for "project:<id>" / "document:<id>". A new canvas starts with the
+    scope's documents as nodes."""
+    c = db.query(models.Canvas).filter(models.Canvas.scope == scope).first()
+    if c:
+        try:
+            return {"scope": scope, "data": json.loads(c.data or "{}"), "saved": True}
+        except Exception:
+            pass
+    kind, _, sid = scope.partition(":")
+    docs = []
+    if kind == "project" and sid.isdigit():
+        docs = crud.get_documents(db, project_id=int(sid))
+    elif kind == "document" and sid.isdigit():
+        d = db.query(models.Document).filter(models.Document.id == int(sid)).first()
+        docs = [d] if d else []
+    nodes = [{"id": f"doc-{d.id}", "type": "document", "position": {"x": 40, "y": 40 + i * 190},
+              "data": {"doc_id": d.id, "title": d.filename}} for i, d in enumerate(docs)]
+    return {"scope": scope, "data": {"nodes": nodes, "edges": []}, "saved": False}
+
+
+@app.put("/api/canvas")
+def save_canvas(req: CanvasIn, db: Session = Depends(get_db)):
+    if not re.fullmatch(r"(project|document):\d+", req.scope):
+        raise HTTPException(status_code=422, detail="scope must be project:<id> or document:<id>")
+    raw = json.dumps(req.data, ensure_ascii=False)
+    if len(raw) > 5_000_000:
+        raise HTTPException(status_code=413, detail="Canvas quá lớn.")
+    c = db.query(models.Canvas).filter(models.Canvas.scope == req.scope).first()
+    if not c:
+        c = models.Canvas(scope=req.scope)
+        db.add(c)
+    c.data = raw
+    c.updated_at = datetime.datetime.utcnow()
+    db.commit()
+    return {"ok": True}
 
 
 class MindMapRequest(BaseModel):

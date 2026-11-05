@@ -581,3 +581,25 @@ def test_practice_library_conversation_task1_and_speaking(client):
     assert hist[0]["question"] == q and hist[0]["transcript"]
     # Local profiles that never went through /api/auth still get stats (was 404).
     assert client.get("/api/user/stats", params={"email": "nobody@local"}).status_code == 200
+
+
+def test_canvas_workspace_persists_and_synthesis_takes_notes(client):
+    pid = client.post("/api/projects", json={"name": "Canvas"}).json()["id"]
+    did = client.post("/api/documents/upload", files={"file": ("a.txt", b"A stack is a last-in first-out memory. " * 5, "text/plain")},
+                      data={"project_id": pid}).json()["id"]
+    fresh = client.get("/api/canvas", params={"scope": f"project:{pid}"}).json()
+    assert not fresh["saved"] and fresh["data"]["nodes"][0]["data"]["doc_id"] == did
+    data = {"nodes": fresh["data"]["nodes"] + [{"id": "note-1", "type": "note", "position": {"x": 400, "y": 0},
+                                                 "data": {"title": "Ghi chú", "text": "Stacks push and pop."}}],
+            "edges": [{"id": "e1", "source": f"doc-{did}", "target": "note-1"}]}
+    assert client.put("/api/canvas", json={"scope": f"project:{pid}", "data": data}).json()["ok"]
+    again = client.get("/api/canvas", params={"scope": f"project:{pid}"}).json()
+    assert again["saved"] and len(again["data"]["nodes"]) == 2 and again["data"]["edges"][0]["target"] == "note-1"
+    assert client.put("/api/canvas", json={"scope": "x:1", "data": {}}).status_code == 422
+    # Synthesis accepts free texts (canvas notes) alongside documents.
+    r = client.post("/api/synthesize", json={"document_ids": [did], "texts": [{"title": "Ghi chú", "text": "Stacks push and pop items in order. " * 3}],
+                                             "format": "outline", "save": False, **OFFLINE}).json()
+    assert r["sources"] == ["a.txt", "Ghi chú"] and r["markdown"]
+    # Chat history can be cleared.
+    client.post("/api/chat", json={"message": "What is a stack?", "document_id": did, **OFFLINE})
+    assert client.delete(f"/api/documents/{did}/messages").json()["deleted"] == 2

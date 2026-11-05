@@ -80,7 +80,14 @@ def notes(sources: list[dict], vn: bool) -> str:
     title = _doc_title(sources[0]["text"], sources[0].get("title", "")) if len(sources) == 1 else ("Bài học tổng hợp" if vn else "Combined lesson")
     parts = [p for src in sources for p in _parts(src["text"])]
     md = [f"# {title}", "", "## Mục tiêu học tập" if vn else "## Learning objectives"]
-    heads = [h for h, _ in parts if h][:5] or [c for c in _concepts(text, 5)]
+    raw_heads = [h for h, _ in parts if h][:5] or _concepts(text, 8)
+    heads, seen = [], set()
+    for h in raw_heads:  # "automata" / "automaton" are one objective
+        key = h.lower()[:6]
+        if key not in seen:
+            seen.add(key)
+            heads.append(h)
+    heads = heads[:5]
     md += [("- Hiểu và trình bày được: " if vn else "- Understand and explain: ") + h.split(" ", 1)[-1] for h in heads]
     md.append("")
     for heading, body in parts:

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useOutletContext } from 'react-router-dom';
-import { Users, ArrowRight, BrainCircuit, FileText, Sparkles, PanelRightClose, PanelRightOpen, ExternalLink, GitBranch, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Users, ArrowRight, BrainCircuit, FileText, Sparkles, PanelRightClose, PanelRightOpen, ExternalLink, GitBranch, ChevronLeft, ChevronRight, X, Trash2 } from 'lucide-react';
 import PdfViewer from '../components/PdfViewer';
 import ProjectCollaborationModal from '../components/modals/ProjectCollaborationModal';
 import CreateExamModal from '../components/modals/CreateExamModal';
@@ -419,6 +419,15 @@ const DocumentViewer = () => {
                     }}>{label}</button>
                   ))}
                 </div>
+                {thread.length > 0 && id && (
+                  <button data-testid="clear-chat" title="Xoá lịch sử chat" onClick={async () => {
+                    if (!window.confirm('Xoá toàn bộ lịch sử chat của mục này?')) return;
+                    const url = isProjectRoute ? `http://127.0.0.1:8000/api/projects/${id}/messages` : `http://127.0.0.1:8000/api/documents/${id}/messages`;
+                    try { await fetch(url, { method: 'DELETE' }); setMessages([]); setLeafId(null); setBranchFrom(null); } catch { /* offline */ }
+                  }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: 4 }}>
+                    <Trash2 size={16} />
+                  </button>
+                )}
                 {activeDoc && (
                   <button onClick={() => setChatHidden(true)} title="Ẩn khung chat (xem tài liệu toàn bộ chiều rộng)" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: 4 }}>
                     <PanelRightClose size={18} />

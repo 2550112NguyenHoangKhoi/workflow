@@ -25,7 +25,10 @@ export default function ActiveLearning() {
   
   // Setup state
   const [topic, setTopic] = useState('');
-  const [context, setContext] = useState('');
+  // "Dạy AI" from a canvas review node hands over the connected content.
+  const [context, setContext] = useState(() => {
+    try { const t = sessionStorage.getItem('teach_context') || ''; sessionStorage.removeItem('teach_context'); return t; } catch { return ''; }
+  });
   const [level, setLevel] = useState('beginner');
   
   // Session state (returned from start endpoint)

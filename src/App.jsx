@@ -9,6 +9,7 @@ import Settings from './pages/Settings';
 import LandingPage from './pages/LandingPage';
 import WritingPractice from './pages/WritingPractice';
 import Speaking from './pages/Speaking';
+import CanvasWorkspace from './pages/CanvasWorkspace';
 import ActiveLearning from './pages/ActiveLearning';
 import Vocabulary from './pages/Vocabulary';
 import { getStoredUser } from './utils/googleAuth';
@@ -45,6 +46,7 @@ const App = () => {
           <Route path="settings" element={<Settings />} />
           <Route path="writing" element={<WritingPractice />} />
           <Route path="speaking" element={<Speaking />} />
+          <Route path="canvas/:kind/:id" element={<CanvasWorkspace />} />
           <Route path="active-learning" element={<ActiveLearning />} />
           <Route path="vocabulary" element={<Vocabulary />} />
         </Route>

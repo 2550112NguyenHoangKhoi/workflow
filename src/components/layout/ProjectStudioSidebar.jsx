@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
-import { Check, Search, Upload, Calendar, AlertCircle, FileText, Network, PanelRightClose, PanelRightOpen, GitBranch, Sparkles, Layers, ClipboardList, NotebookPen, BookOpenText } from 'lucide-react';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { Check, Search, Upload, Calendar, AlertCircle, FileText, Network, PanelRightClose, PanelRightOpen, GitBranch, Sparkles, LayoutDashboard, Layers, ClipboardList, NotebookPen, BookOpenText } from 'lucide-react';
 import UploadSourcesModal from '../modals/UploadSourcesModal';
 import SearchMaterialsModal from '../modals/SearchMaterialsModal';
 import CreateExamModal from '../modals/CreateExamModal';
@@ -21,6 +21,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona, collapsed =
   const { id } = useParams();
   const location = useLocation();
   const isProject = location.pathname.startsWith('/project/');
+  const navigate = useNavigate();
   const projectId = isProject ? id : null;
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -250,6 +251,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona, collapsed =
             {[
               { label: 'Sơ đồ tư duy', icon: GitBranch, onClick: () => setIsMindMapOpen(true) },
               { label: 'AI Tổng hợp', icon: Sparkles, onClick: () => setIsSynthesisOpen(true) },
+              { label: 'Không gian Canvas', icon: LayoutDashboard, onClick: () => navigate(`/canvas/${isProject ? 'project' : 'document'}/${id}`) },
               { label: 'Bản đồ khái niệm', icon: Network, onClick: () => setIsConceptMapOpen(true) },
               { label: 'Flashcard', icon: Layers, onClick: () => setIsFlashcardOpen(true) },
               { label: 'Đề thi / Quiz', icon: ClipboardList, onClick: () => setIsExamOpen(true) },

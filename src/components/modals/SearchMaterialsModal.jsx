@@ -187,8 +187,14 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
                             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', backgroundColor: 'var(--accent-green)', padding: '4px 8px', borderRadius: '8px' }}>
                               {res.type}
                             </span>
+                            {res.trusted && (
+                              <span title={res.trust_reason || 'Nguồn giáo dục / học thuật'} style={{ fontSize: '0.75rem', fontWeight: 700, color: '#065F46', backgroundColor: '#D1FAE5', padding: '4px 8px', borderRadius: '8px' }}>
+                                ✓ Tin cậy
+                              </span>
+                            )}
                           </div>
                         </div>
+                        {res.source && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>{res.source}{res.trust_reason ? ` · ${res.trust_reason}` : ''}</div>}
                         <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
                           {res.snippet}
                         </p>

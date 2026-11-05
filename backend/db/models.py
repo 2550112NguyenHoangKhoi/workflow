@@ -246,3 +246,13 @@ class Feedback(Base):
     page = Column(String, nullable=True)        # route the user was on
     screenshot = Column(Text, nullable=True)    # PNG data URL (optional)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class Canvas(Base):
+    """Canvas workspace (nodes + edges as JSON) for a project or a single document."""
+    __tablename__ = "canvases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scope = Column(String, unique=True, index=True)   # "project:<id>" | "document:<id>"
+    data = Column(Text, default="{}")
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)

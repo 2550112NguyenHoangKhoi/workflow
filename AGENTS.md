@@ -505,6 +505,10 @@ Columns: **ID**, **Where** (file and symbol), **Symptom**, **Root cause**, **Fix
 | F-24 | `Task1Chart.jsx`, `practice_bank.TASK1_CHARTS` | Task 1 prompts were text-only | Bar / pie / line / table / mixed charts drawn (SVG) from data; random Task 1 also picks a charted prompt |
 | F-25 | `pages/Speaking.jsx` (route `/speaking`, sidebar "Luyện nói"), `nlp/speaking.py`, `/api/pronunciation/*`, `/api/speaking/grade`, `/api/speaking/history` | No speaking practice | Pronunciation (read sentences by level/topic; TTS model; word-level green/red/missed), conversation role-play (pick a character, others' lines spoken), IELTS Speaking Part 1 (question bank by topic) / Part 2 (cue card, 60 s prep, 120 s) / Part 3 / full simulation, band estimate (fluency, lexical, grammar, coherence; Gemini examiner with a better answer when a key is set), practice history |
 | F-26 | `UserProfileModal`, `/api/user/stats` | Sidebar "Hồ sơ của tôi" rendered nothing (no user prop); stats 404'd for local profiles | Falls back to the stored user; "Thành tích luyện tập": total points (+ teach XP), streaks, sessions, recent activity |
+| F-27 | `pages/CanvasWorkspace.jsx` (route `/canvas/:kind/:id`, Studio "Không gian Canvas"), `models.Canvas`, `GET/PUT /api/canvas`, `/api/synthesize` `texts` | No canvas workspace | Board per project/document: document, note, AI chat, review (quiz + flashcards, "Dạy AI" hands the content to Active learning), synthesis nodes; drag a node's dot onto another to connect — AI nodes use every connected node's content; "Tạo bài học từ ghi chú"; autosave |
+| F-28 | `/api/search` (`_source_trust`), `SearchMaterialsModal` | Offline results all showed a constant "80% Match"; no source labels | TF-IDF relevance; "✓ Tin cậy" for .edu/.gov/.ac/.edu.vn and known academic sites, with the domain shown |
+| F-29 | `DELETE /api/{documents,projects}/{id}/messages`, chat header bin icon | Chat history could not be cleared | "Xoá lịch sử chat" |
+| U-8 | `index.html` error box | Debug log printed every window error on screen via `innerHTML`, including the benign ResizeObserver warning | Ignores ResizeObserver, uses `textContent`, dismissible box |
 
 ### UI (U)
 
@@ -551,7 +555,7 @@ Sources: public pages + sitemap + robots, and the public JS bundles (omilearn `_
 | Feature (what their app does) | Workflow | Status |
 |---|---|---|
 | Upload docs, chat with citations (`citations` event), select text in the PDF to ask AI (pdf.js text layer), "Vừa trang", highlight | PdfViewer text layer + selection menu; chat citations jump + highlight; fit-width/page | ✅ F-12, F-13, U-7 |
-| Non-linear (branching) chat, chat history saved/cleared | Branching chat (F-21); history per document/project | ✅ (no "xoá lịch sử" button yet) |
+| Non-linear (branching) chat, chat history saved/cleared | F-21, F-29 | ✅ |
 | AI Tổng hợp from connected sources: Đề cương / Ghi chú (bài học) / Bảng so sánh / Tùy chỉnh; copy, export PDF | SynthesisModal (F-14) | ✅ |
 | AI Ôn tập set: Quiz (15) / Flashcard (15) / Tự luận with rubric grading / Dạy AI; "Tạo thêm N câu"; wrong answers → flashcards | Exam (MCQ/TF/short/essay) + essay rubric grading (F-15) + add-more questions + wrong→flashcards (F-16); flashcards; teach-back | ✅ |
 | Teach-back as a child who asks back, voice teaching, "Độ hiểu của đứa trẻ", XP + "độ nhớ" | F-19 | ✅ |
@@ -559,11 +563,11 @@ Sources: public pages + sitemap + robots, and the public JS bundles (omilearn `_
 | Smart reminder: quiz inside the notification, streak | F-20 | ✅ |
 | Mind-map style overview | Mind map per document / per subject (F-11) | ✅ (Workflow-specific) |
 | Notes node → "Tạo bài học từ ghi chú", voice-recording node (speech → note) | Smart notes, study doc; voice input exists (VoiceInput) | ⚠️ no free-form note editor / voice note |
-| **Canvas workspace** (drag nodes: documents, notes, AI chat, review, synthesis; connect edges so AI answers from linked nodes) | Document view + Studio tools | ❌ largest remaining gap |
+| Canvas workspace (nodes: documents, notes, AI chat, review, synthesis; edges feed AI context) | F-27 | ✅ (no video / voice-recording node types) |
 | Subject selection ("Chọn môn chính") filtering the workspace | Projects/folders | ⚠️ |
 | Teacher workspace (lesson plans by subject/grade/textbook/style, exams with answer key + grading guide exported to Word/PDF, print templates, classes/live activity) | Lesson plan (giáo án), exam generator, examdoc | ⚠️ no Word export / print templates / classes |
 | Feedback with screenshot | F-18 | ✅ |
-| AI material search with trust labels | `/api/search` | ⚠️ no trust labels |
+| AI material search with trust labels | `/api/search` + F-28 | ✅ (domain heuristics) |
 
 **english.datpmt.com**
 

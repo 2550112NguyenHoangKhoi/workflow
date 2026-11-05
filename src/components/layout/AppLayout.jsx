@@ -15,7 +15,7 @@ const AppLayout = () => {
   // The right-hand Studio panel (exam/flashcard tools) is only meaningful on the
   // document hub and chat/document views — hide it on full-page tools like the
   // writing practice, active learning, and settings pages so they get the full width.
-  const showStudio = !['/writing', '/speaking', '/settings', '/active-learning', '/vocabulary'].includes(location.pathname);
+  const showStudio = !['/writing', '/speaking', '/settings', '/active-learning', '/vocabulary'].includes(location.pathname) && !location.pathname.startsWith('/canvas/');
   const projectMatch = location.pathname.match(/^\/project\/(\d+)/);
   const teamProjectId = projectMatch ? projectMatch[1] : null;
   const [selectedPersona, setSelectedPersona] = useState('Gia sư thân thiện');
