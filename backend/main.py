@@ -1593,6 +1593,7 @@ class ExamGenRequest(_BaseModel):
     project_id: int | None = None
     document_id: int | None = None
     owner_email: str | None = None
+    drive_api_key: str | None = None
 
 class ExamDocGenRequest(_BaseModel):
     title: str = "Tài liệu ôn thi"
@@ -1602,6 +1603,7 @@ class ExamDocGenRequest(_BaseModel):
     sources: list[ExamSource] = []
     api_key: str | None = None
     owner_email: str | None = None
+    drive_api_key: str | None = None
 
 class ShareRequest(_BaseModel):
     artifact_id: int | None = None
@@ -1806,9 +1808,11 @@ class ExamDocSchema(_BaseModel):
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _fetch_drive_text(file_id: str) -> str:
+def _fetch_drive_text(file_id: str, api_key: str | None = None) -> str:
+    """Text of a public Drive file. The key comes from the user's Settings (sent with the
+    request); the .env value is only a fallback for local development."""
     try:
-        key = os.getenv("VITE_GOOGLE_DRIVE_API_KEY", "")
+        key = (api_key or "").strip() or os.getenv("VITE_GOOGLE_DRIVE_API_KEY", "")
         # macOS system Python lacks CA certs (CERTIFICATE_VERIFY_FAILED) — use certifi's bundle.
         import ssl, certifi
         ctx = ssl.create_default_context(cafile=certifi.where())
@@ -1839,7 +1843,7 @@ def _fetch_drive_text(file_id: str) -> str:
         return ""
 
 
-def _assemble_source_text(db, sources: list, document_id=None) -> str:
+def _assemble_source_text(db, sources: list, document_id=None, drive_api_key=None) -> str:
     parts = []
     for src in sources:
         try:
@@ -1848,7 +1852,7 @@ def _assemble_source_text(db, sources: list, document_id=None) -> str:
             elif src.type == "document":
                 parts.append(get_document_text(db, int(src.value)))
             elif src.type == "drive":
-                parts.append(_fetch_drive_text(src.value))
+                parts.append(_fetch_drive_text(src.value, drive_api_key))
         except Exception:
             pass
     if document_id:
@@ -1858,7 +1862,7 @@ def _assemble_source_text(db, sources: list, document_id=None) -> str:
             pass
     return "\n\n".join(filter(None, parts))[:60000]
 
-def _assemble_source_text_paged(db, sources: list, document_id=None) -> str:
+def _assemble_source_text_paged(db, sources: list, document_id=None, drive_api_key=None) -> str:
     """Like _assemble_source_text but, for `document` and top-level `document_id`
     sources that have per-page text (Document.pages_data JSON array), interleaves
     a `[Trang N]` marker before each page so the model can cite pages. Falls back
@@ -1889,7 +1893,7 @@ def _assemble_source_text_paged(db, sources: list, document_id=None) -> str:
                 else:
                     parts.append(get_document_text(db, doc_id))
             elif src.type == "drive":
-                parts.append(_fetch_drive_text(src.value))
+                parts.append(_fetch_drive_text(src.value, drive_api_key))
         except Exception:
             pass
     if document_id:
@@ -1951,7 +1955,7 @@ def _normalize_exam_questions(questions):
 async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
     from nlp.exam import extract_exam
 
-    text = _assemble_source_text_paged(db, req.sources, document_id=req.document_id)
+    text = _assemble_source_text_paged(db, req.sources, document_id=req.document_id, drive_api_key=req.drive_api_key)
     if not text.strip():
         text = f"{req.title}. {req.description}"
 
@@ -2082,7 +2086,7 @@ async def add_exam_questions(artifact_id: int, req: ExamAddQuestionsRequest, db=
 async def generate_examdoc(req: ExamDocGenRequest, db=Depends(get_db)):
     from nlp.concept_map import generate_offline_exam_prep
 
-    text = _assemble_source_text(db, req.sources)
+    text = _assemble_source_text(db, req.sources, drive_api_key=req.drive_api_key)
     if not text.strip():
         text = f"{req.title}. {req.description}"
 

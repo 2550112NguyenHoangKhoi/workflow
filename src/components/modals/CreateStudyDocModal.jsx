@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { getSelectedSources, extractFileText, getOwnerEmail } from '../../utils/examSources';
 import { getEngineKey } from '../../utils/engine';
+import { getDriveApiKey } from '../../utils/googleDrive';
 
 const CreateStudyDocModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) => {
   const activeDocId = documentId || (() => { const match = window.location.hash.match(/#\/document\/([^/]+)/); return match ? parseInt(match[1], 10) : null; })();
@@ -49,6 +50,7 @@ const CreateStudyDocModal = ({ isOpen, onClose, projectId, documentId, onSuccess
         length,
         sources,
         api_key: getEngineKey(),
+        drive_api_key: getDriveApiKey(),
         owner_email: getOwnerEmail(),
       };
 
