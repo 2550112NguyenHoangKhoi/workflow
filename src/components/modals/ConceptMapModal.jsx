@@ -142,8 +142,8 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
         position: { x: 0, y: 0 },
         data: { label: n.label, definition: n.definition, formula: n.formula },
         style: { 
-          backgroundColor: '#F8EFEA', 
-          border: '2px solid #8A334B', 
+          backgroundColor: 'var(--surface-blush)', 
+          border: '2px solid var(--brand-primary)', 
           borderRadius: '8px',
           padding: '8px 10px',
           width: nodeWidth,
@@ -182,7 +182,7 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
   const exportToPNG = () => {
     if (reactFlowWrapper.current === null) return;
 
-    toPng(reactFlowWrapper.current, { backgroundColor: '#FAFAFA' })
+    toPng(reactFlowWrapper.current, { backgroundColor: 'var(--surface-plain)' })
       .then((dataUrl) => {
         const link = document.createElement('a');
         link.download = `ConceptMap_${activeDoc?.filename || 'Export'}.png`;
@@ -215,10 +215,10 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
         <div style={{
           padding: '24px', borderBottom: '1px solid var(--border-light)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          backgroundColor: '#F8EFEA'
+          backgroundColor: 'var(--surface-blush)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ backgroundColor: '#8A334B', padding: '10px', borderRadius: '12px' }}>
+            <div style={{ backgroundColor: 'var(--brand-primary)', padding: '10px', borderRadius: '12px' }}>
               <Network color="white" size={24} />
             </div>
             <div>
@@ -228,7 +228,7 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             {nodes.length > 0 && (
-              <button onClick={exportToPNG} title="Export to PNG" style={{ background: '#E8F5E9', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
+              <button onClick={exportToPNG} title="Export to PNG" style={{ background: 'var(--surface-green)', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
                 <Download size={16} /> Export Map
               </button>
             )}
@@ -241,7 +241,7 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
         </div>
 
         {/* Content */}
-        <div ref={reactFlowWrapper} style={{ flex: 1, position: 'relative', backgroundColor: '#FAFAFA' }}>
+        <div ref={reactFlowWrapper} style={{ flex: 1, position: 'relative', backgroundColor: 'var(--surface-plain)' }}>
           {isLoading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--brand-primary)' }}>
               <Loader2 size={48} className="animate-spin" style={{ marginBottom: '16px' }} />

@@ -95,7 +95,7 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
         {/* Header */}
         <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ backgroundColor: '#8A334B', padding: '10px', borderRadius: '12px' }}><FolderUp color="white" size={22} /></div>
+            <div style={{ backgroundColor: 'var(--brand-primary)', padding: '10px', borderRadius: '12px' }}><FolderUp color="white" size={22} /></div>
             <div>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 900, color: 'var(--text-navy)', margin: 0 }}>Nhập tài liệu hàng loạt</h2>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>Từ thư mục máy tính hoặc Google Drive</p>
@@ -164,7 +164,7 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
                 {path.map((c, i) => (
                   <React.Fragment key={c.id}>
                     {i > 0 && <ChevronRight size={14} color="var(--text-muted)" />}
-                    <button onClick={() => goToCrumb(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: i === path.length - 1 ? '#1B2A4E' : 'var(--brand-primary)', fontWeight: i === path.length - 1 ? 700 : 600 }}>{c.name}</button>
+                    <button onClick={() => goToCrumb(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: i === path.length - 1 ? 'var(--text-navy)' : 'var(--brand-primary)', fontWeight: i === path.length - 1 ? 700 : 600 }}>{c.name}</button>
                   </React.Fragment>
                 ))}
               </div>

@@ -51,7 +51,7 @@ function renderRich(text) {
   const parts = String(text || '').split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
   return parts.map((p, k) => {
     if (p.startsWith('**') && p.endsWith('**')) return <strong key={k} style={{ color: '#D97706' }}>{p.slice(2, -2)}</strong>;
-    if (p.startsWith('*') && p.endsWith('*')) return <em key={k} style={{ color: '#8A334C' }}>{p.slice(1, -1)}</em>;
+    if (p.startsWith('*') && p.endsWith('*')) return <em key={k} style={{ color: 'var(--brand-primary)' }}>{p.slice(1, -1)}</em>;
     return <span key={k}>{p}</span>;
   });
 }
@@ -390,7 +390,7 @@ export default function WritingPractice() {
   const renderSetup = () => {
     const statBox = (label, value) => (
       <div style={{ flex: 1, textAlign: 'center', padding: '10px 8px' }}>
-        <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#8A334C' }}>{value}</div>
+        <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--brand-primary)' }}>{value}</div>
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{label}</div>
       </div>
     );
@@ -429,7 +429,7 @@ export default function WritingPractice() {
                 border: 'none',
                 cursor: 'pointer',
                 fontWeight: 600,
-                backgroundColor: mode === m.id ? '#8A334C' : 'var(--bg-tertiary)',
+                backgroundColor: mode === m.id ? 'var(--brand-primary)' : 'var(--bg-tertiary)',
                 color: mode === m.id ? '#fff' : 'var(--text-primary)'
               }}
             >
@@ -470,7 +470,7 @@ export default function WritingPractice() {
                   border: 'none',
                   cursor: 'pointer',
                   fontWeight: 600,
-                  backgroundColor: ieltsTask === t.id ? '#8A334C' : 'var(--bg-tertiary)',
+                  backgroundColor: ieltsTask === t.id ? 'var(--brand-primary)' : 'var(--bg-tertiary)',
                   color: ieltsTask === t.id ? '#fff' : 'var(--text-primary)'
                 }}
               >
@@ -489,7 +489,7 @@ export default function WritingPractice() {
                   padding: '6px 14px', borderRadius: '16px', cursor: 'pointer',
                   border: `1px solid ${ieltsPractice === o.id ? '#8A334C' : 'var(--border-medium)'}`,
                   backgroundColor: ieltsPractice === o.id ? 'rgba(138, 51, 76, 0.08)' : 'transparent',
-                  color: ieltsPractice === o.id ? '#8A334C' : 'var(--text-primary)', fontWeight: 600
+                  color: ieltsPractice === o.id ? 'var(--brand-primary)' : 'var(--text-primary)', fontWeight: 600
                 }}
               >
                 {o.label}
@@ -507,7 +507,7 @@ export default function WritingPractice() {
                   padding: '6px 12px',
                   borderRadius: '16px',
                   border: '1px solid var(--border-medium)',
-                  backgroundColor: ieltsType === t.id ? '#8A334C' : 'transparent',
+                  backgroundColor: ieltsType === t.id ? 'var(--brand-primary)' : 'transparent',
                   color: ieltsType === t.id ? '#fff' : 'var(--text-primary)',
                   cursor: 'pointer',
                   fontWeight: ieltsType === t.id ? 600 : 400
@@ -532,7 +532,7 @@ export default function WritingPractice() {
                     padding: '6px 12px',
                     borderRadius: '16px',
                     border: '1px solid var(--border-medium)',
-                    backgroundColor: category === cat ? '#8A334C' : 'transparent',
+                    backgroundColor: category === cat ? 'var(--brand-primary)' : 'transparent',
                     color: category === cat ? '#fff' : 'var(--text-primary)',
                     cursor: 'pointer'
                   }}
@@ -547,7 +547,7 @@ export default function WritingPractice() {
         <button
           onClick={handleGenerate}
           style={{
-            backgroundColor: '#8A334C',
+            backgroundColor: 'var(--brand-primary)',
             color: '#fff',
             borderRadius: '24px',
             padding: '12px 24px',
@@ -590,25 +590,25 @@ export default function WritingPractice() {
           </div>
         </div>
         <div style={{ width: '100%', height: '4px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '2px', overflow: 'hidden' }}>
-          <div style={{ width: `${progressWidth}%`, height: '100%', backgroundColor: '#8A334C', transition: 'width 0.3s ease' }} />
+          <div style={{ width: `${progressWidth}%`, height: '100%', backgroundColor: 'var(--brand-primary)', transition: 'width 0.3s ease' }} />
         </div>
 
         {/* 2) QUESTION */}
         {lesson.ielts_prompt && (
           <div style={{ padding: '16px', backgroundColor: 'rgba(138, 51, 76, 0.05)', border: '1px solid #D6C5B3', borderRadius: '8px' }}>
-            <div style={{ fontWeight: 600, marginBottom: '8px', color: '#8A334C' }}>Đề bài: {lesson.ielts_prompt}</div>
+            <div style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--brand-primary)' }}>Đề bài: {lesson.ielts_prompt}</div>
             
             {lesson.structure_hint && lesson.structure_hint.length > 0 && (
               <div style={{ border: '1px solid var(--border-medium)', borderRadius: '8px', overflow: 'hidden' }}>
                 <div 
-                  style={{ padding: '8px 12px', backgroundColor: '#fafaf9', borderBottom: showOutline ? '1px solid var(--border-medium)' : 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#8A334C', fontWeight: 600, fontSize: '0.9rem' }}
+                  style={{ padding: '8px 12px', backgroundColor: 'var(--surface-plain)', borderBottom: showOutline ? '1px solid var(--border-medium)' : 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--brand-primary)', fontWeight: 600, fontSize: '0.9rem' }}
                   onClick={() => setShowOutline(!showOutline)}
                 >
                   <span>Dàn ý</span>
                   <span>{showOutline ? '▲' : '▼'}</span>
                 </div>
                 {showOutline && (
-                  <div style={{ padding: '12px', backgroundColor: '#fff' }}>
+                  <div style={{ padding: '12px', backgroundColor: 'var(--bg-tertiary)' }}>
                     <ol style={{ margin: 0, paddingLeft: '20px', color: 'var(--text-primary)', fontSize: '0.9rem' }}>
                       {lesson.structure_hint.map((hint, i) => (
                         <li key={i} style={{ marginBottom: '4px' }}>{hint}</li>
@@ -650,17 +650,17 @@ export default function WritingPractice() {
           <div style={{ flex: '0 0 300px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <button
               onClick={openDictionary}
-              style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: '#fff', cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }}
+              style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-tertiary)', cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }}
             >
               Từ điển
             </button>
 
-            <div style={{ padding: '16px', borderRadius: '8px', border: '1px solid var(--border-light)', backgroundColor: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ padding: '16px', borderRadius: '8px', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ fontSize: '2rem', fontWeight: 800, color: accColor }}>{accText}</div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Độ chính xác</div>
             </div>
 
-            <div style={{ padding: '16px', borderRadius: '8px', border: '1px solid var(--border-light)', backgroundColor: '#fff', flex: 1 }}>
+            <div style={{ padding: '16px', borderRadius: '8px', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)', flex: 1 }}>
               <div style={{ fontWeight: 600, marginBottom: '8px' }}>Nhận xét</div>
               {!currentGrade ? (
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Nhấn Kiểm tra để nhận nhận xét từ AI.</div>
@@ -728,7 +728,7 @@ export default function WritingPractice() {
             <button
               onClick={showHint}
               disabled={hintLoading}
-              style={{ padding: '10px 20px', borderRadius: '24px', border: '1px solid #8A334C', backgroundColor: 'transparent', cursor: 'pointer', fontWeight: 600, color: '#8A334C' }}
+              style={{ padding: '10px 20px', borderRadius: '24px', border: '1px solid var(--brand-primary)', backgroundColor: 'transparent', cursor: 'pointer', fontWeight: 600, color: 'var(--brand-primary)' }}
             >
               {hintLoading ? 'Đang tải...' : 'Gợi ý'}
             </button>
@@ -737,14 +737,14 @@ export default function WritingPractice() {
               <button
                 onClick={handleCheckSentence}
                 disabled={!(answers[currentIndex] || '').trim() || loading}
-                style={{ padding: '10px 24px', borderRadius: '24px', border: 'none', backgroundColor: (answers[currentIndex] || '').trim() ? '#8A334C' : 'var(--border-medium)', cursor: (answers[currentIndex] || '').trim() ? 'pointer' : 'not-allowed', fontWeight: 600, color: '#fff' }}
+                style={{ padding: '10px 24px', borderRadius: '24px', border: 'none', backgroundColor: (answers[currentIndex] || '').trim() ? 'var(--brand-primary)' : 'var(--border-medium)', cursor: (answers[currentIndex] || '').trim() ? 'pointer' : 'not-allowed', fontWeight: 600, color: '#fff' }}
               >
                 {loading ? 'Đang xử lý...' : 'Kiểm tra'}
               </button>
             ) : (
               <button
                 onClick={handleNextSentence}
-                style={{ padding: '10px 24px', borderRadius: '24px', border: 'none', backgroundColor: '#8A334C', cursor: 'pointer', fontWeight: 600, color: '#fff' }}
+                style={{ padding: '10px 24px', borderRadius: '24px', border: 'none', backgroundColor: 'var(--brand-primary)', cursor: 'pointer', fontWeight: 600, color: '#fff' }}
               >
                 {currentIndex < lesson.sentences.length - 1 ? 'Câu tiếp theo' : 'Xem kết quả'}
               </button>
@@ -776,7 +776,7 @@ export default function WritingPractice() {
         </div>
 
         <div style={{ padding: '16px', backgroundColor: 'rgba(138, 51, 76, 0.05)', border: '1px solid #D6C5B3', borderRadius: '8px' }}>
-          <div style={{ fontWeight: 600, marginBottom: '8px', color: '#8A334C' }}>Đề bài: {lesson.ielts_prompt}</div>
+          <div style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--brand-primary)' }}>Đề bài: {lesson.ielts_prompt}</div>
           {ieltsTask === 'task1' && (
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
               Đề Task 1 ở đây là đề mô tả bằng chữ (không kèm hình biểu đồ): hãy viết dựa trên số liệu được nêu trong đề.
@@ -803,7 +803,7 @@ export default function WritingPractice() {
           <button
             onClick={handleGradeEssay}
             disabled={!essay.trim() || loading}
-            style={{ backgroundColor: '#8A334C', color: '#fff', borderRadius: '24px', padding: '10px 22px', border: 'none', fontWeight: 600, cursor: (!essay.trim() || loading) ? 'not-allowed' : 'pointer', opacity: (!essay.trim() || loading) ? 0.6 : 1 }}
+            style={{ backgroundColor: 'var(--brand-primary)', color: '#fff', borderRadius: '24px', padding: '10px 22px', border: 'none', fontWeight: 600, cursor: (!essay.trim() || loading) ? 'not-allowed' : 'pointer', opacity: (!essay.trim() || loading) ? 0.6 : 1 }}
           >
             {loading ? 'Đang chấm…' : 'Chấm bài'}
           </button>
@@ -813,12 +813,12 @@ export default function WritingPractice() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ ...box, display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ textAlign: 'center', minWidth: '90px' }}>
-                <div style={{ fontSize: '2.4rem', fontWeight: 800, color: '#8A334C' }}>{r.band}</div>
+                <div style={{ fontSize: '2.4rem', fontWeight: 800, color: 'var(--brand-primary)' }}>{r.band}</div>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Band tổng</div>
               </div>
               <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px' }}>
                 {criteria.map(([k, label]) => (
-                  <div key={k} style={{ padding: '8px 10px', borderRadius: '8px', backgroundColor: '#fff', border: '1px solid var(--border-light)' }}>
+                  <div key={k} style={{ padding: '8px 10px', borderRadius: '8px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{label}</div>
                     <div style={{ fontWeight: 700 }}>{r[k]}</div>
                     {r.descriptors?.[k] && <div style={{ fontSize: '0.75rem', marginTop: '2px' }}>{r.descriptors[k]}</div>}
@@ -939,7 +939,7 @@ export default function WritingPractice() {
           <button
             onClick={handleSaveFlashcards}
             style={{
-              backgroundColor: '#8A334C', color: '#fff', borderRadius: '24px',
+              backgroundColor: 'var(--brand-primary)', color: '#fff', borderRadius: '24px',
               padding: '10px 20px', border: 'none', fontWeight: 600, cursor: 'pointer'
             }}
           >
@@ -954,7 +954,7 @@ export default function WritingPractice() {
     if (!dictOpen) return null;
     return (
       <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '16px' }}>
-        <div style={{ backgroundColor: '#fff', borderRadius: '12px', width: '100%', maxWidth: '500px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '12px', width: '100%', maxWidth: '500px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', borderBottom: '1px solid var(--border-light)' }}>
             <h3 style={{ margin: 0 }}>Từ điển bài học</h3>
             <button onClick={() => setDictOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
@@ -985,7 +985,7 @@ export default function WritingPractice() {
                     ) : (
                       <button
                         onClick={() => handleSaveWord(w)}
-                        style={{ backgroundColor: '#8A334C', color: '#fff', border: 'none', borderRadius: '16px', padding: '4px 10px', fontSize: '0.8rem', cursor: 'pointer' }}
+                        style={{ backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: '16px', padding: '4px 10px', fontSize: '0.8rem', cursor: 'pointer' }}
                       >
                         ＋ Lưu
                       </button>
@@ -1017,7 +1017,7 @@ export default function WritingPractice() {
     return (
       <div style={{
         position: 'fixed', bottom: '90px', left: '50%', transform: 'translateX(-50%)',
-        width: '100%', maxWidth: '320px', backgroundColor: '#fff', borderRadius: '12px',
+        width: '100%', maxWidth: '320px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '12px',
         boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 300, padding: '16px',
         border: '1px solid var(--border-light)'
       }}>
@@ -1061,7 +1061,7 @@ export default function WritingPractice() {
             <button
               onClick={() => handleSaveWord(hintPopover)}
               style={{
-                backgroundColor: '#8A334C', color: '#fff', border: 'none', borderRadius: '16px',
+                backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: '16px',
                 padding: '4px 12px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', marginBottom: '8px'
               }}
             >

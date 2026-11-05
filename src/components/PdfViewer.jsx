@@ -54,7 +54,7 @@ function PdfPage({ doc, pageNum, width }) {
     <div
       ref={holderRef}
       style={{
-        width, minHeight: Math.round(width * aspect), backgroundColor: '#fff',
+        width, minHeight: Math.round(width * aspect), backgroundColor: 'var(--bg-tertiary)',
         borderRadius: 4, boxShadow: '0 1px 4px rgba(0,0,0,0.18)', overflow: 'hidden',
       }}
     >

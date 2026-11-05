@@ -9,9 +9,9 @@ import { getDriveApiKey, setDriveApiKey, DRIVE_KEY_STORAGE } from '../utils/goog
 //   'local'     -> sentinel 'LOCAL'                   -> backend routes to a local Ollama model
 //   'algorithm' -> sentinel 'OFFLINE'                 -> backend uses the deterministic NLP engine
 const ENGINES = [
-  { id: 'ai', title: 'Cloud API (Gemini)', color: '#8A334B', bg: '#F8EFEA', desc: 'Chất lượng cao nhất. Cần API key Google Gemini (miễn phí).' },
-  { id: 'local', title: 'Model cục bộ (Ollama)', color: '#2563EB', bg: '#EFF6FF', desc: 'Tải model AI về máy, chạy offline bằng CPU/GPU của bạn.' },
-  { id: 'algorithm', title: 'Thuật toán (NLP)', color: '#3B6B59', bg: '#E8F5E9', desc: 'Bộ máy NLP tích hợp (TextRank, pyvi). Không cần cài đặt gì.' },
+  { id: 'ai', title: 'Cloud API (Gemini)', color: 'var(--brand-primary)', bg: 'var(--surface-blush)', desc: 'Chất lượng cao nhất. Cần API key Google Gemini (miễn phí).' },
+  { id: 'local', title: 'Model cục bộ (Ollama)', color: '#2563EB', bg: 'var(--surface-blue)', desc: 'Tải model AI về máy, chạy offline bằng CPU/GPU của bạn.' },
+  { id: 'algorithm', title: 'Thuật toán (NLP)', color: '#3B6B59', bg: 'var(--surface-green)', desc: 'Bộ máy NLP tích hợp (TextRank, pyvi). Không cần cài đặt gì.' },
 ];
 
 const Settings = () => {
@@ -142,8 +142,8 @@ const Settings = () => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '28px' }}>
           {ENGINES.map((e) => (
             <div key={e.id} onClick={() => setEngineMode(e.id)} style={{
-              border: `2px solid ${engineMode === e.id ? e.color : 'var(--border-light)'}`,
-              backgroundColor: engineMode === e.id ? e.bg : 'white',
+              border: `2px solid ${engineMode === e.id ? e.color: 'var(--border-light)'}`,
+              backgroundColor: engineMode === e.id ? e.bg : 'var(--bg-tertiary)',
               padding: '20px', borderRadius: '16px', cursor: 'pointer', transition: 'all 0.2s'
             }}>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '6px' }}>{e.title}</div>
@@ -165,7 +165,7 @@ const Settings = () => {
                 <ShieldAlert size={18} /> Cách lấy API Key miễn phí:
               </h3>
               <ol style={{ paddingLeft: '24px', color: '#92400E', display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.9rem', lineHeight: '1.6', margin: 0 }}>
-                <li>Truy cập <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" style={{ color: '#8A334B', textDecoration: 'underline', fontWeight: 600 }}>Google AI Studio → API Keys</a>.</li>
+                <li>Truy cập <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" style={{ color: 'var(--brand-primary)', textDecoration: 'underline', fontWeight: 600 }}>Google AI Studio → API Keys</a>.</li>
                 <li>Đăng nhập bằng tài khoản Google của bạn. Đảm bảo bạn đã đồng ý với các điều khoản sử dụng của Google AI Studio nếu đây là lần đầu truy cập.</li>
                 <li>Nhấn nút <strong>"Create API Key"</strong> màu xanh ở góc trên bên trái màn hình.</li>
                 <li>Hệ thống sẽ yêu cầu chọn một dự án (Project). Bạn có thể chọn project có sẵn hoặc nhấn <strong>"Create API key in a new project"</strong>.</li>
@@ -187,7 +187,7 @@ const Settings = () => {
             <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-navy)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Download size={22} color="#2563EB" /> Tải & chạy model AI cục bộ
             </h2>
-            <div style={{ backgroundColor: '#EFF6FF', borderLeft: '4px solid #2563EB', padding: '20px', borderRadius: '0 12px 12px 0', marginBottom: '20px' }}>
+            <div style={{ backgroundColor: 'var(--surface-blue)', borderLeft: '4px solid #2563EB', padding: '20px', borderRadius: '0 12px 12px 0', marginBottom: '20px' }}>
               {localRecommendation && (
                 <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#DBEAFE', borderRadius: '12px', border: '1px solid #BFDBFE' }}>
                   <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#1E40AF', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -217,7 +217,7 @@ const Settings = () => {
               <select 
                 value={selectedLocalModel}
                 onChange={(e) => setSelectedLocalModel(e.target.value)}
-                style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '2px solid var(--border-light)', fontSize: '1rem', outline: 'none', backgroundColor: 'white', color: 'var(--text-navy)', appearance: 'auto' }}
+                style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '2px solid var(--border-light)', fontSize: '1rem', outline: 'none', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-navy)', appearance: 'auto' }}
               >
                 <option value="gemma2">gemma2 (Gợi ý cho máy &gt; 8GB RAM)</option>
                 <option value="gemma2:2b">gemma2:2b (Nhẹ, máy &lt; 8GB RAM)</option>
@@ -265,7 +265,7 @@ const Settings = () => {
 
         {/* === Algorithm (offline NLP) === */}
         {engineMode === 'algorithm' && (
-          <div style={{ backgroundColor: '#E8F5E9', borderLeft: '4px solid #3B6B59', padding: '20px', borderRadius: '0 12px 12px 0' }}>
+          <div style={{ backgroundColor: 'var(--surface-green)', borderLeft: '4px solid #3B6B59', padding: '20px', borderRadius: '0 12px 12px 0' }}>
             <h3 style={{ fontWeight: 700, color: '#047857', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem' }}>
               <Sparkles size={18} /> Không cần cấu hình
             </h3>
@@ -323,7 +323,7 @@ const Settings = () => {
           {dataDir || 'Không kết nối được backend.'}
         </code>
         {isDesktop ? (
-          <button onClick={handleSelectWorkspace} style={{ alignSelf: 'flex-start', padding: '10px 18px', borderRadius: '10px', border: '1px solid #8A334B', backgroundColor: 'white', color: '#8A334B', fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={handleSelectWorkspace} style={{ alignSelf: 'flex-start', padding: '10px 18px', borderRadius: '10px', border: '1px solid var(--brand-primary)', backgroundColor: 'var(--bg-tertiary)', color: 'var(--brand-primary)', fontWeight: 700, cursor: 'pointer' }}>
             Đổi thư mục lưu trữ…
           </button>
         ) : (

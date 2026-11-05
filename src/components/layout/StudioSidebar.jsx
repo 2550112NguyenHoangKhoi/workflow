@@ -92,38 +92,38 @@ const StudioSidebar = () => {
     }}>
       {/* Header Tabs */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1B2A4E', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '8px' }}>
           Studio
         </h2>
       </div>
 
       {/* Action Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '32px' }}>
-        <button onClick={() => setIsUploadOpen(true)} style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--brand-secondary)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
+        <button onClick={() => setIsUploadOpen(true)} style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--brand-secondary)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: 'var(--text-navy)', fontWeight: 700, fontSize: '0.875rem' }}>
           <Upload size={20} color="var(--brand-primary)" />
           Upload
         </button>
-        <button onClick={() => setIsExamOpen(true)} style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
+        <button onClick={() => setIsExamOpen(true)} style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: 'var(--text-navy)', fontWeight: 700, fontSize: '0.875rem' }}>
           <FileText size={20} color="var(--text-muted)" />
           Create Exam
         </button>
-        <button onClick={() => setIsProgressOpen(true)} style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
+        <button onClick={() => setIsProgressOpen(true)} style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: 'var(--text-navy)', fontWeight: 700, fontSize: '0.875rem' }}>
           <FileText size={20} color="var(--text-muted)" />
           Study Doc
         </button>
-        <button onClick={() => setIsSmartNotesOpen(true)} style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
+        <button onClick={() => setIsSmartNotesOpen(true)} style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: 'var(--text-navy)', fontWeight: 700, fontSize: '0.875rem' }}>
           <FileText size={20} color="#1B2A4E" />
           Smart Notes
         </button>
-        <button onClick={() => setIsConceptMapOpen(true)} style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
+        <button onClick={() => setIsConceptMapOpen(true)} style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: 'var(--text-navy)', fontWeight: 700, fontSize: '0.875rem' }}>
           <Network size={20} color="var(--brand-primary)" />
           Concept Map
         </button>
-        <button onClick={() => setIsFlashcardOpen(true)} style={{ gridColumn: 'span 2', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#1B2A4E', fontWeight: 700, fontSize: '0.875rem' }}>
+        <button onClick={() => setIsFlashcardOpen(true)} style={{ gridColumn: 'span 2', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: 'var(--text-navy)', fontWeight: 700, fontSize: '0.875rem' }}>
           <BrainCircuit size={20} color="#92400E" />
           Review Flashcards (SM-2)
         </button>
-        <button onClick={() => setIsImportOpen(true)} style={{ gridColumn: 'span 2', backgroundColor: '#F8EFEA', border: '1px solid #8A334B', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: '#8A334B', fontWeight: 700, fontSize: '0.875rem' }}>
+        <button onClick={() => setIsImportOpen(true)} style={{ gridColumn: 'span 2', backgroundColor: 'var(--surface-blush)', border: '1px solid var(--brand-primary)', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', color: 'var(--brand-primary)', fontWeight: 700, fontSize: '0.875rem' }}>
           <Cloud size={20} color="#8A334B" />
           Nhập từ thư mục / Google Drive
         </button>

@@ -36,7 +36,7 @@ const LandingPage = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div style={{ backgroundColor: '#FAFAF9', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ backgroundColor: 'var(--surface-plain)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {showLogin && <LoginModal onLoginSuccess={handleLoginSuccess} />}
 
       {/* Top Nav */}

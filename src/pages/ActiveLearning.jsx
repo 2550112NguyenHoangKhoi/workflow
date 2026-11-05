@@ -171,7 +171,7 @@ export default function ActiveLearning() {
         onClick={handleStart}
         disabled={loading}
         style={{
-          backgroundColor: '#8A334C',
+          backgroundColor: 'var(--brand-primary)',
           color: '#fff',
           borderRadius: '24px',
           padding: '12px 24px',
@@ -193,21 +193,21 @@ export default function ActiveLearning() {
       <div>
         <h2 style={{ marginBottom: '16px', color: 'var(--text-navy)' }}>{session?.concept}</h2>
         
-        <div style={{ padding: '16px', backgroundColor: 'rgba(138, 51, 76, 0.05)', borderRadius: '8px', borderLeft: '4px solid #8A334C', marginBottom: '24px', color: '#8A334C', fontWeight: 600 }}>
+        <div style={{ padding: '16px', backgroundColor: 'rgba(138, 51, 76, 0.05)', borderRadius: '8px', borderLeft: '4px solid #8A334C', marginBottom: '24px', color: 'var(--brand-primary)', fontWeight: 600 }}>
           {session?.question_vi}
         </div>
 
         {session?.key_points && session.key_points.length > 0 && (
           <div style={{ marginBottom: '24px', border: '1px solid var(--border-medium)', borderRadius: '8px', overflow: 'hidden' }}>
             <div 
-              style={{ padding: '12px 16px', backgroundColor: '#fafaf9', borderBottom: showHints ? '1px solid var(--border-medium)' : 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}
+              style={{ padding: '12px 16px', backgroundColor: 'var(--surface-plain)', borderBottom: showHints ? '1px solid var(--border-medium)' : 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}
               onClick={() => setShowHints(!showHints)}
             >
               <span>Gợi ý những điểm nên nhắc tới</span>
               <span>{showHints ? '▲' : '▼'}</span>
             </div>
             {showHints && (
-              <div style={{ padding: '16px', backgroundColor: '#fff' }}>
+              <div style={{ padding: '16px', backgroundColor: 'var(--bg-tertiary)' }}>
                 <ul style={{ margin: 0, paddingLeft: '20px', color: 'var(--text-muted)' }}>
                   {session.key_points.map((kp, i) => (
                     <li key={i} style={{ marginBottom: '8px' }}>{kp}</li>
@@ -237,7 +237,7 @@ export default function ActiveLearning() {
           onClick={handleSubmit}
           disabled={loading}
           style={{
-            backgroundColor: '#8A334C', color: '#fff', borderRadius: '24px', padding: '12px 24px',
+            backgroundColor: 'var(--brand-primary)', color: '#fff', borderRadius: '24px', padding: '12px 24px',
             border: 'none', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', fontSize: '1rem'
           }}
         >
@@ -307,7 +307,7 @@ export default function ActiveLearning() {
             <h3 style={{ margin: '0 0 16px 0', color: '#EF4444' }}>Hiểu lầm cần sửa</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {result.misconceptions.map((m, i) => (
-                <div key={i} style={{ padding: '16px', backgroundColor: '#fafaf9', border: '1px solid var(--border-medium)', borderRadius: '8px' }}>
+                <div key={i} style={{ padding: '16px', backgroundColor: 'var(--surface-plain)', border: '1px solid var(--border-medium)', borderRadius: '8px' }}>
                   <div style={{ textDecoration: 'line-through', color: 'var(--text-muted)', marginBottom: '8px' }}>{m.claim}</div>
                   <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{m.correction}</div>
                 </div>
@@ -318,12 +318,12 @@ export default function ActiveLearning() {
 
         {result.followup_question && (
           <div style={{ padding: '20px', backgroundColor: 'rgba(138, 51, 76, 0.05)', borderRadius: '12px', border: '1px solid rgba(138, 51, 76, 0.2)', marginBottom: '32px' }}>
-            <h3 style={{ margin: '0 0 12px 0', color: '#8A334C' }}>Câu hỏi đào sâu</h3>
+            <h3 style={{ margin: '0 0 12px 0', color: 'var(--brand-primary)' }}>Câu hỏi đào sâu</h3>
             <div style={{ color: 'var(--text-primary)', marginBottom: '16px', fontWeight: 500 }}>{result.followup_question}</div>
             <button
               onClick={handleFollowup}
               style={{
-                backgroundColor: '#8A334C', color: '#fff', borderRadius: '24px', padding: '8px 20px',
+                backgroundColor: 'var(--brand-primary)', color: '#fff', borderRadius: '24px', padding: '8px 20px',
                 border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: '0.9rem'
               }}
             >
@@ -351,7 +351,7 @@ export default function ActiveLearning() {
           <button
             onClick={() => setScreen('explain')}
             style={{
-              backgroundColor: '#8A334C', color: '#fff', borderRadius: '24px',
+              backgroundColor: 'var(--brand-primary)', color: '#fff', borderRadius: '24px',
               padding: '12px 24px', border: 'none', fontWeight: 600, cursor: 'pointer'
             }}
           >

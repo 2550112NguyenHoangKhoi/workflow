@@ -138,10 +138,10 @@ const CreateStudyDocModal = ({ isOpen, onClose, projectId, documentId, onSuccess
             <button onClick={handleRegenerate} style={{ padding: '12px 28px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '24px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <RotateCcw size={15} /> Tạo lại
             </button>
-            <button onClick={handleDownloadMd} style={{ padding: '12px 28px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid #8A334C', borderRadius: '24px', fontWeight: 600, color: '#8A334C', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button onClick={handleDownloadMd} style={{ padding: '12px 28px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--brand-primary)', borderRadius: '24px', fontWeight: 600, color: 'var(--brand-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Download size={15} /> Tải xuống .md
             </button>
-            <button onClick={handleClose} style={{ padding: '12px 28px', backgroundColor: '#8A334C', border: 'none', borderRadius: '24px', fontWeight: 600, color: 'white', cursor: 'pointer' }}>
+            <button onClick={handleClose} style={{ padding: '12px 28px', backgroundColor: 'var(--brand-primary)', border: 'none', borderRadius: '24px', fontWeight: 600, color: 'white', cursor: 'pointer' }}>
               Đóng
             </button>
           </div>
@@ -181,7 +181,7 @@ const CreateStudyDocModal = ({ isOpen, onClose, projectId, documentId, onSuccess
               type="text" 
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem', fontWeight: 600 }} 
+              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem', fontWeight: 600 }} 
             />
           </div>
 
@@ -191,7 +191,7 @@ const CreateStudyDocModal = ({ isOpen, onClose, projectId, documentId, onSuccess
               rows={3} 
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem', resize: 'none' }}
+              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem', resize: 'none' }}
             ></textarea>
           </div>
 
@@ -202,7 +202,7 @@ const CreateStudyDocModal = ({ isOpen, onClose, projectId, documentId, onSuccess
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder="Ví dụ: Ôn thi giữa kỳ, Tổng hợp công thức cốt lõi..." 
-              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem' }} 
+              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem' }} 
             />
           </div>
 
@@ -211,7 +211,7 @@ const CreateStudyDocModal = ({ isOpen, onClose, projectId, documentId, onSuccess
             <select 
               value={length}
               onChange={(e) => setLength(e.target.value)}
-              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem' }}
+              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem' }}
             >
               <option>Độ dài vừa phải (Tổng hợp lý thuyết & So sánh)</option>
               <option>Ngắn gọn (Chỉ gồm các bullet point chính)</option>
@@ -220,7 +220,7 @@ const CreateStudyDocModal = ({ isOpen, onClose, projectId, documentId, onSuccess
           </div>
 
           {/* Data Source Block */}
-          <div style={{ border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', backgroundColor: '#FDF8F5', marginTop: '8px' }}>
+          <div style={{ border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', backgroundColor: 'var(--bg-primary)', marginTop: '8px' }}>
             <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em', marginBottom: '16px' }}>TÀI LIỆU LÀM NGUỒN DỮ LIỆU</div>
 
             {(librarySources.length > 0 || uploadedSources.length > 0) && (
@@ -231,7 +231,7 @@ const CreateStudyDocModal = ({ isOpen, onClose, projectId, documentId, onSuccess
                   </span>
                 ))}
                 {uploadedSources.map((s, i) => (
-                  <span key={`up-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', backgroundColor: '#E8F5E9', border: '1px solid var(--brand-secondary)', borderRadius: '16px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--brand-secondary)', maxWidth: '100%' }}>
+                  <span key={`up-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', backgroundColor: 'var(--surface-green)', border: '1px solid var(--brand-secondary)', borderRadius: '16px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--brand-secondary)', maxWidth: '100%' }}>
                     <UploadCloud size={12} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>{s.name}</span>
                     <X size={12} style={{ cursor: 'pointer' }} onClick={() => setUploadedSources(prev => prev.filter((_, j) => j !== i))} />
                   </span>

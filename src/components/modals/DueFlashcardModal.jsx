@@ -116,7 +116,7 @@ const DueFlashcardModal = ({ isOpen, onClose }) => {
       backdropFilter: 'blur(4px)'
     }}>
       <div style={{
-        backgroundColor: '#FAFAFA', borderRadius: '24px', width: '90%', maxWidth: '600px',
+        backgroundColor: 'var(--surface-plain)', borderRadius: '24px', width: '90%', maxWidth: '600px',
         display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)'
       }}>
         {/* Header */}
@@ -186,7 +186,7 @@ const DueFlashcardModal = ({ isOpen, onClose }) => {
                 <button onClick={() => submitReview(1)} style={{ flex: 1, padding: '12px', backgroundColor: '#FEE2E2', color: '#991B1B', border: '1px solid #FCA5A5', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>
                   Hard (1)
                 </button>
-                <button onClick={() => submitReview(3)} style={{ flex: 1, padding: '12px', backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                <button onClick={() => submitReview(3)} style={{ flex: 1, padding: '12px', backgroundColor: 'var(--accent-amber-bg)', color: '#92400E', border: '1px solid #FCD34D', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>
                   Good (3)
                 </button>
                 <button onClick={() => submitReview(5)} style={{ flex: 1, padding: '12px', backgroundColor: '#D1FAE5', color: '#065F46', border: '1px solid #6EE7B7', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>

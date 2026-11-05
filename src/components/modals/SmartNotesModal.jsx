@@ -113,7 +113,7 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
       backdropFilter: 'blur(4px)'
     }}>
       <div className="animate-fade-in" style={{
-        backgroundColor: '#FAFAFA', borderRadius: '24px', width: '90%', maxWidth: '800px',
+        backgroundColor: 'var(--surface-plain)', borderRadius: '24px', width: '90%', maxWidth: '800px',
         maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
         boxShadow: '0 24px 48px rgba(0,0,0,0.2)'
       }}>
@@ -132,12 +132,12 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             {(markdown || error) && !isLoading && (
-              <button onClick={() => generateNotes(true)} title="Tạo lại ghi chú bằng bộ máy AI hiện tại" style={{ background: '#F3F4F6', border: 'none', cursor: 'pointer', color: 'var(--text-navy)', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
+              <button onClick={() => generateNotes(true)} title="Tạo lại ghi chú bằng bộ máy AI hiện tại" style={{ background: 'var(--surface-muted)', border: 'none', cursor: 'pointer', color: 'var(--text-navy)', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
                 <RefreshCw size={16} /> Tạo lại
               </button>
             )}
             {markdown && (
-              <button onClick={exportToMD} title="Download Markdown" style={{ background: '#E8F5E9', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
+              <button onClick={exportToMD} title="Download Markdown" style={{ background: 'var(--surface-green)', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
                 <Download size={16} /> Export MD
               </button>
             )}

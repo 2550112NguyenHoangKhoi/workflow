@@ -194,7 +194,7 @@ const DocumentViewer = () => {
   ];
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#F8EFEA', padding: '0' }}>
+    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: 'var(--surface-blush)', padding: '0' }}>
 
       {/* Header */}
       <div style={{ padding: '32px 48px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -251,7 +251,7 @@ const DocumentViewer = () => {
       {/* Main Content Area: Split View */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {(!isProjectRoute || activeDoc) && (
-            <div style={{ flex: 1, borderRight: '1px solid var(--border-medium)', overflowY: 'auto', padding: '24px 48px', backgroundColor: '#FDF8F5' }}>
+            <div style={{ flex: 1, borderRight: '1px solid var(--border-medium)', overflowY: 'auto', padding: '24px 48px', backgroundColor: 'var(--bg-primary)' }}>
               {!activeDoc ? (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
@@ -294,13 +294,13 @@ const DocumentViewer = () => {
             </div>
           )}
         {/* Right Pane / Full Chat */}
-        <div style={{ width: (isProjectRoute && !activeDoc) ? '100%' : '450px', display: 'flex', flexDirection: 'column', backgroundColor: '#FAFAF9', position: 'relative' }}>
+        <div style={{ width: (isProjectRoute && !activeDoc) ? '100%' : '450px', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--surface-plain)', position: 'relative' }}>
           
           {/* Chat Panel */}
           <>
               {/* Chat mode toggle — Chat chính (plain AI) vs OmiGuide (persona tutor) */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 24px 0' }}>
-                <div style={{ display: 'flex', gap: '4px', backgroundColor: '#E5E7EB', padding: '4px', borderRadius: '24px' }}>
+                <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--surface-grey)', padding: '4px', borderRadius: '24px' }}>
                   {[['main', 'Chat chính'], ['omiguide', 'OmiGuide']].map(([mode, label]) => (
                     <button key={mode} onClick={() => setChatMode(mode)} style={{
                       backgroundColor: chatMode === mode ? 'var(--brand-primary)' : 'transparent',
@@ -336,13 +336,13 @@ const DocumentViewer = () => {
                       alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start'
                     }}>
                       {msg.role === 'assistant' && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 800, color: '#8A334C', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 800, color: 'var(--brand-primary)', marginBottom: '8px' }}>
                           <Sparkles size={14} /> Workflow
                         </div>
                       )}
                       <div style={{
-                        backgroundColor: msg.role === 'user' ? '#8A334C' : 'white',
-                        color: msg.role === 'user' ? 'white' : '#1F2937',
+                        backgroundColor: msg.role === 'user' ? 'var(--brand-primary)' : 'var(--bg-tertiary)',
+                        color: msg.role === 'user' ? 'white' : 'var(--text-ink)',
                         border: msg.role === 'user' ? 'none' : '1px solid #E5E7EB',
                         padding: '12px 16px',
                         borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '12px',
@@ -395,13 +395,13 @@ const DocumentViewer = () => {
                 <div ref={threadEndRef} />
               </div>
               {/* Chat Input */}
-              <div style={{ padding: '16px 24px', borderTop: '1px solid #E5E7EB', backgroundColor: '#FAFAF9' }}>
+              <div style={{ padding: '16px 24px', borderTop: '1px solid #E5E7EB', backgroundColor: 'var(--surface-plain)' }}>
                 {/* Action Pills — sends prompt directly to chat like Workflow */}
                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-start', marginBottom: '12px', flexWrap: 'wrap' }}>
                   {actionPills.map(pill => (
                     <button key={pill.label} onClick={pill.action} disabled={!activeDoc || isTyping} style={{
                       backgroundColor: 'var(--bg-tertiary)', border: '1px solid #D6C5B3', borderRadius: '20px', padding: '6px 14px',
-                      fontSize: '0.8rem', fontWeight: 600, color: '#1F2937', cursor: (!activeDoc || isTyping) ? 'not-allowed' : 'pointer',
+                      fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-ink)', cursor: (!activeDoc || isTyping) ? 'not-allowed' : 'pointer',
                       whiteSpace: 'nowrap', opacity: (!activeDoc || isTyping) ? 0.5 : 1, transition: 'all 0.2s'
                     }}>
                       {pill.label}
@@ -416,12 +416,12 @@ const DocumentViewer = () => {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
                     placeholder="Hỏi Workflow..."
-                    style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: '0.95rem', padding: '4px', color: '#1F2937' }}
+                    style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: '0.95rem', padding: '4px', color: 'var(--text-ink)' }}
                   />
                   <button
                     onClick={() => sendMessage()}
                     disabled={!input.trim() || isTyping}
-                    style={{ backgroundColor: (!input.trim() || isTyping) ? '#E5E7EB' : '#D6C5B3', border: 'none', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: (!input.trim() || isTyping) ? 'not-allowed' : 'pointer', transition: 'background-color 0.2s', flexShrink: 0 }}>
+                    style={{ backgroundColor: (!input.trim() || isTyping) ? 'var(--surface-grey)' : '#D6C5B3', border: 'none', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: (!input.trim() || isTyping) ? 'not-allowed' : 'pointer', transition: 'background-color 0.2s', flexShrink: 0 }}>
                     <ArrowRight size={18} />
                   </button>
                 </div>

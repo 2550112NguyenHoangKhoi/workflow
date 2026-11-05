@@ -91,7 +91,7 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
       backdropFilter: 'blur(4px)'
     }}>
       <div className="animate-fade-in" style={{
-        backgroundColor: '#FAFAFA', borderRadius: '24px', width: '90%', maxWidth: '800px',
+        backgroundColor: 'var(--surface-plain)', borderRadius: '24px', width: '90%', maxWidth: '800px',
         maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
         boxShadow: '0 24px 48px rgba(0,0,0,0.2)'
       }}>
@@ -170,7 +170,7 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     {mod.topics.map((topic, tIdx) => (
                       <div key={tIdx} style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                        <div style={{ marginTop: '4px', backgroundColor: '#E6F0EC', padding: '8px', borderRadius: '8px' }}>
+                        <div style={{ marginTop: '4px', backgroundColor: 'var(--accent-green)', padding: '8px', borderRadius: '8px' }}>
                           <BookOpen size={16} color="var(--brand-primary)" />
                         </div>
                         <div style={{ flex: 1 }}>
@@ -178,7 +178,7 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
                           <p style={{ margin: '0 0 8px 0', fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
                             {topic.description}
                           </p>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#D97706', fontWeight: 600, backgroundColor: '#FEF3C7', padding: '4px 8px', borderRadius: '12px', width: 'fit-content' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#D97706', fontWeight: 600, backgroundColor: 'var(--accent-amber-bg)', padding: '4px 8px', borderRadius: '12px', width: 'fit-content' }}>
                             <Clock size={12} />
                             {topic.estimated_time}
                           </div>

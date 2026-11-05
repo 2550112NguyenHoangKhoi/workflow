@@ -104,17 +104,17 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
       display: 'flex', alignItems: 'center', justifyContent: 'center'
     }}>
       <div style={{
-        backgroundColor: '#FFFFFF', width: '460px', borderRadius: '16px',
+        backgroundColor: 'var(--bg-tertiary)', width: '460px', borderRadius: '16px',
         display: 'flex', flexDirection: 'column', boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
         maxHeight: '90vh', overflow: 'hidden'
       }}>
         {/* Header */}
         <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#1F2937' }}>
+          <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-ink)' }}>
             Mời bạn bè
           </h2>
           <button onClick={onClose} style={{ 
-            background: '#F3F4F6', border: 'none', 
+            background: 'var(--surface-muted)', border: 'none', 
             borderRadius: '50%', width: '32px', height: '32px', 
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', color: '#6B7280' 
@@ -169,7 +169,7 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
                   <div key={idx} style={{ 
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
                     padding: '12px 16px', borderRadius: '12px', border: '1px solid #F3F4F6',
-                    backgroundColor: '#FAFAFA'
+                    backgroundColor: 'var(--surface-plain)'
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div style={{ 
@@ -179,7 +179,7 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
                       }}>
                         {getInitials(displayName)}
                       </div>
-                      <div style={{ fontWeight: 600, color: '#374151', fontSize: '0.95rem' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--text-slate-strong)', fontSize: '0.95rem' }}>
                         {displayName}
                       </div>
                     </div>
@@ -222,8 +222,8 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
                   flex: 1, padding: '12px', borderRadius: '12px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                   border: role === 'viewer' ? '1px solid #007AFF' : '1px solid #E5E7EB',
-                  backgroundColor: role === 'viewer' ? '#007AFF' : '#FFFFFF',
-                  color: role === 'viewer' ? '#FFFFFF' : '#4B5563',
+                  backgroundColor: role === 'viewer' ? '#007AFF' : 'var(--bg-tertiary)',
+                  color: role === 'viewer' ? '#FFFFFF' : 'var(--text-slate)',
                   fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s'
                 }}
               >
@@ -235,8 +235,8 @@ const ProjectCollaborationModal = ({ isOpen, onClose, projectId, documentId }) =
                   flex: 1, padding: '12px', borderRadius: '12px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                   border: role === 'editor' ? '1px solid #007AFF' : '1px solid #E5E7EB',
-                  backgroundColor: role === 'editor' ? '#007AFF' : '#FFFFFF',
-                  color: role === 'editor' ? '#FFFFFF' : '#4B5563',
+                  backgroundColor: role === 'editor' ? '#007AFF' : 'var(--bg-tertiary)',
+                  color: role === 'editor' ? '#FFFFFF' : 'var(--text-slate)',
                   fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s'
                 }}
               >

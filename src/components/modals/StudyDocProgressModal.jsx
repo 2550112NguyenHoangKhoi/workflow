@@ -79,13 +79,13 @@ const StudyDocProgressModal = ({ isOpen, onClose }) => {
       display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(4px)'
     }}>
       <div className="animate-fade-in" style={{
-        backgroundColor: '#FAFAFA', borderRadius: '24px', width: '600px', maxWidth: '90vw',
+        backgroundColor: 'var(--surface-plain)', borderRadius: '24px', width: '600px', maxWidth: '90vw',
         boxShadow: '0 24px 48px rgba(0,0,0,0.2)', overflow: 'hidden'
       }}>
         {/* Header */}
         <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ backgroundColor: '#8A334B', padding: '10px', borderRadius: '12px' }}>
+            <div style={{ backgroundColor: 'var(--brand-primary)', padding: '10px', borderRadius: '12px' }}>
               <Activity color="white" size={24} />
             </div>
             <div>

@@ -165,7 +165,7 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
                            style={{ 
                              border: `2px solid ${selectedUrls.has(res.url) ? 'var(--brand-primary)' : 'transparent'}`, 
                              borderRadius: '12px', padding: '16px', 
-                             backgroundColor: selectedUrls.has(res.url) ? '#FDF8F5' : 'white',
+                             backgroundColor: selectedUrls.has(res.url) ? '#FDF8F5' : 'var(--bg-tertiary)',
                              boxShadow: 'var(--shadow-sm)',
                              cursor: 'pointer',
                              transition: 'all 0.2s',
@@ -182,7 +182,7 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
                                 {res.relevancy_score}% Match
                               </span>
                             )}
-                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', backgroundColor: '#E6F0EC', padding: '4px 8px', borderRadius: '8px' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', backgroundColor: 'var(--accent-green)', padding: '4px 8px', borderRadius: '8px' }}>
                               {res.type}
                             </span>
                           </div>

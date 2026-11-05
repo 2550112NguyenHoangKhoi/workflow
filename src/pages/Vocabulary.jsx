@@ -302,8 +302,8 @@ export default function Vocabulary() {
           <div style={{ backgroundColor: 'var(--bg-primary)', padding: '32px', borderRadius: '16px', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
             <h2 style={{ marginBottom: '16px', color: 'var(--text-navy)' }}>Kết quả ôn tập</h2>
             <div style={{ fontSize: '1.2rem', marginBottom: '8px' }}>Đúng {correct} / {correct + wrong}</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#8A334C', marginBottom: '24px' }}>+{points} điểm</div>
-            <button onClick={closeReview} style={{ backgroundColor: '#8A334C', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '24px', fontWeight: 600, cursor: 'pointer', width: '100%' }}>
+            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--brand-primary)', marginBottom: '24px' }}>+{points} điểm</div>
+            <button onClick={closeReview} style={{ backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '24px', fontWeight: 600, cursor: 'pointer', width: '100%' }}>
               Đóng
             </button>
           </div>
@@ -323,7 +323,7 @@ export default function Vocabulary() {
         
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
           <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-            <div style={{ fontSize: '3rem', fontWeight: 'bold', color: '#8A334C', display: 'flex', alignItems: 'center', gap: '16px', justifyContent: 'center' }}>
+            <div style={{ fontSize: '3rem', fontWeight: 'bold', color: 'var(--brand-primary)', display: 'flex', alignItems: 'center', gap: '16px', justifyContent: 'center' }}>
               {word.word}
               <button onClick={() => playAudio(word.word)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><Volume2 size={32} color="#8A334C" /></button>
             </div>
@@ -374,7 +374,7 @@ export default function Vocabulary() {
 
       {stats && (
         <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', marginBottom: '32px', overflow: 'hidden' }}>
-          <div style={{ width: `${stats.completion}%`, height: '100%', backgroundColor: '#8A334C', transition: 'width 0.5s' }} />
+          <div style={{ width: `${stats.completion}%`, height: '100%', backgroundColor: 'var(--brand-primary)', transition: 'width 0.5s' }} />
         </div>
       )}
 
@@ -398,20 +398,20 @@ export default function Vocabulary() {
             </button>
             <button 
               onClick={() => { setImporting(!importing); setAdding(false); setAiPrompting(false); }}
-              style={{ padding: '0 20px', backgroundColor: '#fff', color: '#8A334C', border: '1px solid #8A334C', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              style={{ padding: '0 20px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--brand-primary)', border: '1px solid var(--brand-primary)', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               📥 Từ bộ có sẵn
             </button>
             <button 
               onClick={() => { setAiPrompting(!aiPrompting); setAdding(false); setImporting(false); }}
-              style={{ padding: '0 20px', backgroundColor: '#fff', color: '#8A334C', border: '1px solid #8A334C', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              style={{ padding: '0 20px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--brand-primary)', border: '1px solid var(--brand-primary)', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               ✨ Tạo bằng AI
             </button>
           </div>
 
           {aiPrompting && (
-            <form onSubmit={handleGenerate} style={{ display: 'flex', gap: '12px', marginBottom: '24px', padding: '16px', backgroundColor: 'rgba(138,51,76,0.05)', border: '1px solid #8A334C', borderRadius: '12px', flexWrap: 'wrap' }}>
+            <form onSubmit={handleGenerate} style={{ display: 'flex', gap: '12px', marginBottom: '24px', padding: '16px', backgroundColor: 'rgba(138,51,76,0.05)', border: '1px solid var(--brand-primary)', borderRadius: '12px', flexWrap: 'wrap' }}>
               <input 
                 type="text" 
                 placeholder="Nhập chủ đề (VD: Kinh doanh, Động vật, IELTS...)" 
@@ -422,7 +422,7 @@ export default function Vocabulary() {
               <button 
                 type="submit" 
                 disabled={isGenerating}
-                style={{ padding: '10px 24px', backgroundColor: '#8A334C', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: isGenerating ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
+                style={{ padding: '10px 24px', backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: isGenerating ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
               >
                 {isGenerating ? 'Đang tạo...' : 'Tạo'}
               </button>
@@ -434,20 +434,20 @@ export default function Vocabulary() {
               <select 
                 value={selectedTopic}
                 onChange={(e) => setSelectedTopic(e.target.value)}
-                style={{ flex: 1, minWidth: '150px', padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-medium)', fontSize: '1rem', backgroundColor: '#fff' }}
+                style={{ flex: 1, minWidth: '150px', padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-medium)', fontSize: '1rem', backgroundColor: 'var(--bg-tertiary)' }}
               >
                 {bankTopics.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
               <select 
                 value={selectedLevel}
                 onChange={(e) => setSelectedLevel(e.target.value)}
-                style={{ width: '150px', padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-medium)', fontSize: '1rem', backgroundColor: '#fff' }}
+                style={{ width: '150px', padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-medium)', fontSize: '1rem', backgroundColor: 'var(--bg-tertiary)' }}
               >
                 <option value="b">Cơ bản (A1-A2)</option>
                 <option value="i">Trung cấp (B1-B2)</option>
                 <option value="a">Cao cấp (C1-C2)</option>
               </select>
-              <button type="submit" style={{ padding: '0 20px', backgroundColor: '#8A334C', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
+              <button type="submit" style={{ padding: '0 20px', backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
                 Nhập
               </button>
             </form>
@@ -463,7 +463,7 @@ export default function Vocabulary() {
                 autoFocus
                 style={{ flex: 1, padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-medium)', fontSize: '1rem' }}
               />
-              <button type="submit" style={{ padding: '0 20px', backgroundColor: '#8A334C', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
+              <button type="submit" style={{ padding: '0 20px', backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
                 Thêm
               </button>
             </form>
@@ -476,7 +476,7 @@ export default function Vocabulary() {
           )}
 
           {lookupResult && !words.find(w => (w.word || "").toLowerCase() === lookupResult.word.toLowerCase()) && (
-            <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#fff', marginBottom: '24px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+            <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-tertiary)', marginBottom: '24px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
                 <div style={{ flex: 1, minWidth: '250px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
@@ -526,7 +526,7 @@ export default function Vocabulary() {
                       notify('Lỗi thêm từ', 'error');
                     }
                   }}
-                  style={{ padding: '8px 16px', backgroundColor: '#8A334C', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  style={{ padding: '8px 16px', backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
                   + Thêm từ này
                 </button>
@@ -553,7 +553,7 @@ export default function Vocabulary() {
                   style={{
                     padding: '6px 12px', borderRadius: '16px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
                     border: '1px solid', borderColor: statusFilter === f.k ? '#8A334C' : 'var(--border-medium)',
-                    backgroundColor: statusFilter === f.k ? '#8A334C' : 'var(--bg-primary)',
+                    backgroundColor: statusFilter === f.k ? 'var(--brand-primary)' : 'var(--bg-primary)',
                     color: statusFilter === f.k ? '#fff' : 'var(--text-secondary)',
                   }}>
                   {f.label}
@@ -606,7 +606,7 @@ export default function Vocabulary() {
                         {w.part_of_speech && <span style={{ backgroundColor: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{w.part_of_speech}</span>}
                         {w.learned === 1
                           ? <span style={{ backgroundColor: '#D1FAE5', color: '#065F46', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>✓ đã thuộc</span>
-                          : <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>● đang học</span>}
+                          : <span style={{ backgroundColor: 'var(--accent-amber-bg)', color: '#92400E', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>● đang học</span>}
                         {(w.correct_count > 0 || w.wrong_count > 0) && (
                           <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
                             {w.correct_count || 0}✓ / {w.wrong_count || 0}✗
@@ -635,7 +635,7 @@ export default function Vocabulary() {
             <h3 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: 'var(--text-navy)' }}>Thống kê học tập</h3>
             <div style={{ display: 'flex', gap: '16px' }}>
               <div style={{ flex: 1, backgroundColor: 'var(--bg-primary)', padding: '16px', borderRadius: '8px', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#8A334C' }}>{stats?.completion || 0}%</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--brand-primary)' }}>{stats?.completion || 0}%</div>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Hoàn thành</div>
               </div>
               <div style={{ flex: 1, backgroundColor: 'var(--bg-primary)', padding: '16px', borderRadius: '8px', textAlign: 'center' }}>
@@ -648,10 +648,10 @@ export default function Vocabulary() {
           <div style={{ padding: '20px', border: '1px solid var(--border-light)', borderRadius: '12px', backgroundColor: 'var(--bg-tertiary)' }}>
             <h3 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: 'var(--text-navy)' }}>Ôn tập</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <button onClick={() => startReview('new_words')} style={{ width: '100%', padding: '12px', borderRadius: '8px', backgroundColor: '#8A334C', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer' }}>
+              <button onClick={() => startReview('new_words')} style={{ width: '100%', padding: '12px', borderRadius: '8px', backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer' }}>
                 Ôn từ mới
               </button>
-              <button onClick={() => startReview('learned_words')} disabled={!stats?.learned} style={{ width: '100%', padding: '12px', borderRadius: '8px', backgroundColor: stats?.learned ? '#fff' : 'var(--bg-primary)', color: stats?.learned ? '#8A334C' : 'var(--text-muted)', border: '1px solid var(--border-medium)', fontWeight: 600, cursor: stats?.learned ? 'pointer' : 'not-allowed' }}>
+              <button onClick={() => startReview('learned_words')} disabled={!stats?.learned} style={{ width: '100%', padding: '12px', borderRadius: '8px', backgroundColor: stats?.learned ? '#fff' : 'var(--bg-primary)', color: stats?.learned ? 'var(--brand-primary)' : 'var(--text-muted)', border: '1px solid var(--border-medium)', fontWeight: 600, cursor: stats?.learned ? 'pointer' : 'not-allowed' }}>
                 Ôn từ đã thuộc
               </button>
             </div>
@@ -668,7 +668,7 @@ export default function Vocabulary() {
                 <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Giới hạn trả lời sai</label>
                 <input type="number" min="1" max="10" value={settingWrongLimit} onChange={(e) => setSettingWrongLimit(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border-medium)' }} />
               </div>
-              <button onClick={handleSaveSettings} style={{ width: '100%', padding: '10px', borderRadius: '8px', backgroundColor: '#fff', color: '#000', border: '1px solid var(--border-medium)', fontWeight: 600, cursor: 'pointer', marginTop: '8px' }}>
+              <button onClick={handleSaveSettings} style={{ width: '100%', padding: '10px', borderRadius: '8px', backgroundColor: 'var(--bg-tertiary)', color: '#000', border: '1px solid var(--border-medium)', fontWeight: 600, cursor: 'pointer', marginTop: '8px' }}>
                 Lưu cài đặt
               </button>
             </div>
@@ -683,7 +683,7 @@ export default function Vocabulary() {
                     {a.unlocked ? '🏆' : '🔒'}
                   </div>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: a.unlocked ? '#8A334C' : 'var(--text-primary)' }}>{a.title_vi}</div>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: a.unlocked ? 'var(--brand-primary)' : 'var(--text-primary)' }}>{a.title_vi}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{a.desc_vi}</div>
                   </div>
                 </div>

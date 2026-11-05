@@ -62,7 +62,7 @@ function SourcePdfPage({ doc, pageNum, zoom }) {
 
   return (
     <div ref={wrapRef} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-      <canvas ref={canvasRef} style={{ display: 'block', boxShadow: '0 1px 6px rgba(0,0,0,0.2)', borderRadius: 4, backgroundColor: '#fff' }} />
+      <canvas ref={canvasRef} style={{ display: 'block', boxShadow: '0 1px 6px rgba(0,0,0,0.2)', borderRadius: 4, backgroundColor: 'var(--bg-tertiary)' }} />
     </div>
   );
 }
@@ -323,7 +323,7 @@ function ExamTaker() {
     return (
       <div key={i} style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: 24, border: '1px solid var(--border-light)', padding: 24, marginBottom: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <span style={{ backgroundColor: '#F8EFEA', color: '#8A334C', fontWeight: 700, fontSize: '0.7rem', borderRadius: 8, padding: '4px 10px' }}>
+          <span style={{ backgroundColor: 'var(--surface-blush)', color: 'var(--brand-primary)', fontWeight: 700, fontSize: '0.7rem', borderRadius: 8, padding: '4px 10px' }}>
             CÂU {i + 1} · {TYPE_LABEL[q.type]}
           </span>
           {reveal && gradeable && (
@@ -358,7 +358,7 @@ function ExamTaker() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
               <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-navy)' }}>Giải thích chi tiết:</span>
               {q.source_ref && (
-                <span style={{ backgroundColor: '#F8EFEA', color: '#8A334C', fontSize: '0.75rem', padding: '2px 8px', borderRadius: 999, border: '1px solid #E5D5C5' }}>
+                <span style={{ backgroundColor: 'var(--surface-blush)', color: 'var(--brand-primary)', fontSize: '0.75rem', padding: '2px 8px', borderRadius: 999, border: '1px solid #E5D5C5' }}>
                   {q.source_ref}
                 </span>
               )}
@@ -411,7 +411,7 @@ function ExamTaker() {
     display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 700,
     padding: '4px 10px', borderRadius: 8, cursor: 'pointer', border: '1px solid',
     borderColor: active ? '#8A334C' : 'var(--border-medium)',
-    backgroundColor: active ? '#8A334C' : 'var(--bg-primary)', color: active ? '#fff' : 'var(--text-secondary)',
+    backgroundColor: active ? 'var(--brand-primary)' : 'var(--bg-primary)', color: active ? '#fff' : 'var(--text-secondary)',
   });
 
   return (
@@ -479,7 +479,7 @@ function ExamTaker() {
               <button
                 onClick={addMore}
                 disabled={adding}
-                style={{ backgroundColor: adding ? 'transparent' : '#8A334C', color: adding ? '#8A334C' : '#fff', border: '1px solid #8A334C', borderRadius: 14, padding: 10, fontWeight: 700, width: '100%', cursor: adding ? 'not-allowed' : 'pointer' }}
+                style={{ backgroundColor: adding ? 'transparent' : '#8A334C', color: adding ? 'var(--brand-primary)' : '#fff', border: '1px solid var(--brand-primary)', borderRadius: 14, padding: 10, fontWeight: 700, width: '100%', cursor: adding ? 'not-allowed' : 'pointer' }}
               >
                 {adding ? 'Đang tạo…' : 'Tạo thêm'}
               </button>
@@ -488,7 +488,7 @@ function ExamTaker() {
 
           {!submitted ? (
             <>
-              <div style={{ backgroundColor: '#F8EFEA', borderRadius: 14, padding: 14, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>
+              <div style={{ backgroundColor: 'var(--surface-blush)', borderRadius: 14, padding: 14, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>
                 Làm thử đề thi được AI tạo trực tiếp dựa trên tài liệu bạn đã chọn. Bấm Nộp bài để xem điểm và giải thích chi tiết.
               </div>
               <button onClick={() => doSubmit(false)} style={{ backgroundColor: '#3B6B59', color: '#fff', border: 'none', borderRadius: 14, padding: 14, fontWeight: 800, width: '100%', cursor: 'pointer', marginBottom: 16 }}>
@@ -501,7 +501,7 @@ function ExamTaker() {
               <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-navy)', marginBottom: 4 }}>Kết quả làm bài</div>
               <div style={{ fontSize: '2rem', fontWeight: 900, color: '#3B6B59' }}>{score.correct} / {score.total}</div>
               <div style={{ color: 'var(--text-secondary)', marginBottom: 10 }}>Đúng {pct}%</div>
-              <button onClick={reset} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#8A334C', color: '#fff', border: 'none', borderRadius: 20, padding: '10px 16px', fontWeight: 700, cursor: 'pointer', width: '100%' }}>
+              <button onClick={reset} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: 20, padding: '10px 16px', fontWeight: 700, cursor: 'pointer', width: '100%' }}>
                 <RotateCcw size={16} /> Làm lại bài thi
               </button>
             </div>
@@ -518,7 +518,7 @@ function ExamTaker() {
           <div style={{ fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: 1, fontSize: '0.75rem', marginBottom: 16 }}>NGUỒN: TÀI LIỆU ĐỐI CHIẾU</div>
           
           {sourceDoc ? (
-            <div style={{ border: '2px solid #8A334C', borderRadius: 16, display: 'flex', flexDirection: 'column', height: 'calc(100% - 32px)' }}>
+            <div style={{ border: '2px solid var(--brand-primary)', borderRadius: 16, display: 'flex', flexDirection: 'column', height: 'calc(100% - 32px)' }}>
               <div style={{ padding: 16, borderBottom: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)', borderTopLeftRadius: 14, borderTopRightRadius: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
                   <div style={{ fontWeight: 700, color: 'var(--text-navy)', fontSize: '0.9rem', wordBreak: 'break-word', flex: 1 }}>{sourceDoc.filename}</div>

@@ -168,7 +168,7 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
 
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(27,42,78,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
-      <div style={{ backgroundColor: '#FAFAFA', borderRadius: '24px', width: '92%', maxWidth: '640px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.25)' }}>
+      <div style={{ backgroundColor: 'var(--surface-plain)', borderRadius: '24px', width: '92%', maxWidth: '640px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.25)' }}>
         {/* Header */}
         <div style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)' }}>
           <div>
@@ -181,7 +181,7 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
             {cards.length > 0 && !done && (
               <>
                 <button onClick={shuffle} title="Xáo trộn (S)" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', cursor: 'pointer', color: 'var(--text-secondary)', padding: '8px', borderRadius: '8px', display: 'flex' }}><Shuffle size={16} /></button>
-                <button onClick={exportToCSV} title="Xuất CSV (Anki/Quizlet)" style={{ background: '#E8F5E9', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.85rem' }}><Download size={16} /> CSV</button>
+                <button onClick={exportToCSV} title="Xuất CSV (Anki/Quizlet)" style={{ background: 'var(--surface-green)', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.85rem' }}><Download size={16} /> CSV</button>
               </>
             )}
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={24} /></button>
