@@ -5,15 +5,24 @@ import random
 import asyncio
 import datetime
 import ssl
+import sys
 import nltk
 from nltk.corpus import wordnet as wn
+
+# Bundled NLTK data (backend/nltk_data, or <_MEIPASS>/nltk_data in the frozen build) must be
+# on the search path BEFORE the lookup below, otherwise the packaged app tries to download.
+_NLTK_BUNDLE = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "nltk_data")
+if os.path.isdir(_NLTK_BUNDLE) and _NLTK_BUNDLE not in nltk.data.path:
+    nltk.data.path.insert(0, _NLTK_BUNDLE)
 
 try:
     nltk.data.find('corpora/wordnet')
 except LookupError:
-    ssl._create_default_https_context = ssl._create_unverified_context
-    nltk.download('wordnet', quiet=True)
-    nltk.download('omw-1.4', quiet=True)
+    try:
+        nltk.download('wordnet', quiet=True)
+        nltk.download('omw-1.4', quiet=True)
+    except Exception as e:  # offline first run: WordNet features degrade, app still starts
+        print(f"[startup] could not download WordNet: {e}")
 
 import difflib
 try:

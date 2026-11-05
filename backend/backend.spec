@@ -1,5 +1,5 @@
 import os
-from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files, collect_all
 from PyInstaller.building.datastruct import Tree
 from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT
 
@@ -23,7 +23,24 @@ for pkg in [
     except Exception:
         pass
 
-# Bundle NLTK data from the user's home directory
+binaries = []
+extra_hidden = []
+# Packages that ship native binaries / data files or import submodules dynamically.
+# google.antigravity bundles the `localharness` executable it spawns at runtime.
+for pkg in ["google.antigravity", "google.genai", "uvicorn", "ddgs", "pyvi", "trafilatura",
+            "youtube_transcript_api", "deep_translator", "docx", "pdfplumber", "certifi"]:
+    try:
+        d, b, h = collect_all(pkg)
+        datas += d
+        binaries += b
+        extra_hidden += h
+    except Exception:
+        pass
+
+# NLTK data: the repo copy (wordnet) plus anything in the builder's ~/nltk_data.
+repo_nltk = os.path.abspath("nltk_data")
+if os.path.exists(repo_nltk):
+    datas += [(repo_nltk, "nltk_data")]
 nltk_data_path = os.path.expanduser('~/nltk_data')
 if os.path.exists(nltk_data_path):
     datas += [(nltk_data_path, "nltk_data")]
@@ -31,9 +48,9 @@ if os.path.exists(nltk_data_path):
 a = Analysis(
     ["main.py"],
     pathex=["."],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
-    hiddenimports=spacy_hidden + [
+    hiddenimports=spacy_hidden + extra_hidden + [
         "spacy.matcher._schemas",
         "spacy.tokens._retokenize",
         "spacy.tokens.morphanalysis",
@@ -59,7 +76,8 @@ a = Analysis(
         "sqlalchemy.ext.declarative",
         "sqlalchemy.orm.sessionmaker",
         "pyvi",
-    ],
+        "en_core_web_sm",
+    ] + collect_submodules("nlp") + collect_submodules("db"),
     hookspath=["hooks"],
     runtime_hooks=[],
     excludes=[],

@@ -37,12 +37,17 @@ jobs:
           cd backend
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller
+          python -m spacy download en_core_web_sm
+
+      - name: Smoke-test backend import
+        run: |
+          cd backend
+          python -c "import main; print(len(main.app.routes), 'routes')"
 
       - name: Build Python Backend
         run: |
           cd backend
-          pyinstaller workflow-backend.spec
+          pyinstaller --noconfirm backend.spec
 
       - name: Install Node dependencies
         run: npm install

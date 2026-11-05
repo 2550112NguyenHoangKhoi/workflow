@@ -33,7 +33,6 @@ __pycache__/
 *$py.class
 backend/build/
 backend/dist/
-backend/*.spec
 
 # Local secrets (API keys)
 .env
