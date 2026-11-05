@@ -56,7 +56,25 @@ def extract_quiz(text: str, num_questions: int = 5) -> Dict:
     random.shuffle(candidate_sentences)
     
     used_targets = set()
-    
+
+    # Distractor pools drawn from THIS document, so wrong answers are plausible and on-topic
+    # (they used to be a canned list: "London", "Microsoft", "Albert Einstein", ...).
+    ents_by_label = {}
+    for ent in doc.ents:
+        ents_by_label.setdefault(ent.label_, {})[ent.text.lower()] = ent.text
+    doc_terms = {}
+    for chunk in doc.noun_chunks:
+        root = chunk.root
+        if root.pos_ in ('NOUN', 'PROPN') and len(root.text) > 3 and not root.is_stop:
+            doc_terms.setdefault(root.text.lower(), root.text)
+
+    def _from_doc(target_text, label=None, num=3):
+        low = target_text.lower()
+        same = [v for k, v in ents_by_label.get(label, {}).items() if k != low and low not in k and k not in low] if label else []
+        others = [v for k, v in doc_terms.items() if k != low and low not in k and k not in low and v not in same]
+        random.shuffle(same); random.shuffle(others)
+        return (same + others)[:num]
+
     for sent in candidate_sentences:
         if len(questions) >= num_questions:
             break
@@ -72,11 +90,23 @@ def extract_quiz(text: str, num_questions: int = 5) -> Dict:
             # Try to get distractors based on entity type if possible, otherwise skip WordNet
             # Simple fallback for Entities:
             if target.label_ == 'DATE':
-                distractors = ["1998", "2005", "1800s", "the 19th century"]
+                # Other dates from the text, then nearby years — never a non-date term.
+                low = target_text.lower()
+                distractors = [v for k, v in ents_by_label.get('DATE', {}).items() if k != low]
+                random.shuffle(distractors)
+                import re as _re
+                years = _re.findall(r'\b(1[5-9]\d\d|20\d\d)\b', target_text)
+                if years:
+                    y = int(years[0])
+                    for d in (-10, 5, 20, -3):
+                        alt = target_text.replace(years[0], str(y + d))
+                        if alt.lower() not in {x.lower() for x in distractors}:
+                            distractors.append(alt)
             else:
-                distractors = ["London", "Microsoft", "Albert Einstein", "The United Nations"]
-                
-            distractors = random.sample([d for d in distractors if d.lower() != target_text.lower()], 3)
+                distractors = _from_doc(target_text, target.label_)
+            if len(distractors) < 3:
+                continue  # not enough on-topic wrong answers for a fair question
+            distractors = distractors[:3]
             
         # 2. Fallback to Root Nouns
         if not target:
@@ -84,14 +114,13 @@ def extract_quiz(text: str, num_questions: int = 5) -> Dict:
             if nouns:
                 target = random.choice(nouns)
                 target_text = target.text
-                distractors = generate_distractors(target_text, num=3)
-                # If wordnet fails to find enough distractors, we use generic ones from the document
+                # Other terms from the same document first, then WordNet coordinate terms.
+                distractors = _from_doc(target_text)
                 if len(distractors) < 3:
-                    doc_nouns = list(set([t.text for t in doc if t.pos_ == 'NOUN' and len(t.text) > 4 and t.text.lower() != target_text.lower()]))
-                    if len(doc_nouns) >= 3:
-                        distractors = random.sample(doc_nouns, 3)
-                    else:
-                        continue # Skip this sentence if we can't build a good question
+                    distractors += [d for d in generate_distractors(target_text, num=3)
+                                    if d.lower() not in {x.lower() for x in distractors}]
+                if len(distractors) < 3:
+                    continue  # skip this sentence if we can't build a good question
             else:
                 continue
                 
@@ -112,7 +141,8 @@ def extract_quiz(text: str, num_questions: int = 5) -> Dict:
         options_text = [target_text] + distractors
         random.shuffle(options_text)
         
-        options = [{"id": chr(97+j), "text": str(opt).capitalize()} for j, opt in enumerate(options_text)]
+        # Upper-case only the first letter: str.capitalize() turned "ATP" into "Atp".
+        options = [{"id": chr(97+j), "text": str(opt)[:1].upper() + str(opt)[1:]} for j, opt in enumerate(options_text)]
         correct_id = [opt["id"] for opt in options if opt["text"].lower() == target_text.lower()][0]
         
         questions.append({

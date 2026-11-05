@@ -1918,7 +1918,26 @@ def _normalize_exam_questions(questions):
     that matches one of the option ids. Best-effort; leaves the question untouched on failure."""
     def _clean(x):
         return x.strip().strip(",").strip() if isinstance(x, str) else x
+    # The exam page only renders/grades these four type ids; the AI sometimes answers with
+    # labels like "multiple choice" / "Đúng/Sai" instead.
+    type_aliases = {
+        "mcq": "mcq", "multiple_choice": "mcq", "multiple choice": "mcq", "trắc nghiệm": "mcq",
+        "true_false": "true_false", "true/false": "true_false", "true or false": "true_false",
+        "tf": "true_false", "đúng/sai": "true_false", "đúng sai": "true_false",
+        "short_answer": "short_answer", "short answer": "short_answer", "trả lời ngắn": "short_answer",
+        "fill_in_the_blank": "short_answer", "essay": "essay", "tự luận": "essay",
+    }
     for q in (questions or []):
+        try:
+            t = str(q.get("type") or "").strip().lower()
+            if t in type_aliases:
+                q["type"] = type_aliases[t]
+            elif q.get("options"):
+                q["type"] = "true_false" if len(q["options"]) == 2 else "mcq"
+            elif t not in ("short_answer", "essay"):
+                q["type"] = "short_answer" if q.get("answer") and len(str(q["answer"])) < 80 else "essay"
+        except Exception:
+            pass
         try:
             opts = q.get("options")
             if not opts:
