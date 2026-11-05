@@ -1,7 +1,7 @@
 // The AI engine chosen in Settings, encoded as the value every AI request sends as `api_key`
 // (or the X-API-Key header). Settings is the only writer:
 //   '<Gemini key>' | ''  -> Cloud Gemini ('' = use the server's .env key)
-//   'LOCAL' | 'LOCAL:m'  -> local Ollama model
+//   'LOCAL'              -> local model (Settings panel: built-in Gemma via LiteRT, or Ollama/LM Studio)
 //   'OFFLINE'            -> built-in NLP engine
 export const ENGINE_KEY_STORAGE = 'workflow_api_key';
 
@@ -17,6 +17,6 @@ export function getEngineKey() {
 export function engineLabel() {
   const k = getEngineKey();
   if (k === 'OFFLINE') return 'bộ máy NLP tích hợp (offline)';
-  if (k.startsWith('LOCAL')) return `model cục bộ${k.includes(':') ? ` (${k.split(':')[1]})` : ' (Ollama)'}`;
+  if (k.startsWith('LOCAL')) return 'model cục bộ (Gemma / máy chủ cục bộ)';
   return 'Gemini (Cloud)';
 }

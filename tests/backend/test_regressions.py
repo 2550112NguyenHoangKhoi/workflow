@@ -621,3 +621,107 @@ def test_exam_word_export_and_no_placeholder_questions(client):
     bad = client.post("/api/exams/generate", json={"title": "x", "num_questions": 3, **OFFLINE})
     assert bad.status_code == 422
     assert client.post("/api/generate_quiz", json={"topic_or_text": "Hi.", **OFFLINE}).status_code == 422
+
+
+def _fake_openai_server():
+    """A minimal OpenAI-compatible server (like Ollama / LM Studio). When the harness offers
+    the `finish` tool (structured output) it calls it with a value built from the tool's JSON
+    schema; otherwise it answers with text."""
+    import http.server, threading
+
+    def sample(schema, defs):
+        if "$ref" in schema:
+            return sample(defs[schema["$ref"].split("/")[-1]], defs)
+        t = schema.get("type")
+        if t == "object" or "properties" in schema:
+            return {k: sample(v, defs) for k, v in schema.get("properties", {}).items()}
+        if t == "array":
+            return [sample(schema.get("items", {}), defs)]
+        return {"integer": 1, "number": 1.0, "boolean": True}.get(t, "local-model")
+
+    calls = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def _send(self, obj, ctype="application/json"):
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.end_headers()
+            self.wfile.write(obj if isinstance(obj, bytes) else json.dumps(obj).encode())
+
+        def do_GET(self):
+            self._send({"object": "list", "data": [{"id": "gemma3:4b", "object": "model"}]})
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            calls.append(body)
+            tools = body.get("tools") or []
+            if tools:
+                params = tools[0]["function"]["parameters"]
+                args = sample(params, params.get("$defs", {}))
+                msg = {"role": "assistant", "content": None, "tool_calls": [
+                    {"index": 0, "id": "c1", "type": "function", "function": {"name": tools[0]["function"]["name"], "arguments": json.dumps(args)}}]}
+                fin = "tool_calls"
+            else:
+                msg, fin = {"role": "assistant", "content": "Hà Nội."}, "stop"
+            if body.get("stream"):
+                chunks = [{"id": "x", "object": "chat.completion.chunk", "choices": [{"index": 0, "delta": msg, "finish_reason": None}]},
+                          {"id": "x", "object": "chat.completion.chunk", "choices": [{"index": 0, "delta": {}, "finish_reason": fin}],
+                           "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}}]
+                self._send(("".join(f"data: {json.dumps(c)}\n\n" for c in chunks) + "data: [DONE]\n\n").encode(), "text/event-stream")
+            else:
+                self._send({"id": "x", "object": "chat.completion", "choices": [{"index": 0, "message": msg, "finish_reason": fin}]})
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, calls
+
+
+def test_local_model_engine_through_the_harness(client):
+    """'Model cục bộ': a local OpenAI-compatible server (Ollama / LM Studio) driven through the
+    Antigravity harness; the same path serves the built-in Gemma (LiteRT) runtime."""
+    hw = client.get("/api/local/hardware").json()
+    assert {"os", "accelerator", "backends", "builtin_supported", "recommended_model", "reasoning"} <= set(hw)
+    models = client.get("/api/local/models").json()
+    assert [m["id"] for m in models["models"]][:3] == ["gemma-4-e2b", "gemma-4-e4b", "gemma-4-12b"]
+    assert client.post("/api/local/models/nope/download").status_code == 404
+
+    srv, calls = _fake_openai_server()
+    url = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        assert client.get("/api/local/server/models", params={"url": url}).json()["models"] == ["gemma3:4b"]
+        cfg = client.put("/api/local/config", json={"runtime": "server", "server_url": url + "/v1/", "server_model": "gemma3:4b"}).json()
+        assert cfg["server_url"] == url                      # trailing /v1/ normalised
+        t = client.post("/api/local/test").json()
+        assert t["ok"] and "Hà Nội" in t["reply"]
+        # A real feature with the local engine: structured output comes back through the harness.
+        quiz = client.post("/api/generate_quiz", json={"topic_or_text": "A stack is LIFO memory. " * 10, "api_key": "LOCAL"}).json()
+        assert quiz["questions"][0]["question"] == "local-model"
+        assert any(c.get("tools") and c["tools"][0]["function"]["name"] == "finish" for c in calls)
+        assert calls[-1]["model"] == "gemma3:4b"
+        # The legacy "LOCAL:<ollama model>" key still works (server URL from the config).
+        n = len(calls)
+        client.post("/api/generate_quiz", json={"topic_or_text": "A queue is FIFO memory. " * 10, "api_key": "LOCAL:llama3.2"})
+        assert calls[n]["model"] == "llama3.2"
+    finally:
+        srv.shutdown()
+        client.put("/api/local/config", json={"runtime": "builtin", "server_url": "http://127.0.0.1:11434", "server_model": ""})
+
+
+def test_local_model_output_repairs():
+    """Gemma 2–4B quirks seen on a real run: nested objects sent as JSON strings inside
+    tool-call arguments, and trailing commas in plain JSON replies."""
+    from core.local_models import _decode_nested, _parse_json, recommend
+    assert _decode_nested({"q": ['{"a": 1}', "keep me", "[1, 2]"]}) == {"q": [{"a": 1}, "keep me", [1, 2]]}
+    assert _parse_json('```json\n{"a": [1, 2,],}\n```') == {"a": [1, 2]}
+    # Recommendations follow memory: unified memory on Apple Silicon, VRAM on Windows.
+    assert recommend({"os": "macOS", "ram_gb": 16, "gpus": [], "backends": ["gpu", "cpu"], "builtin_supported": True})["recommended_model"] == "gemma-4-12b"
+    assert recommend({"os": "macOS", "ram_gb": 8, "gpus": [], "backends": ["gpu", "cpu"], "builtin_supported": True})["recommended_model"] == "gemma-4-e2b"
+    win = recommend({"os": "Windows", "ram_gb": 16, "gpus": [{"name": "RTX 4060", "vram_gb": 8}], "backends": ["gpu", "cpu"],
+                     "accelerator": "DirectX 12 (WebGPU)", "builtin_supported": True})
+    assert win["recommended_model"] == "gemma-4-e4b" and win["recommended_backend"] == "gpu" and "DirectX 12" in win["reasoning"]
+    igpu = recommend({"os": "Windows", "ram_gb": 16, "gpus": [{"name": "Intel Arc Graphics", "vram_gb": None}], "backends": ["gpu", "cpu"],
+                      "accelerator": "DirectX 12 (WebGPU)", "builtin_supported": True})
+    assert igpu["recommended_model"] == "gemma-4-e2b"

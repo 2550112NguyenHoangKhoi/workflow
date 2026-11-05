@@ -27,7 +27,9 @@ binaries = []
 extra_hidden = []
 # Packages that ship native binaries / data files or import submodules dynamically.
 # google.antigravity bundles the `localharness` executable it spawns at runtime.
-for pkg in ["google.antigravity", "google.genai", "uvicorn", "ddgs", "pyvi", "trafilatura",
+# litert_lm bundles the LiteRT-LM native library (liblitert-lm.dylib with Metal on macOS;
+# litert-lm.dll + dxcompiler/dxil + OpenVINO NPU dispatch on Windows).
+for pkg in ["google.antigravity", "litert_lm", "google.genai", "uvicorn", "ddgs", "pyvi", "trafilatura",
             "youtube_transcript_api", "deep_translator", "docx", "pdfplumber", "certifi"]:
     try:
         d, b, h = collect_all(pkg)

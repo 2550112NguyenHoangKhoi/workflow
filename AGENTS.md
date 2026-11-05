@@ -45,7 +45,7 @@ Every AI feature has **three interchangeable engines**, selected in Settings:
 | Engine | UI signal (`localStorage.workflow_api_key`) | Backend behaviour |
 |---|---|---|
 | Gemini (cloud) | the user's key `AIza…` / `AQ…`, or `''` (empty) | Google Antigravity SDK; `''` falls back to the `.env` key |
-| Local (Ollama) | `LOCAL` or `LOCAL:<model>` | `nlp/local_llm.py` → `http://127.0.0.1:11434` |
+| Local model | `LOCAL` (legacy `LOCAL:<ollama model>`) | `core/local_models.py`, through the **Antigravity harness** (`LocalOpenAIAgentConfig`): built-in **Gemma 4 on LiteRT-LM** (Metal on Apple Silicon, DirectX 12/WebGPU on Windows x64, CPU fallback) or any OpenAI-compatible server (Ollama, LM Studio, llama.cpp). Choice stored in `<data dir>/local_ai.json` |
 | Offline NLP | `OFFLINE` | deterministic spaCy / pyvi / TextRank / WordNet engine in `backend/nlp/` |
 
 **Every AI path falls back to the offline engine** on error or timeout, so endpoints never fail just because the AI did.
@@ -158,7 +158,8 @@ Google Translate (deep-translator), YouTube transcripts, trafilatura (web pages)
 | Path | Role |
 |---|---|
 | `backend/main.py` (≈3.4k lines) | FastAPI app: schema patch, CORS + token middleware, all routes, Pydantic schemas, helper functions. Ends with the `__main__` block. |
-| `backend/core/agent.py` | **AI plumbing:** `get_api_key`, `agent_run` (Gemini / Ollama, hard timeout), `FAST_CAPS`, `DEFAULT_MODEL`, token accounting (`read_usage`, `record_usage`). Imported by `main.py` and `nlp/roadmap.py`. |
+| `backend/core/local_models.py` | **Local models:** hardware detection (`detect_hardware`, `recommend`), Gemma catalog + resumable downloads (HF `litert-community`), `LiteRTRuntime` (one engine kept loaded, served by the SDK's LiteRT OpenAI server on loopback), `local_generate` (harness → direct OpenAI call fallback), output repairs (`_decode_nested`, `_parse_json`). |
+| `backend/core/agent.py` | **AI plumbing:** `get_api_key`, `agent_run` (Gemini / local models, hard timeout), `FAST_CAPS`, `DEFAULT_MODEL`, token accounting (`read_usage`, `record_usage`). Imported by `main.py` and `nlp/roadmap.py`. |
 | `backend/db/database.py` | Data-dir resolution, legacy migration, SQLAlchemy engine and session, `UPLOAD_DIR`, `USAGE_FILE`. |
 | `backend/db/models.py` | ORM models (§7). |
 | `backend/db/crud.py` | DB helpers incl. `remove_document_files`, `_purge_document_rows`, `delete_document`, `delete_project`, `flashcard_has_progress`. |
@@ -205,7 +206,6 @@ Google Translate (deep-translator), YouTube transcripts, trafilatura (web pages)
 | `vi_desegment.py` | `desegment` | Re-spaces glued Vietnamese syllables from bad PDF extraction. |
 | `teachback.py` | `make_prompt`, `evaluate` | Feynman check (keyword coverage offline). |
 | `spaced_repetition.py` | `sm2_update` | SM-2 (quality 0–5). |
-| `local_llm.py` | `local_generate`, `status` | Ollama client. |
 | `vocab_bank.py` | `VOCAB_BANK` | `{topic: {"b"/"i"/"a": [word dicts]}}` |
 | `pdf_toc.py` | `parse_pdf_toc` | Heading detection (largely unused). |
 
@@ -266,7 +266,8 @@ Line ≈ = line of the decorator.
 | GET/POST `/api/documents/{id}/members`, `…/invite` | 567/580 | local-only |
 | GET `/api/projects/{id}/artifacts`, `/api/documents/{id}/artifacts` | 593/598 | artifact lists |
 | GET `/api/documents/{id}/notes?api_key&regenerate` | 603 | smart notes (cached artifact) |
-| GET `/api/engine/local_status`, `/api/engine/recommend_local` | 655/661 | Ollama status / RAM-based recommendation |
+| GET `/api/engine/local_status`, `/api/engine/recommend_local` | — | compatibility wrappers over `core/local_models` |
+| GET `/api/local/hardware`, `/api/local/models`, POST/DELETE `/api/local/models/{id}/download`, DELETE `/api/local/models/{id}`, GET/PUT `/api/local/config`, GET `/api/local/server/models?url=`, POST `/api/local/test`, `/api/local/unload` | — | Local-model management (Settings → Model cục bộ) |
 | GET `/api/system/info` | 695 | `{data_dir}` for Settings |
 | GET `/api/usage` | 702 | estimated AI tokens vs a made-up 500k quota (§11) |
 | POST `/api/chat` | 771 | chat (§5) |
@@ -342,7 +343,7 @@ SQLite foreign keys are **not enforced**, so endpoints validate parent ids thems
 | `/` | `LandingPage` | Google login or "bypass" local user (registers via `/api/auth/login`) |
 | `/documents[?folder=&q=]` | `DocumentExplorer` | library, Drive browser (`utils/googleDrive`), `StudioSidebar` (upload, exams, notes, concept map, flashcards, import) |
 | `/chat`, `/document/:id`, `/project/:id` | `DocumentViewer` | chat, `PdfViewer` (pdf.js), `ProjectStudioSidebar` (uploads, personas, roadmap, artifacts), `TeamChatWidget` |
-| `/settings` | `Settings` | engine picker, Gemini key, Ollama check, **Drive API key**, **storage folder** |
+| `/settings` | `Settings` | engine picker, Gemini key, `LocalModelPanel` (hardware, Gemma downloads, GPU/CPU/NPU, Ollama/LM Studio, test), **Drive API key**, **storage folder** |
 | `/writing` | `WritingPractice` | sentence / paragraph / IELTS (`renderEssay` ≈759, `handleGradeEssay` ≈360) |
 | `/active-learning` | `ActiveLearning` | Feynman |
 | `/vocabulary` | `Vocabulary` | trainer, bank import, AI generate |
@@ -374,7 +375,7 @@ SQLite foreign keys are **not enforced**, so endpoints validate parent ids thems
 ## 9. Conventions and gotchas (do / don't)
 
 1. **Backend route placement:** keep `if __name__ == "__main__":` the **last statement** of `main.py` (test: `test_all_routes_registered_when_frozen`).
-2. **AI calls:** `config = LocalAgentConfig(api_key=get_api_key(raw), model=DEFAULT_MODEL, response_schema=..., capabilities=FAST_CAPS)` then `await agent_run(config, prompt, structured=..., timeout=...)` inside `try/except`, with an offline fallback. Never call `Agent(...)` directly (no timeout, no Ollama routing).
+2. **AI calls:** `config = LocalAgentConfig(api_key=get_api_key(raw), model=DEFAULT_MODEL, response_schema=..., capabilities=FAST_CAPS)` then `await agent_run(config, prompt, structured=..., timeout=...)` inside `try/except`, with an offline fallback. Never call `Agent(...)` directly (no timeout, no local-model routing). Local models: keep prompts self-contained and schemas shallow — 2–4B models are weaker at deeply nested JSON (see `_decode_nested`).
 3. **Don't import `main` from other modules** (it breaks in PyInstaller). Shared code goes in `core/` or `db/`.
 4. **New DB column:** update `models.py` **and** `patch_database_schema`.
 5. **Deleting documents/projects:** use `crud.delete_document` / `crud.delete_project`. They purge child rows, shares **and** stored files.
@@ -510,6 +511,7 @@ Columns: **ID**, **Where** (file and symbol), **Symptom**, **Root cause**, **Fix
 | F-29 | `DELETE /api/{documents,projects}/{id}/messages`, chat header bin icon | Chat history could not be cleared | "Xoá lịch sử chat" |
 | F-30 | `nlp/exam_docx.py`, `POST /api/exams/{id}/export.docx`, ExamTaker "Tải Word" | Exams exported only as a browser print / JSON | Word file: school header + logo, candidate line, marks per question, answer key table, essay grading guide, footer + page numbers; the print template is saved (`workflow_exam_template`) |
 | F-31 | `nlp/quizzes.py:extract_quiz`, `/api/exams/generate`, `/api/generate_quiz`, `CreateExamModal` | With no usable source text the offline engine returned a hard-coded "What is 2+2?" question, so empty sources produced a fake exam | No placeholder: 422 with a clear message, shown by the dialog |
+| F-32 | `core/local_models.py`, `core/agent.py`, `/api/local/*`, `LocalModelPanel.jsx`, `requirements.txt` (`litert-lm-api` with platform markers), `backend.spec` (`collect_all("litert_lm")`), CI "Local model runtime check" | Local engine = a hand-written Ollama HTTP client; users had to install Ollama and pull a model in a terminal; no GPU choice; Mac/Windows acceleration unknown | Local models run through the Antigravity harness like Gemini. Built-in Gemma 4 E2B/E4B/12B (`.litertlm` from HF `litert-community`, downloaded in-app with progress/resume) on Google AI Edge LiteRT-LM: **Metal** on Apple Silicon (verified: the macOS wheel links `Metal.framework`), **DirectX 12 via WebGPU/Dawn** on Windows x64 (wheel ships `dxcompiler.dll`/`dxil.dll`; DLL dir registered for the frozen app), Intel Core Ultra NPU builds (experimental), CPU fallback when the GPU fails. One engine stays loaded. External servers (Ollama / LM Studio / llama.cpp) via the same harness path. Hardware-based model recommendation. Structured calls on the built-in runtime use LiteRT-LM **grammar-constrained decoding** (`ResponseFormat.json` + llguidance): through the harness's `finish` tool, Gemma 4 E2B sent nested list items as plain strings and failed schema validation. Text calls go through the harness. Verified here with the real Gemma 4 E2B on CPU (no GPU in the container): self-test 4.7 s, Vietnamese chat, flashcards 38 s, 5-question quiz 72 s, concept map 65 s, no offline fallbacks |
 | U-8 | `index.html` error box | Debug log printed every window error on screen via `innerHTML`, including the benign ResizeObserver warning | Ignores ResizeObserver, uses `textContent`, dismissible box |
 
 ### UI (U)

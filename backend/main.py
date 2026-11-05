@@ -704,43 +704,115 @@ async def get_document_notes_api(document_id: int, api_key: str | None = None, r
 
 @app.get("/api/engine/local_status")
 async def engine_local_status(model_name: str | None = None):
-    """Whether a local downloaded model (Ollama) is reachable, for the Settings checker."""
-    from nlp.local_llm import status
-    return status(model_name)
+    """Readiness of the configured local model (kept for older Settings screens)."""
+    from core import local_models as L
+    cfg = L.load_config()
+    if cfg["runtime"] == "server" or model_name:
+        names = await asyncio.to_thread(L.server_models, cfg["server_url"])
+        target = model_name or cfg.get("server_model") or (names[0] if names else "")
+        return {"available": bool(names), "url": cfg["server_url"], "model": target,
+                "model_pulled": any(n == target or n.startswith(target + ":") for n in names), "models": names}
+    return {"available": True, "model": cfg["model_id"], "model_pulled": L.is_installed(cfg["model_id"]), "models": []}
+
 
 @app.get("/api/engine/recommend_local")
 async def recommend_local_model():
-    """Detect system RAM and recommend the best local model for Vietnamese & study app."""
-    import os
-    ram_gb = 8.0 # default
-    try:
-        if hasattr(os, 'sysconf'):
-            if 'SC_PAGE_SIZE' in os.sysconf_names and 'SC_PHYS_PAGES' in os.sysconf_names:
-                ram_gb = (os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')) / (1024.**3)
-    except Exception:
-        pass
-    
-    ram_gb = round(ram_gb, 1)
-    
-    if ram_gb >= 14:
-        rec = "gemma2"
-        reason = f"Máy bạn có {ram_gb}GB RAM, cực kỳ mạnh mẽ để chạy Gemma 2 (9B) hoặc Qwen2.5 (14B) - các model vượt trội về khả năng suy luận logic và tiếng Việt."
-        alts = ["qwen2.5:14b", "llama3.1", "qwen2.5"]
-    elif ram_gb >= 6:
-        rec = "qwen2.5"
-        reason = f"Máy bạn có {ram_gb}GB RAM, đủ để chạy mượt Qwen2.5 (7B) hoặc Llama 3.1 (8B) - cân bằng hoàn hảo giữa tốc độ và chất lượng tiếng Việt."
-        alts = ["llama3.1", "gemma2", "mistral"]
-    else:
-        rec = "qwen2.5:3b"
-        reason = f"Máy bạn có {ram_gb}GB RAM, phù hợp chạy các model nhỏ và nhẹ như Qwen2.5 (3B) hoặc Gemma 2 (2B) để đảm bảo không bị giật lag."
-        alts = ["gemma2:2b", "llama3.2"]
+    from core import local_models as L
+    hw = await asyncio.to_thread(L.detect_hardware)
+    return {"system_ram_gb": hw["ram_gb"], "recommended_model": hw["recommended_model"],
+            "reasoning": hw["reasoning"], "alternatives": [m["id"] for m in L.CATALOG]}
 
-    return {
-        "system_ram_gb": ram_gb,
-        "recommended_model": rec,
-        "reasoning": reason,
-        "alternatives": alts
-    }
+
+# --- Local models (alternative to a cloud API key) — see core/local_models.py ---
+
+class LocalConfigIn(BaseModel):
+    runtime: str | None = None      # builtin | server
+    model_id: str | None = None
+    backend: str | None = None      # auto | gpu | cpu | npu
+    server_url: str | None = None
+    server_model: str | None = None
+
+
+@app.get("/api/local/hardware")
+async def local_hardware():
+    from core import local_models as L
+    return await asyncio.to_thread(L.detect_hardware)
+
+
+@app.get("/api/local/models")
+def local_models_list():
+    from core import local_models as L
+    return {"models": L.list_models(), "runtime": L.RUNTIME.status(), "config": L.load_config(), "models_dir": L.MODELS_DIR}
+
+
+@app.post("/api/local/models/{model_id}/download")
+def local_model_download(model_id: str, variant: str | None = None):
+    from core import local_models as L
+    try:
+        return L.start_download(model_id, variant)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Không có model này.")
+
+
+@app.delete("/api/local/models/{model_id}/download")
+def local_model_cancel(model_id: str):
+    from core import local_models as L
+    L.cancel_download(model_id)
+    return {"ok": True}
+
+
+@app.delete("/api/local/models/{model_id}")
+def local_model_delete(model_id: str):
+    from core import local_models as L
+    if not L.model_entry(model_id):
+        raise HTTPException(status_code=404, detail="Không có model này.")
+    L.delete_model(model_id)
+    return {"ok": True}
+
+
+@app.get("/api/local/config")
+def local_config_get():
+    from core import local_models as L
+    return L.load_config()
+
+
+@app.put("/api/local/config")
+def local_config_put(req: LocalConfigIn):
+    from core import local_models as L
+    cfg = L.save_config(req.model_dump())
+    rt = L.RUNTIME
+    if rt.base_url and (cfg["runtime"] != "builtin" or rt.model_id != cfg["model_id"]):
+        rt.unload()   # free the memory of a model that is no longer selected
+    return cfg
+
+
+@app.get("/api/local/server/models")
+async def local_server_models(url: str):
+    from core import local_models as L
+    names = await asyncio.to_thread(L.server_models, url)
+    return {"reachable": bool(names), "models": names}
+
+
+@app.post("/api/local/test")
+async def local_test():
+    """Load the selected local model (if needed) and run one short prompt through the harness."""
+    import time as _t
+    from core import local_models as L
+    t0 = _t.time()
+    try:
+        text = await L.local_generate("LOCAL", "Trả lời đúng một câu: Thủ đô của Việt Nam là gì?", structured=False, timeout=300)
+    except Exception as e:
+        return {"ok": False, "error": str(e), "runtime": L.RUNTIME.status()}
+    return {"ok": True, "reply": str(text)[:300], "seconds": round(_t.time() - t0, 1), "runtime": L.RUNTIME.status(),
+            "config": L.load_config()}
+
+
+@app.post("/api/local/unload")
+def local_unload():
+    from core import local_models as L
+    L.RUNTIME.unload()
+    return {"ok": True}
+
 
 @app.get("/api/system/info")
 def system_info():
