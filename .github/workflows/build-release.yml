@@ -39,10 +39,10 @@ jobs:
           pip install -r requirements.txt
           python -m spacy download en_core_web_sm
 
-      - name: Smoke-test backend import
+      - name: Backend regression tests
         run: |
-          cd backend
-          python -c "import main; print(len(main.app.routes), 'routes')"
+          pip install pytest
+          python -m pytest tests/backend -q -p no:warnings
 
       - name: Build Python Backend
         run: |
