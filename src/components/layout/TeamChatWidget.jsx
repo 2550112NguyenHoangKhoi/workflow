@@ -70,7 +70,12 @@ export default function TeamChatWidget({ projectId }) {
       const res = await fetch(`http://127.0.0.1:8000/api/projects/${projectId}/messages`);
       if (res.ok) {
         const data = await res.json();
-        setAiMessages(data.messages || []);
+        const next = data.messages || [];
+        // Only replace when something changed: a new array every 3 s re-ran the
+        // scroll-to-bottom effect and kept yanking the reader back down.
+        setAiMessages(prev => (
+          prev.length === next.length && prev[prev.length - 1]?.id === next[next.length - 1]?.id ? prev : next
+        ));
       }
     } catch {}
   }, [projectId]);
