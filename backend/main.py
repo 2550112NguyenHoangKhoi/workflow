@@ -76,6 +76,8 @@ def patch_database_schema(engine):
                 conn.execute(text("ALTER TABLE flashcards ADD COLUMN project_id INTEGER REFERENCES projects(id)"))
             if "document_id" not in cols:
                 conn.execute(text("ALTER TABLE flashcards ADD COLUMN document_id INTEGER REFERENCES documents(id)"))
+            if "last_reviewed" not in cols:
+                conn.execute(text("ALTER TABLE flashcards ADD COLUMN last_reviewed DATETIME"))
 
         if "project_members" in inspector.get_table_names():
             cols = [c["name"] for c in inspector.get_columns("project_members")]
@@ -768,24 +770,37 @@ async def generate_flashcards(request: FlashcardRequest, db: Session = Depends(g
         if doc_text.strip():
             text_to_process = doc_text
 
+    def _card_dict(c):
+        return {"id": c.id, "front": c.front, "back": c.back, "interval": c.interval,
+                "ease": c.ease, "repetitions": c.repetitions, "due_date": c.due_date.isoformat()}
+
     def _save(cards):
+        """Store a freshly generated set. Regenerating replaces only cards that were never
+        reviewed — reviewed cards keep their SM-2 history, and a generated card whose front
+        matches a kept card reuses it instead of duplicating it."""
+        kept = {}
         if request.project_id or request.document_id:
             query = db.query(models.Flashcard)
             if request.document_id:
                 query = query.filter(models.Flashcard.document_id == request.document_id)
-            elif request.project_id:
+            else:
                 query = query.filter(models.Flashcard.project_id == request.project_id)
-            query.delete()
+            for old in query.all():
+                if crud.flashcard_has_progress(old):
+                    kept[(old.front or "").strip().lower()] = old
+                else:
+                    db.delete(old)
             db.commit()
 
-        out = []
+        out, seen = [], set()
         for c in cards:
-            db_card = crud.create_flashcard(db, front=c.get("front", ""), back=c.get("back", ""), project_id=request.project_id, document_id=request.document_id)
-            out.append({
-                "id": db_card.id, "front": db_card.front, "back": db_card.back,
-                "interval": db_card.interval, "ease": db_card.ease,
-                "repetitions": db_card.repetitions, "due_date": db_card.due_date.isoformat()
-            })
+            front, back = c.get("front", ""), c.get("back", "")
+            key = front.strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            card = kept.get(key) or crud.create_flashcard(db, front=front, back=back, project_id=request.project_id, document_id=request.document_id)
+            out.append(_card_dict(card))
         return out
 
     current_key = get_api_key(request.api_key)
@@ -1096,6 +1111,23 @@ async def search_materials(request: SearchRequest, x_api_key: str | None = Heade
         print(f"Error searching materials: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+def _clear_unshared_artifacts(db, art_type: str, project_id=None, document_id=None):
+    """Regenerating a quiz / exam prep / study plan replaces the previous one for the same
+    document (or project) — except artifacts someone has been shared, which are kept."""
+    query = db.query(models.Artifact).filter(models.Artifact.type == art_type)
+    if document_id:
+        query = query.filter(models.Artifact.document_id == document_id)
+    elif project_id:
+        query = query.filter(models.Artifact.project_id == project_id)
+    else:
+        return
+    shared_ids = {sid for (sid,) in db.query(models.Share.artifact_id).filter(models.Share.artifact_id.isnot(None))}
+    for art in query.all():
+        if art.id not in shared_ids:
+            db.delete(art)
+    db.commit()
+
+
 def get_document_text(db: Session, document_id: int | None, page_ranges: list[int] | None = None) -> str:
     if not document_id:
         return ""
@@ -1141,13 +1173,7 @@ async def generate_quiz_endpoint(request: TopicRequest, db: Session = Depends(ge
             data = await agent_run(config, prompt)
             if data and data.get("questions"):
                 if request.project_id or request.document_id:
-                    query = db.query(models.Artifact).filter(models.Artifact.type == "quiz")
-                    if request.document_id:
-                        query = query.filter(models.Artifact.document_id == request.document_id)
-                    elif request.project_id:
-                        query = query.filter(models.Artifact.project_id == request.project_id)
-                    query.delete()
-                    db.commit()
+                    _clear_unshared_artifacts(db, "quiz", request.project_id, request.document_id)
                     crud.create_artifact(db, project_id=request.project_id, type="quiz", title=data.get("title", "Bài Trắc Nghiệm"), content=json.dumps(data), document_id=request.document_id)
                 return data
         except Exception as e:
@@ -1155,13 +1181,7 @@ async def generate_quiz_endpoint(request: TopicRequest, db: Session = Depends(ge
     from nlp.quizzes import extract_quiz
     quiz_data = extract_quiz(text_to_process, num_questions=5)
     if request.project_id or request.document_id:
-        query = db.query(models.Artifact).filter(models.Artifact.type == "quiz")
-        if request.document_id:
-            query = query.filter(models.Artifact.document_id == request.document_id)
-        elif request.project_id:
-            query = query.filter(models.Artifact.project_id == request.project_id)
-        query.delete()
-        db.commit()
+        _clear_unshared_artifacts(db, "quiz", request.project_id, request.document_id)
         crud.create_artifact(db, project_id=request.project_id, type="quiz", title=quiz_data.get("title", "Bài Trắc Nghiệm"), content=json.dumps(quiz_data), document_id=request.document_id)
     return quiz_data
 class ExamPrepSchema(BaseModel):
@@ -1185,13 +1205,7 @@ async def generate_exam_prep_endpoint(request: TopicRequest, db: Session = Depen
             data = await agent_run(config, prompt)
             if data and data.get("markdown_content"):
                 if request.project_id or request.document_id:
-                    query = db.query(models.Artifact).filter(models.Artifact.type == "examprep")
-                    if request.document_id:
-                        query = query.filter(models.Artifact.document_id == request.document_id)
-                    elif request.project_id:
-                        query = query.filter(models.Artifact.project_id == request.project_id)
-                    query.delete()
-                    db.commit()
+                    _clear_unshared_artifacts(db, "examprep", request.project_id, request.document_id)
                     crud.create_artifact(db, project_id=request.project_id, type="examprep", title=data.get("title", "Tài liệu phòng thi"), content=json.dumps(data), document_id=request.document_id)
                 return data
         except Exception as e:
@@ -1201,13 +1215,7 @@ async def generate_exam_prep_endpoint(request: TopicRequest, db: Session = Depen
     from nlp.concept_map import generate_offline_exam_prep
     data = generate_offline_exam_prep(text_to_process)
     if request.project_id or request.document_id:
-        query = db.query(models.Artifact).filter(models.Artifact.type == "examprep")
-        if request.document_id:
-            query = query.filter(models.Artifact.document_id == request.document_id)
-        elif request.project_id:
-            query = query.filter(models.Artifact.project_id == request.project_id)
-        query.delete()
-        db.commit()
+        _clear_unshared_artifacts(db, "examprep", request.project_id, request.document_id)
         crud.create_artifact(db, project_id=request.project_id, type="examprep", title=data.get("title", "Tài liệu phòng thi"), content=json.dumps(data), document_id=request.document_id)
     return data
 
@@ -1231,13 +1239,7 @@ async def generate_study_plan_endpoint(request: TopicRequest, db: Session = Depe
             data = await agent_run(config, prompt)
             if data and data.get("markdown_content"):
                 if request.project_id or request.document_id:
-                    query = db.query(models.Artifact).filter(models.Artifact.type == "studyplan")
-                    if request.document_id:
-                        query = query.filter(models.Artifact.document_id == request.document_id)
-                    elif request.project_id:
-                        query = query.filter(models.Artifact.project_id == request.project_id)
-                    query.delete()
-                    db.commit()
+                    _clear_unshared_artifacts(db, "studyplan", request.project_id, request.document_id)
                     crud.create_artifact(db, project_id=request.project_id, type="studyplan", title=data.get("title", "Giáo Án"), content=json.dumps(data), document_id=request.document_id)
                 return data
         except Exception as e:
@@ -1247,13 +1249,7 @@ async def generate_study_plan_endpoint(request: TopicRequest, db: Session = Depe
     from nlp.concept_map import generate_offline_study_plan
     data = generate_offline_study_plan(text_to_process)
     if request.project_id or request.document_id:
-        query = db.query(models.Artifact).filter(models.Artifact.type == "studyplan")
-        if request.document_id:
-            query = query.filter(models.Artifact.document_id == request.document_id)
-        elif request.project_id:
-            query = query.filter(models.Artifact.project_id == request.project_id)
-        query.delete()
-        db.commit()
+        _clear_unshared_artifacts(db, "studyplan", request.project_id, request.document_id)
         crud.create_artifact(db, project_id=request.project_id, type="studyplan", title=data.get("title", "Giáo Án"), content=json.dumps(data), document_id=request.document_id)
     return data
 
@@ -1854,15 +1850,7 @@ async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
         "description": req.description,
     }
 
-    if req.project_id or req.document_id:
-        query = db.query(models.Artifact).filter(models.Artifact.type == "exam")
-        if req.document_id:
-            query = query.filter(models.Artifact.document_id == req.document_id)
-        elif req.project_id:
-            query = query.filter(models.Artifact.project_id == req.project_id)
-        query.delete()
-        db.commit()
-
+    # Exams are named, configured user work: a new exam never replaces an earlier one.
     artifact = crud.create_artifact(
         db,
         project_id=req.project_id,

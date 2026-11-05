@@ -15,6 +15,7 @@ class Flashcard(Base):
     ease = Column(Float, default=2.5)
     repetitions = Column(Integer, default=0)
     due_date = Column(Date, default=datetime.date.today)
+    last_reviewed = Column(DateTime, nullable=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
     

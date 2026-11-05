@@ -61,7 +61,9 @@ def get_due_flashcards(db: Session, project_id: int = None, document_id: int = N
     return query.all()
 
 def create_flashcard(db: Session, front: str, back: str, project_id: int = None, document_id: int = None):
-    db_flashcard = models.Flashcard(front=front, back=back, project_id=project_id, document_id=document_id, repetitions=1)
+    # repetitions starts at 0: SM-2's first successful review must give the 1-day step
+    # (starting at 1 jumped new cards straight to a 6-day interval).
+    db_flashcard = models.Flashcard(front=front, back=back, project_id=project_id, document_id=document_id, repetitions=0)
     db.add(db_flashcard)
     db.commit()
     db.refresh(db_flashcard)
@@ -75,6 +77,7 @@ def update_flashcard_sm2(db: Session, card_id: int, interval: int, ease: float, 
         db_card.repetitions = repetitions
         # Parse YYYY-MM-DD
         db_card.due_date = datetime.datetime.strptime(due_date_str, "%Y-%m-%d").date()
+        db_card.last_reviewed = datetime.datetime.utcnow()
         db.commit()
         db.refresh(db_card)
     return db_card
@@ -224,3 +227,12 @@ def update_roadmap_item(db: Session, item_id: int, completed: bool = None, activ
     db.commit()
     db.refresh(db_item)
     return db_item
+
+
+def flashcard_has_progress(card) -> bool:
+    """True if the learner has reviewed this card (so regenerating must not delete it).
+    Cards from before `last_reviewed` existed: any SM-2 movement beyond a fresh card."""
+    if card.last_reviewed is not None:
+        return True
+    return (card.interval or 1) > 1 or (card.repetitions or 0) >= 2 or \
+        (card.due_date is not None and card.due_date > datetime.date.today())
