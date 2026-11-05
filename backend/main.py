@@ -683,16 +683,23 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     if request.project_id or request.document_id:
         crud.save_chat_message(db, project_id=request.project_id, role=role, content=message_text, persona=request.persona, document_id=request.document_id)
 
-    context = request.context or ""
-    if request.project_id and not context:
-        project = crud.get_project(db, request.project_id)
-        if project:
-            sources = [doc.content for doc in project.documents if doc.content]
-            context = "\n\n---\n\n".join(sources)[:30000]
-    elif request.document_id and not context:
-        doc = db.query(models.Document).filter(models.Document.id == request.document_id).first()
-        if doc and doc.content:
-            context = doc.content[:30000]
+    # Context comes from the DB whenever we know the document/project: the focused document
+    # first, then the project's other documents, so project chat sees every source.
+    context = ""
+    if request.project_id or request.document_id:
+        docs = []
+        if request.document_id:
+            focused = db.query(models.Document).filter(models.Document.id == request.document_id).first()
+            if focused:
+                docs.append(focused)
+        if request.project_id:
+            project = crud.get_project(db, request.project_id)
+            if project:
+                docs += [d for d in project.documents if d.id != request.document_id]
+        context = "\n\n---\n\n".join(
+            f"[{d.filename}]\n{d.content}" for d in docs if (d.content or "").strip())[:30000]
+    if not context:
+        context = request.context or ""
             
     # persona=None means "Chat chính" (plain AI Q&A, no tutor persona).
     if request.persona is None:

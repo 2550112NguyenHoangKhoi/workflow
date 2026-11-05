@@ -144,7 +144,8 @@ const DocumentViewer = () => {
     // Construct the contextual payload
     const payload = {
       message: content,
-      context: activeDoc ? activeDoc.content.slice(0, 6000) : '',
+      // The backend loads the full document/project text itself from the ids below.
+      context: '',
       persona: chatMode === 'omiguide' ? selectedPersona : null,
       api_key: getEngineKey()
     };
