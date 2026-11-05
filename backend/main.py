@@ -709,6 +709,9 @@ async def get_usage():
 
 # --- Endpoints ---
 
+_LINE_WRAP = re.compile(r"(?<![.!?…:;])[ \t]*\n[ \t]*(?=[a-zđàáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ0-9(])")
+
+
 def offline_doc_answer(message: str, db: Session, context: str = "") -> str:
     """Offline chat: answer from the active (context) or latest document via TF-IDF sentence retrieval."""
     try:
@@ -724,7 +727,10 @@ def offline_doc_answer(message: str, db: Session, context: str = "") -> str:
         import re
         from nlp.vietnamese import VIETNAMESE_STOPWORDS, is_vietnamese
         
-        # Split by punctuation OR by newlines to handle bullet points and math cheatsheets better
+        # PDFs hard-wrap lines mid-sentence: re-join a line break when the next line starts in
+        # lower case (a continuation). Breaks before capitals/bullets stay, so headings, bullet
+        # points and math cheatsheets still split per line.
+        source_text = _LINE_WRAP.sub(" ", source_text)
         sentences = [s.strip() for s in re.split(r'(?<=[.!?…])\s+|\n+', source_text) if len(s.strip()) > 3]
         if not sentences:
             return "📄 [Offline] Tài liệu hiện chưa có nội dung văn bản để trích xuất."
@@ -741,7 +747,15 @@ def offline_doc_answer(message: str, db: Session, context: str = "") -> str:
                 sims = cosine_similarity(matrix[-1], matrix[:-1]).flatten()
                 ranked = [int(i) for i in sims.argsort()[::-1] if sims[int(i)] > 0.01][:4]
                 if ranked:
-                    answer = "\n".join("- " + sentences[i] for i in ranked)
+                    # A hit is often followed by a sentence that continues it through a pronoun
+                    # ("Glycolysis … happens in the cytoplasm. It splits glucose into pyruvate.")
+                    # — that continuation usually holds the actual answer, so keep them together.
+                    anaphor = re.compile(r"^(it|its|this|these|that|those|they|their|he|she|such|nó|điều này|chúng|họ|quá trình này)\b", re.I)
+                    def with_followup(i):
+                        if i + 1 < len(sentences) and anaphor.match(sentences[i + 1]) and i + 1 not in ranked:
+                            return f"{sentences[i]} {sentences[i + 1]}"
+                        return sentences[i]
+                    answer = "\n".join("- " + with_followup(i) for i in ranked)
                     return f"📚 [Offline · trích từ {label}]\n\n{answer}"
             except Exception:
                 pass
@@ -1068,6 +1082,25 @@ def _youtube_transcript(video_id: str) -> str:
 
 
 @app.post("/api/documents/ingest_url")
+def _download_page(url: str) -> str | None:
+    """HTML of a web page via `requests`, which honours HTTPS_PROXY / system proxies and the
+    certifi CA bundle. trafilatura's own downloader ignores HTTPS proxies, so imports failed on
+    proxied (school / office) networks. Returns None so the caller can fall back."""
+    try:
+        import requests
+        r = requests.get(url, timeout=20, stream=True, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; WorkflowStudyApp/1.0)",
+            "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+        })
+        if r.status_code != 200 or "html" not in r.headers.get("Content-Type", "html").lower():
+            return None
+        body = r.raw.read(5_000_000, decode_content=True)  # cap at ~5 MB
+        return body.decode(r.encoding or r.apparent_encoding or "utf-8", errors="replace")
+    except Exception as e:
+        print(f"[ingest] requests download failed for {url}: {e}")
+        return None
+
+
 @app.post("/api/documents/url")
 def ingest_url(request: UrlIngestRequest, db: Session = Depends(get_db)):
     url = (request.url or "").strip()
@@ -1091,7 +1124,7 @@ def ingest_url(request: UrlIngestRequest, db: Session = Depends(get_db)):
     else:
         try:
             import trafilatura
-            downloaded = trafilatura.fetch_url(url)
+            downloaded = _download_page(url) or trafilatura.fetch_url(url)
             if downloaded:
                 text = trafilatura.extract(downloaded) or ""
                 meta = trafilatura.extract_metadata(downloaded)
@@ -1534,7 +1567,13 @@ async def score_text_difficulty(request: TopicRequest):
     return score_difficulty(request.topic_or_text)
 
 @app.post("/api/generate_map")
-async def generate_concept_map_endpoint(request: TopicRequest):
+async def generate_concept_map_endpoint(request: TopicRequest, db: Session = Depends(get_db)):
+    # Like quiz/flashcards: an empty text with a document_id maps that document.
+    if not (request.topic_or_text or "").strip() and request.document_id:
+        try:
+            request.topic_or_text = get_document_text(db, request.document_id)
+        except Exception:
+            raise HTTPException(status_code=404, detail="Document not found")
     current_key = get_api_key(request.api_key)
     if current_key:
         try:

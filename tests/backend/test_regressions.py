@@ -242,3 +242,50 @@ def test_drive_sources_use_the_users_google_token(monkeypatch):
     assert all(h.get("Authorization") == "Bearer tok-123" for _, h in seen)
     assert "/d1/export?mimeType=text/plain" in seen[-1][0]
     assert "supportsAllDrives=true" in seen[-1][0]
+
+
+def test_offline_chat_keeps_wrapped_pdf_sentences_whole(client):
+    """PDF text is hard-wrapped; the offline answer used to stop mid-sentence at each line
+    break and dropped the pronoun sentence that carries the answer."""
+    db = SessionLocal()
+    try:
+        text = ("Glycolysis is the first stage of respiration and happens in the cytoplasm.\n"
+                "It splits glucose into two\nmolecules of pyruvate.\nThe Calvin cycle takes place in the stroma.")
+        answer = main.offline_doc_answer("What does glycolysis produce?", db, context=text)
+    finally:
+        db.close()
+    assert "It splits glucose into two molecules of pyruvate." in answer
+
+
+def test_concept_map_from_document_id(client):
+    d = client.post("/api/documents/upload", files={"file": ("cm.txt", b"Photosynthesis converts light energy into chemical energy. "
+        b"Chlorophyll absorbs light in the chloroplast. The Calvin cycle fixes carbon dioxide into glucose. "
+        b"Cellular respiration releases energy from glucose in the mitochondria.", "text/plain")}).json()
+    r = client.post("/api/generate_map", json={"topic_or_text": "", "document_id": d["id"], **OFFLINE})
+    assert r.status_code == 200 and len(r.json()["nodes"]) >= 3
+
+
+def test_web_import_uses_proxy_aware_download(client, monkeypatch):
+    """trafilatura's downloader ignores HTTPS proxies; pages are now fetched with requests."""
+    import requests
+
+    class Resp:
+        status_code = 200
+        headers = {"Content-Type": "text/html; charset=utf-8"}
+        encoding = "utf-8"
+        apparent_encoding = "utf-8"
+
+        class raw:
+            @staticmethod
+            def read(n, decode_content=True):
+                return ("<html><head><title>Calvin cycle</title></head><body><article><h1>Calvin cycle</h1>"
+                        + "<p>The Calvin cycle is the set of light-independent reactions of photosynthesis that "
+                          "fix carbon dioxide into sugar in the stroma of chloroplasts.</p>" * 5
+                        + "</article></body></html>").encode()
+
+    seen = {}
+    monkeypatch.setattr(requests, "get", lambda url, **kw: seen.setdefault("url", url) and Resp())
+    r = client.post("/api/documents/url", json={"url": "https://example.org/calvin"})
+    assert r.status_code == 200, r.text
+    assert seen["url"] == "https://example.org/calvin"
+    assert r.json()["filename"] == "Calvin cycle"
