@@ -185,11 +185,12 @@ const DocumentViewer = () => {
     }
   };
 
+  // Quiz/flashcard pills open the real generators; the others are chat prompts.
   const actionPills = [
-    "Tạo quiz nhanh",
-    "Tạo flashcard",
-    "Giải thích lại",
-    "Cho ví dụ"
+    { label: "Tạo quiz nhanh", action: () => setIsExamModalOpen(true) },
+    { label: "Tạo flashcard", action: () => setIsFlashcardOpen(true) },
+    { label: "Giải thích lại", action: () => sendMessage("Giải thích lại") },
+    { label: "Cho ví dụ", action: () => sendMessage("Cho ví dụ") }
   ];
 
   return (
@@ -398,12 +399,12 @@ const DocumentViewer = () => {
                 {/* Action Pills — sends prompt directly to chat like Workflow */}
                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-start', marginBottom: '12px', flexWrap: 'wrap' }}>
                   {actionPills.map(pill => (
-                    <button key={pill} onClick={() => sendMessage(pill)} disabled={!activeDoc || isTyping} style={{
+                    <button key={pill.label} onClick={pill.action} disabled={!activeDoc || isTyping} style={{
                       backgroundColor: 'var(--bg-tertiary)', border: '1px solid #D6C5B3', borderRadius: '20px', padding: '6px 14px',
                       fontSize: '0.8rem', fontWeight: 600, color: '#1F2937', cursor: (!activeDoc || isTyping) ? 'not-allowed' : 'pointer',
                       whiteSpace: 'nowrap', opacity: (!activeDoc || isTyping) ? 0.5 : 1, transition: 'all 0.2s'
                     }}>
-                      {pill}
+                      {pill.label}
                     </button>
                   ))}
                 </div>
