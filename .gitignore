@@ -41,6 +41,8 @@ backend/dist/
 backend/uploads/
 *.db
 *.db.bak
+*.sqlite
+usage.json
 
 # AI Contextual and test files
 .agents/
