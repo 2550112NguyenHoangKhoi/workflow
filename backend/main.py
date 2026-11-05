@@ -2822,6 +2822,25 @@ def grade_vocab(req: VocabGradeRequest, db: Session = Depends(get_db)):
     db.commit()
     return {"id": word.id, "learned": word.learned, "points_delta": points, "repetitions": word.repetitions}
 
+def _local_date(dt):
+    """created_at columns are naive UTC; streaks are about the learner's local calendar days."""
+    if dt is None:
+        return None
+    return dt.replace(tzinfo=datetime.timezone.utc).astimezone().date()
+
+
+def _day_streak(days: set) -> int:
+    """Consecutive active days ending today — or yesterday, so the streak doesn't drop to 0
+    every morning before the first session of the day."""
+    today = datetime.date.today()
+    day = today if today in days else today - datetime.timedelta(days=1)
+    streak = 0
+    while day in days:
+        streak += 1
+        day -= datetime.timedelta(days=1)
+    return streak
+
+
 @app.get("/api/vocabulary/stats")
 def get_vocab_stats(email: str | None = None, db: Session = Depends(get_db)):
     from sqlalchemy import func
@@ -2836,45 +2855,16 @@ def get_vocab_stats(email: str | None = None, db: Session = Depends(get_db)):
     learned = word_query.filter(models.VocabWord.learned == 1).count()
     completion = round(learned / total * 100) if total > 0 else 0
     
-    review_query = db.query(models.VocabReview)
-    if email:
-        review_query = review_query.filter(models.VocabReview.owner_email == email)
-    else:
-        review_query = review_query.filter(models.VocabReview.owner_email.is_(None))
-        
     points = db.query(func.sum(models.VocabReview.points)).filter(
         models.VocabReview.owner_email == email if email else models.VocabReview.owner_email.is_(None)
     ).scalar() or 0
     
-    # Streak calculation
-    dates = db.query(func.date(models.VocabReview.created_at)).filter(
+    # Streak: local calendar days with at least one review.
+    review_times = db.query(models.VocabReview.created_at).filter(
         models.VocabReview.owner_email == email if email else models.VocabReview.owner_email.is_(None)
-    ).distinct().order_by(func.date(models.VocabReview.created_at).desc()).all()
-    
-    streak = 0
-    today = datetime.date.today()
-    yesterday = today - datetime.timedelta(days=1)
-    
-    if dates:
-        # SQLite func.date() returns ISO strings ('2026-07-05'); coerce to date objects
-        # so membership tests against `today`/`yesterday` (datetime.date) actually match.
-        date_set = set()
-        for d in dates:
-            v = d[0]
-            if not v:
-                continue
-            if isinstance(v, str):
-                try:
-                    v = datetime.date.fromisoformat(v[:10])
-                except ValueError:
-                    continue
-            date_set.add(v)
-        if today in date_set or yesterday in date_set:
-            curr = today if today in date_set else yesterday
-            while curr in date_set:
-                streak += 1
-                curr -= datetime.timedelta(days=1)
-                
+    ).all()
+    streak = _day_streak({_local_date(t) for (t,) in review_times if t})
+
     achievements = [
         {"id": "first_word", "title_vi": "Bước khởi đầu", "desc_vi": "Thêm từ vựng đầu tiên", "unlocked": total >= 1},
         {"id": "quick_learner", "title_vi": "Học nhanh", "desc_vi": "Thuộc 5 từ vựng", "unlocked": learned >= 5},
@@ -2914,8 +2904,9 @@ def writing_log_attempt(req: WritingAttemptRequest, db=Depends(get_db)):
 @app.get("/api/writing/progress")
 def writing_progress(email: str | None = None, db=Depends(get_db)):
     q = db.query(models.WritingAttempt)
-    if email:
-        q = q.filter(models.WritingAttempt.owner_email == email)
+    # Same rule as vocabulary: no email = the signed-out bucket, not everyone's attempts.
+    q = q.filter(models.WritingAttempt.owner_email == email) if email \
+        else q.filter(models.WritingAttempt.owner_email.is_(None))
     rows = q.order_by(models.WritingAttempt.created_at.desc()).all()
 
     total_points = sum(r.points or 0 for r in rows)
@@ -2938,14 +2929,7 @@ def writing_progress(email: str | None = None, db=Depends(get_db)):
         categories.append(acc)
     categories.sort(key=lambda c: c["avg_score"])   # weakest first
 
-    # Streak: consecutive days (up to today) with at least one attempt.
-    import datetime as _dt
-    days = {r.created_at.date() for r in rows if r.created_at}
-    streak = 0
-    day = _dt.date.today()
-    while day in days:
-        streak += 1
-        day -= _dt.timedelta(days=1)
+    streak = _day_streak({_local_date(r.created_at) for r in rows if r.created_at})
 
     recent = [
         {"mode": r.mode, "level": r.level, "category": r.category, "task": r.task,
