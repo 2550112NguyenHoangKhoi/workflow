@@ -139,7 +139,9 @@ function ExamTaker() {
       setSeconds((s) => {
         if (s <= 1) {
           clearInterval(timerRef.current);
-          doSubmit(true);
+          // Submit via the ref: the doSubmit captured when this interval started saw the
+          // initial (empty) answers, so a timed-out exam was graded as all blank.
+          setTimeout(() => doSubmitRef.current(true), 0);
           return 0;
         }
         return s - 1;
@@ -212,6 +214,9 @@ function ExamTaker() {
     setScore(grade());
     setSubmitted(true);
   }
+
+  const doSubmitRef = useRef(doSubmit);
+  doSubmitRef.current = doSubmit;
 
   function reset() {
     submittedRef.current = false;
