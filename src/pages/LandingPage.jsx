@@ -25,6 +25,12 @@ const LandingPage = ({ onLoginSuccess }) => {
       sub: "local_user_1"
     };
     localStorage.setItem('workflow_user', JSON.stringify(dummyUser));
+    // Register the local user in the backend DB too (profile stats etc. look it up by email).
+    fetch('http://127.0.0.1:8000/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: dummyUser.email, name: dummyUser.name, picture: null }),
+    }).catch(() => { /* backend may still be starting; stats will show zeros */ });
     onLoginSuccess(dummyUser);
     navigate('/documents');
   };

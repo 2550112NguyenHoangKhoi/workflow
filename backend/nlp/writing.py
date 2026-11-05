@@ -1274,8 +1274,53 @@ def grade_ielts(prompt: str, essay: str, task: str = "task2", question_type: str
 
 
 
+_BANK_INDEX = None
+
+
+def _bank_entry(word: str):
+    """Built-in vocabulary bank entry (has Vietnamese meaning, IPA, examples), if any."""
+    global _BANK_INDEX
+    if _BANK_INDEX is None:
+        _BANK_INDEX = {}
+        try:
+            from .vocab_bank import VOCAB_BANK
+            for levels in VOCAB_BANK.values():
+                for words in levels.values():
+                    for e in words:
+                        _BANK_INDEX.setdefault(e["word"].lower(), e)
+        except Exception:
+            pass
+    return _BANK_INDEX.get(word)
+
+
+_WN_POS = {"n": "noun", "v": "verb", "a": "adjective", "s": "adjective", "r": "adverb"}
+
+
 def lookup_word(word: str, sentence_en: str = "") -> dict:
+    """Offline dictionary: built-in bank (Vietnamese) -> WordNet (English definition) -> hint."""
     w = (word or "").strip().strip(".,!?;:\"'()").lower()
+    entry = _bank_entry(w)
+    if entry:
+        return {
+            "word": w, "ipa": entry.get("ipa", ""), "part_of_speech": entry.get("part_of_speech", ""),
+            "meaning_vi": entry.get("meaning_vi", ""),
+            "example_en": entry.get("example_en", "") or sentence_en or "",
+            "example_vi": entry.get("example_vi", ""),
+        }
+    try:
+        from nltk.corpus import wordnet as wn
+        synsets = wn.synsets(w.replace(" ", "_"))
+        if synsets:
+            syn = synsets[0]
+            examples = syn.examples()
+            return {
+                "word": w, "ipa": "", "part_of_speech": _WN_POS.get(syn.pos(), ""),
+                "meaning_vi": f"(EN) {syn.definition()}",
+                "example_en": sentence_en or (examples[0] if examples else ""),
+                "example_vi": "",
+            }
+    except Exception:
+        pass
     return {
         "word": w,
         "ipa": "",

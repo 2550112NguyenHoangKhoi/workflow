@@ -2716,7 +2716,15 @@ def _dictionary_lookup(word: str, context: str = ""):
 
 @app.get("/api/vocabulary/lookup")
 def lookup_dictionary(word: str):
-    return _dictionary_lookup(word)
+    result = _dictionary_lookup(word)
+    if result:
+        return result
+    # Online dictionary unreachable / unknown word: offline bank + WordNet.
+    from nlp import writing as writing_engine
+    offline = writing_engine.lookup_word(word)
+    if offline.get("part_of_speech") or offline.get("ipa"):
+        return {**offline, "grammar": "", "synonyms": []}
+    raise HTTPException(status_code=404, detail="Không tìm thấy từ này trong từ điển.")
 
 
 def _passage_example(word, text) -> str:
