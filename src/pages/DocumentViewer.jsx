@@ -414,7 +414,7 @@ const DocumentViewer = () => {
                       backgroundColor: chatMode === mode ? 'var(--brand-primary)' : 'transparent',
                       border: 'none', borderRadius: '20px', padding: '6px 16px', fontSize: '0.8rem',
                       fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
-                      color: chatMode === mode ? 'white' : '#6B7280',
+                      color: chatMode === mode ? 'white' : 'var(--text-secondary)',
                       boxShadow: chatMode === mode ? 'var(--shadow-sm)' : 'none'
                     }}>{label}</button>
                   ))}

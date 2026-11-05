@@ -339,7 +339,7 @@ export default function PdfViewer({ url, docId, initialPage }) {
         </div>
       )}
       <div ref={containerRef} onScroll={() => { onScroll(); if (sel) setSel(null); }} onMouseUp={onMouseUp} data-testid="pdf-scroll"
-        style={{ flex: 1, minHeight: 0, overflow: 'auto', backgroundColor: 'var(--pdf-canvas-bg, #E9E4DF)', display: 'flex', flexDirection: 'column', gap: GAP, padding: PAD }}>
+        style={{ flex: 1, minHeight: 0, overflow: 'auto', backgroundColor: 'var(--surface-grey)', display: 'flex', flexDirection: 'column', gap: GAP, padding: PAD }}>
         {error && (
           <div style={{ color: '#EF4444', padding: 24, fontSize: '0.875rem' }}>⚠️ {error}</div>
         )}
