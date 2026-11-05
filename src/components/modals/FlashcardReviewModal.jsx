@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, ArrowRight, ArrowLeft, Download, Shuffle, Star, RotateCcw, Sparkles, Check } from 'lucide-react';
 import { getEngineKey } from '../../utils/engine';
+import { renderInline } from '../../utils/inlineMarkdown';
+import { useEscape } from '../../utils/useEscape';
+import { bumpStreak } from '../SmartReminder';
 
 const FlashcardReviewModal = ({ isOpen, onClose }) => {
+  useEscape(isOpen, onClose);
   const [cards, setCards] = useState([]);
   const [order, setOrder] = useState([]);        // indices into `cards`, for shuffle
   const [pos, setPos] = useState(0);              // position within `order`
@@ -104,6 +108,7 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
     const currentState = cardStates[idx];
     if (currentState) {
       try {
+        bumpStreak(); // a review keeps the daily streak (smart reminders)
         const res = await fetch('http://127.0.0.1:8000/api/flashcards/review', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...currentState, quality })
@@ -168,7 +173,7 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
 
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(27,42,78,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
-      <div style={{ backgroundColor: '#FAFAFA', borderRadius: '24px', width: '92%', maxWidth: '640px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.25)' }}>
+      <div style={{ backgroundColor: 'var(--surface-plain)', borderRadius: '24px', width: '92%', maxWidth: '640px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.25)' }}>
         {/* Header */}
         <div style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)' }}>
           <div>
@@ -181,7 +186,7 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
             {cards.length > 0 && !done && (
               <>
                 <button onClick={shuffle} title="Xáo trộn (S)" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', cursor: 'pointer', color: 'var(--text-secondary)', padding: '8px', borderRadius: '8px', display: 'flex' }}><Shuffle size={16} /></button>
-                <button onClick={exportToCSV} title="Xuất CSV (Anki/Quizlet)" style={{ background: '#E8F5E9', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.85rem' }}><Download size={16} /> CSV</button>
+                <button onClick={exportToCSV} title="Xuất CSV (Anki/Quizlet)" style={{ background: 'var(--surface-green)', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.85rem' }}><Download size={16} /> CSV</button>
               </>
             )}
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={24} /></button>
@@ -232,12 +237,12 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
                   {/* Front */}
                   <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', backgroundColor: 'var(--bg-tertiary)', border: '2px solid var(--border-medium)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                     <span style={{ position: 'absolute', top: 12, left: 16, fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)' }}>CÂU HỎI</span>
-                    <h3 style={{ fontSize: '1.4rem', color: 'var(--text-navy)', fontWeight: 700, margin: 0 }}>{currentCard?.front}</h3>
+                    <h3 style={{ fontSize: '1.4rem', color: 'var(--text-navy)', fontWeight: 700, margin: 0 }}>{renderInline(currentCard?.front)}</h3>
                   </div>
                   {/* Back */}
                   <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)', backgroundColor: 'var(--btn-navy)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
                     <span style={{ position: 'absolute', top: 12, left: 16, fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.05em', color: 'rgba(255,255,255,0.5)' }}>ĐÁP ÁN</span>
-                    <p style={{ fontSize: '1.25rem', color: 'white', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{currentCard?.back}</p>
+                    <p style={{ fontSize: '1.25rem', color: 'white', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{renderInline(currentCard?.back)}</p>
                   </div>
                 </div>
               </div>

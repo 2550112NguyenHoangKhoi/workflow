@@ -35,12 +35,19 @@ Phương pháp này sử dụng máy chủ siêu tốc của Google, cho tốc �
 - **Bước 3**: Sao chép đoạn mã (API Key) vừa tạo.
 - **Bước 4**: Quay lại phần **Cài đặt** trong Workflow app, dán API Key vào và lưu lại.
 
-### 2. Sử dụng Local AI (Ollama) - Bảo mật 100% 🔒
-Phương pháp này sử dụng sức mạnh trực tiếp từ máy tính của bạn. Mọi tài liệu và dữ liệu đều không bao giờ bị đẩy lên Internet. Thích hợp cho máy tính có RAM >= 8GB.
-- **Bước 1**: Tải và cài đặt phần mềm [Ollama](https://ollama.com/) vào máy tính.
-- **Bước 2**: Mở Terminal (Mac) hoặc Command Prompt (Windows).
-- **Bước 3**: Tải mô hình AI. Workflow app sẽ gợi ý mô hình phù hợp nhất với máy tính của bạn. Nhập lệnh tương ứng (Ví dụ: `ollama pull qwen2.5:3b` hoặc `ollama pull gemma2:9b`).
-- **Bước 4**: Vào **Cài đặt** trong Workflow app, chọn chuyển sang chế độ Local Model và chọn tên mô hình bạn vừa tải về.
+### 2. Model AI cục bộ (không cần API key) — Bảo mật 100% 🔒
+AI chạy ngay trên máy bạn; tài liệu không bao giờ rời khỏi máy. Mọi tính năng đi qua cùng bộ "harness" Google Antigravity như bản Cloud.
+
+**Cách A — Gemma tích hợp (khuyên dùng, không cần cài thêm gì):**
+- Vào **Cài đặt → Model cục bộ (Gemma)**. Workflow nhận diện phần cứng và gợi ý model: Gemma 4 E2B (≈2,6 GB, máy 8 GB RAM), E4B (≈3,7 GB) hoặc 12B (≈6,9 GB).
+- Bấm **Tải về** (tải một lần từ Hugging Face, có thể tạm dừng / tải tiếp), rồi **Chạy thử**.
+- Tăng tốc phần cứng qua Google AI Edge **LiteRT-LM**:
+  - **macOS (Apple Silicon M1–M5):** GPU qua **Metal**, dùng bộ nhớ hợp nhất.
+  - **Windows 10/11 (x64):** GPU qua **DirectX 12** (NVIDIA, AMD, Intel Arc / iGPU); NPU Intel Core Ultra (thử nghiệm).
+  - Máy không có GPU phù hợp: tự chuyển sang CPU (chậm hơn).
+- Mac Intel và Windows ARM chưa có bản LiteRT-LM → dùng Cách B.
+
+**Cách B — Ollama / LM Studio / llama.cpp:** mở phần mềm đó, tải một model (ví dụ `ollama pull gemma3`), rồi trong Cài đặt chọn **Máy chủ cục bộ**, bấm **Kiểm tra** và chọn model.
 
 ---
 

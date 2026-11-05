@@ -90,7 +90,7 @@ export default function ArtifactViewerModal({ isOpen, onClose, artifactId }) {
   const pillBtn = (primary) => ({
     borderRadius: 24, padding: '10px 24px', border: 'none', cursor: 'pointer', fontWeight: 700,
     display: 'flex', alignItems: 'center', gap: 6,
-    backgroundColor: primary ? '#8A334C' : 'var(--bg-tertiary)',
+    backgroundColor: primary ? 'var(--brand-primary)' : 'var(--bg-tertiary)',
     color: primary ? '#fff' : 'var(--text-navy)',
   });
   const infoStripStyle = {
@@ -111,7 +111,7 @@ export default function ArtifactViewerModal({ isOpen, onClose, artifactId }) {
       border: `${borderWidth}px solid ${borderColor}`, marginBottom: 16,
     };
     const badgeStyle = {
-      width: 28, height: 28, borderRadius: '50%', backgroundColor: '#8A334C',
+      width: 28, height: 28, borderRadius: '50%', backgroundColor: 'var(--brand-primary)',
       color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       fontWeight: 700, fontSize: 13, flexShrink: 0,
     };
@@ -162,7 +162,7 @@ export default function ArtifactViewerModal({ isOpen, onClose, artifactId }) {
                 <div style={{
                   width: 18, height: 18, borderRadius: '50%',
                   border: `2px solid ${answers[idx] === opt.id ? '#8A334C' : '#ccc'}`,
-                  backgroundColor: answers[idx] === opt.id ? '#8A334C' : 'transparent',
+                  backgroundColor: answers[idx] === opt.id ? 'var(--brand-primary)' : 'transparent',
                   flexShrink: 0,
                 }} />
                 <span style={{ fontSize: 14, color: 'var(--text-navy)' }}>{opt.text}</span>
@@ -190,7 +190,7 @@ export default function ArtifactViewerModal({ isOpen, onClose, artifactId }) {
               style={{
                 width: '100%', padding: '10px 14px', borderRadius: 10,
                 border: '1px solid var(--border-light)', fontSize: 14,
-                backgroundColor: isChecked ? '#f9f9f9' : '#fff', boxSizing: 'border-box',
+                backgroundColor: isChecked ? '#f9f9f9' : 'var(--bg-tertiary)', boxSizing: 'border-box',
               }}
             />
             {!isChecked && (answers[idx] ?? '').trim() && (
@@ -216,7 +216,7 @@ export default function ArtifactViewerModal({ isOpen, onClose, artifactId }) {
               style={{
                 width: '100%', padding: '10px 14px', borderRadius: 10,
                 border: '1px solid var(--border-light)', fontSize: 14, resize: 'vertical',
-                backgroundColor: isChecked ? '#f9f9f9' : '#fff', boxSizing: 'border-box',
+                backgroundColor: isChecked ? '#f9f9f9' : 'var(--bg-tertiary)', boxSizing: 'border-box',
               }}
             />
             {!isChecked && (
@@ -274,7 +274,7 @@ export default function ArtifactViewerModal({ isOpen, onClose, artifactId }) {
                 <div key={n.id || i} style={{ padding: 14, borderRadius: 12, backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-light)', marginBottom: 10 }}>
                   <div style={{ fontWeight: 700, color: 'var(--text-navy)', fontSize: 14, marginBottom: 4 }}>{n.label}</div>
                   {n.definition && <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>{n.definition}</div>}
-                  {n.formula && <div style={{ fontSize: 13, color: '#8A334C', fontFamily: 'monospace', marginTop: 4 }}>{n.formula}</div>}
+                  {n.formula && <div style={{ fontSize: 13, color: 'var(--brand-primary)', fontFamily: 'monospace', marginTop: 4 }}>{n.formula}</div>}
                 </div>
               ))}
             </div>

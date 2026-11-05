@@ -9,6 +9,34 @@ try:
 except Exception:
     nlp = None
 
+def _has_verb(sentence: str) -> bool:
+    """Headings ("Equivalence of DFA and NFA.") have no verb; note bullets should."""
+    if not nlp:
+        return True
+    try:
+        return any(t.pos_ in ("VERB", "AUX") for t in nlp(sentence))
+    except Exception:
+        return True
+
+
+def clean_ranked(sentences, limit):
+    """Ranked sentences → readable, unique bullets: whitespace collapsed, slide debris
+    (formula fragments, table cells) dropped, and lines repeated across slides kept once."""
+    import re
+    from .preprocessor import is_prose
+    out, seen = [], set()
+    for raw in sentences:
+        sent = " ".join(raw.split())
+        key = re.sub(r"\W+", " ", sent.lower()).strip()
+        if not is_prose(sent) or key in seen or not _has_verb(sent):
+            continue
+        seen.add(key)
+        out.append(sent)
+        if len(out) == limit:
+            break
+    return out or [" ".join(x.split()) for x in sentences[:limit]]
+
+
 def extract_notes(text: str) -> Dict:
     """
     Algorithmically extracts a smart summary and key bullet points using TextRank graph ranking.
@@ -27,7 +55,8 @@ def extract_notes(text: str) -> Dict:
     
     # TextRank provides a summary method that yields the highest ranked sentences
     # based on the eigenvalue centrality of the phrases they contain.
-    top_sentences = [sent.text.strip() for sent in doc._.textrank.summary(limit_sentences=8)]
+    # A wide candidate pool: slide decks have many debris lines that clean_ranked drops.
+    top_sentences = clean_ranked([sent.text for sent in doc._.textrank.summary(limit_phrases=40, limit_sentences=200)], 8)
     
     if len(top_sentences) == 0:
         return _fallback_notes(text)

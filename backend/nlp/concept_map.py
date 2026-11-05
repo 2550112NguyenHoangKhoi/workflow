@@ -92,13 +92,32 @@ def generate_concept_map(text: str) -> Dict:
 
     doc = nlp(text)
     
-    # Extract noun phrases as concepts
-    concepts = [chunk.text.lower().strip() for chunk in doc.noun_chunks if len(chunk.text.split()) <= 3]
-    
-    # Filter common stop words and very short words
-    # dict.fromkeys dedupes while keeping document order (set() made results vary per run)
-    concepts = list(dict.fromkeys(c for c in concepts if len(c) > 3 and c not in nlp.Defaults.stop_words))
-    
+    # Concepts = noun phrases normalised to their lemma ("The States", "states" → "state"),
+    # ranked by frequency; only the top MAX_CONCEPTS become nodes. Every distinct phrase used to
+    # become a node (90+ on a slide deck, with State/States/The States side by side).
+    from collections import Counter
+    from .quizzes import GENERIC_NOUNS
+    word_ok = re.compile(r"[^\W\d_][^\W_]*(?:-[^\W\d_]+)*")
+    freq, surface, first = Counter(), {}, {}
+    for chunk in doc.noun_chunks:
+        toks = [t for t in chunk if t.pos_ not in ("DET", "PRON", "NUM", "PUNCT", "SYM") and not t.is_stop]
+        if not toks or toks[-1].pos_ not in ("NOUN", "PROPN") or len(toks) > 3:
+            continue
+        if not all(word_ok.fullmatch(t.text) for t in toks):
+            continue
+        key = " ".join(t.lemma_.lower() if t.pos_ == "NOUN" else t.text.lower() for t in toks)
+        if len(key) <= 3 or key in GENERIC_NOUNS or key in nlp.Defaults.stop_words:
+            continue
+        freq[key] += 1
+        first.setdefault(key, len(first))
+        # Label: acronyms/proper nouns as written ("DFA", "NFA"), common nouns lower-case lemma.
+        label = " ".join(t.text if (t.text.isupper() and len(t.text) > 1) or t.pos_ == "PROPN" else
+                         (t.lemma_.lower() if t.pos_ == "NOUN" else t.text.lower()) for t in toks)
+        surface.setdefault(key, Counter())[label] += 1
+    MAX_CONCEPTS = 14
+    concepts = sorted(freq, key=lambda k: (-freq[k], first[k]))[:MAX_CONCEPTS]
+    labels = {k: surface[k].most_common(1)[0][0] for k in concepts}
+
     sentences = [sent.text.strip() for sent in doc.sents]
     
     if len(concepts) < 2:
@@ -107,7 +126,7 @@ def generate_concept_map(text: str) -> Dict:
             defn, form = _extract_definition_and_formula(c, sentences, is_vn=False)
             formatted_nodes.append({
                 "id": c,
-                "label": c.title(),
+                "label": labels.get(c, c)[:1].upper() + labels.get(c, c)[1:],
                 "definition": defn,
                 "formula": form
             })
@@ -120,7 +139,7 @@ def generate_concept_map(text: str) -> Dict:
     # Add edges based on co-occurrence in sentences
     for sent in sentences:
         sent_lower = sent.lower()
-        present_concepts = [c for c in concepts if c in sent_lower]
+        present_concepts = [c for c in concepts if c in sent_lower or c.rstrip("s") in sent_lower]
         for i in range(len(present_concepts)):
             for j in range(i + 1, len(present_concepts)):
                 c1, c2 = present_concepts[i], present_concepts[j]
@@ -139,7 +158,7 @@ def generate_concept_map(text: str) -> Dict:
         if u not in covered or v not in covered:
             top_edges.append((u, v, data)); picked.add((u, v)); covered.update((u, v))
     for u, v, data in edges_list:
-        if len(top_edges) >= max(15, len(picked)):
+        if len(top_edges) >= max(20, len(picked)):
             break
         if (u, v) not in picked:
             top_edges.append((u, v, data)); picked.add((u, v))
@@ -155,11 +174,12 @@ def generate_concept_map(text: str) -> Dict:
         
     # Format for frontend (e.g., React Flow)
     formatted_nodes = []
-    for n in nodes:
+    for n in list(nodes) + [c for c in concepts if c not in nodes]:  # isolated concepts too
         defn, form = _extract_definition_and_formula(n, sentences, is_vn=False)
+        lab = labels.get(n, n)
         formatted_nodes.append({
             "id": n,
-            "label": n.title(),
+            "label": lab[:1].upper() + lab[1:],
             "definition": defn,
             "formula": form
         })
@@ -190,7 +210,7 @@ def _vietnamese_concept_map(text: str) -> Dict:
             defn, form = _extract_definition_and_formula(c, sentences, is_vn=True)
             formatted_nodes.append({
                 "id": c,
-                "label": c.title(),
+                "label": labels.get(c, c)[:1].upper() + labels.get(c, c)[1:],
                 "definition": defn,
                 "formula": form
             })
@@ -260,6 +280,9 @@ def generate_offline_exam_prep(text: str) -> dict:
             sentences = [s.strip() for s in text.split(".") if s.strip()]
             title = "Exam Prep Guide"
             
+    # Drop slide debris (formula fragments, table cells) and repeated lines; collapse wraps.
+    from .notes import clean_ranked
+    sentences = clean_ranked(sentences, 10 ** 6)
     summary = ""
     key_points = []
     if len(sentences) >= 2:
@@ -316,6 +339,9 @@ def generate_offline_study_plan(text: str) -> dict:
             title = "Study Plan Guide"
             
     stage1_sents, stage2_sents, stage3_sents = [], [], []
+    # Drop slide debris (formula fragments, table cells) and repeated lines; collapse wraps.
+    from .notes import clean_ranked
+    sentences = clean_ranked(sentences, 10 ** 6)
     if len(sentences) >= 3:
         try:
             n = len(sentences)
@@ -466,24 +492,15 @@ def generate_offline_suggestions(text: str) -> dict:
     text = clean_text(text)
     is_vn = is_vietnamese(text)
     
-    if is_vn:
-        concepts = vi_nouns(text)
-        freq = Counter(concepts)
-        most_common = [w for w, _ in freq.most_common(3)]
-    else:
-        if nlp:
-            doc = nlp(text)
-            chunks = [chunk.text.lower().strip() for chunk in doc.noun_chunks if len(chunk.text.split()) <= 3]
-            freq = Counter(chunks)
-            most_common = [c for c, _ in freq.most_common(3) if len(c) > 3 and c not in nlp.Defaults.stop_words]
-        else:
-            words = [re.sub(r'[^a-zA-Z]', '', w).lower() for w in text.split() if len(re.sub(r'[^a-zA-Z]', '', w)) > 5]
-            freq = Counter(words)
-            most_common = [word for word, count in freq.most_common(3)]
-            
-    path_topic = most_common[0].capitalize() if len(most_common) > 0 else "General Study"
-    quiz_topic = most_common[1].capitalize() if len(most_common) > 1 else "Reading Comprehension"
-    flashcard_topic = most_common[2].capitalize() if len(most_common) > 2 else "Vocabulary"
+    # Ranked concepts (noun phrases / VI compounds, generic words removed). The old code took
+    # the 3 most common chunks *before* filtering — "it", "we" — and fell back to
+    # "Introduction to General Study".
+    from .teachback import _key_concepts
+    most_common = _key_concepts(text[:20000], 3)
+    cap = lambda w: w[:1].upper() + w[1:]  # not .capitalize(): keeps "DFA", "NFA"
+    path_topic = cap(most_common[0]) if len(most_common) > 0 else "General Study"
+    quiz_topic = cap(most_common[1]) if len(most_common) > 1 else "Reading Comprehension"
+    flashcard_topic = cap(most_common[2]) if len(most_common) > 2 else "Vocabulary"
     
     if is_vn:
         return {

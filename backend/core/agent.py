@@ -29,7 +29,8 @@ ENV_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("VITE_GEMINI_API_KEY")
 def get_api_key(x_api_key: str | None) -> str | None:
     """Resolve the engine signal sent by the UI (Settings → AI Engine):
       "OFFLINE"        -> deterministic local NLP engine (returns None)
-      "LOCAL[:model]"  -> local Ollama model (routed inside agent_run)
+      "LOCAL"          -> local model from Settings (built-in Gemma/LiteRT or a local server)
+      "LOCAL:<model>"  -> legacy: that Ollama model
       "AIzaSy…"/"AQ…"  -> the user's Gemini key
       empty/other      -> the server's .env key, if any
     """
@@ -72,12 +73,13 @@ async def agent_run(config, prompt, structured=True, timeout=30):
 
     Local-LLM engine: a key of "LOCAL" / "LOCAL:<model>" is routed to Ollama instead."""
     if getattr(config, "api_key", None) and config.api_key.startswith("LOCAL"):
-        model_name = config.api_key.split(":", 1)[1] if ":" in config.api_key else None
-        from nlp.local_llm import local_generate
-        schema = getattr(config, "response_schema", None)
-        result = await local_generate(prompt, structured=structured, schema=schema,
-                                      model_name=model_name,
-                                      timeout=max(timeout, 120))
+        # Local model (Settings → "Model cục bộ"): built-in Gemma on LiteRT (Metal / DirectX 12 /
+        # CPU) or an OpenAI-compatible server (Ollama, LM Studio…), run through the same
+        # Antigravity harness. See core/local_models.py.
+        from core.local_models import local_generate
+        result = await local_generate(config.api_key, prompt,
+                                      schema=getattr(config, "response_schema", None),
+                                      structured=structured, timeout=max(timeout, 180))
         record_usage(prompt, result)
         return result
 

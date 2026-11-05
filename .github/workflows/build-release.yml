@@ -39,6 +39,20 @@ jobs:
           pip install -r requirements.txt
           python -m spacy download en_core_web_sm
 
+      - name: Local model runtime check (LiteRT native library + harness binary)
+        shell: bash
+        run: |
+          cd backend
+          python - <<'PY'
+          import os, sys, platform
+          from litert_lm import _ffi
+          _ffi._get_lib()
+          import google.antigravity, glob
+          bins = glob.glob(os.path.join(os.path.dirname(google.antigravity.__file__), "bin", "localharness*"))
+          assert bins, "localharness binary missing"
+          print("LiteRT native OK on", sys.platform, platform.machine(), "| harness:", os.path.basename(bins[0]))
+          PY
+
       - name: Backend regression tests
         run: |
           pip install pytest
@@ -51,6 +65,9 @@ jobs:
 
       - name: Install Node dependencies
         run: npm install
+
+      - name: Desktop sign-in tests
+        run: node --test tests/electron/googleOAuth.test.cjs
 
       - name: Set App Version
         shell: bash
@@ -72,6 +89,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.VITE_GOOGLE_OAUTH_CLIENT_ID }}
+          # Optional "Desktop app" client id (public); users can also enter it in Settings.
+          VITE_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.VITE_GOOGLE_DESKTOP_CLIENT_ID }}
 
       - name: Upload Release Artifact
         uses: softprops/action-gh-release@v2

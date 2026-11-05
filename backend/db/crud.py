@@ -25,27 +25,29 @@ def get_flashcards(db: Session, project_id: int = None, document_id: int = None,
         query = query.filter(models.Flashcard.document_id == document_id)
     return query.offset(skip).limit(limit).all()
 
-def create_roadmap(db: Session, project_id: int, items: list):
-    old_roadmaps = db.query(models.Roadmap).filter(models.Roadmap.project_id == project_id).all()
-    for rm in old_roadmaps:
-        db.query(models.RoadmapItem).filter(models.RoadmapItem.roadmap_id == rm.id).delete()
-        db.delete(rm)
+def add_roadmap_items(db: Session, roadmap, items: list):
+    for i, item in enumerate(items):
+        db.add(models.RoadmapItem(
+            roadmap_id=roadmap.id,
+            step_number=i + 1,
+            title=item.get("title", ""),
+            description=item.get("description", ""),
+            due_date=item.get("due_date"),
+            estimated_time=item.get("estimated_time"),
+            needs_material=int(bool(item.get("needs_material"))),
+        ))
     db.commit()
 
+
+def create_roadmap(db: Session, project_id: int, items: list):
+    for rm in db.query(models.Roadmap).filter(models.Roadmap.project_id == project_id).all():
+        db.delete(rm)  # cascade removes the items
+    db.commit()
     db_roadmap = models.Roadmap(project_id=project_id)
     db.add(db_roadmap)
     db.commit()
     db.refresh(db_roadmap)
-    
-    for i, item in enumerate(items):
-        db_item = models.RoadmapItem(
-            roadmap_id=db_roadmap.id,
-            step_number=i+1,
-            title=item.get("title", ""),
-            description=item.get("description", "")
-        )
-        db.add(db_item)
-    db.commit()
+    add_roadmap_items(db, db_roadmap, items)
     return db_roadmap
 
 def get_roadmap(db: Session, project_id: int):
@@ -195,8 +197,8 @@ def delete_project(db: Session, project_id: int) -> bool:
         remove_document_files(doc_id)
     return True
 
-def save_chat_message(db: Session, project_id: int = None, role: str = "", content: str = "", persona: str = None, document_id: int = None):
-    msg = models.ChatMessage(project_id=project_id, role=role, content=content, persona=persona, document_id=document_id)
+def save_chat_message(db: Session, project_id: int = None, role: str = "", content: str = "", persona: str = None, document_id: int = None, parent_id: int = None):
+    msg = models.ChatMessage(project_id=project_id, role=role, content=content, persona=persona, document_id=document_id, parent_id=parent_id)
     db.add(msg)
     db.commit()
     db.refresh(msg)

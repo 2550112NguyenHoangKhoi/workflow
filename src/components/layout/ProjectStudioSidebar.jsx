@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
-import { Check, Search, Upload, Calendar, AlertCircle, FileText, Network } from 'lucide-react';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { Check, Search, Upload, Calendar, AlertCircle, FileText, Network, PanelRightClose, PanelRightOpen, GitBranch, Sparkles, LayoutDashboard, Layers, ClipboardList, NotebookPen, BookOpenText } from 'lucide-react';
 import UploadSourcesModal from '../modals/UploadSourcesModal';
 import SearchMaterialsModal from '../modals/SearchMaterialsModal';
 import CreateExamModal from '../modals/CreateExamModal';
@@ -9,12 +9,19 @@ import FlashcardReviewModal from '../modals/FlashcardReviewModal';
 import StudyPlanModal from '../modals/StudyPlanModal';
 import CreateLessonPlanModal from '../modals/CreateLessonPlanModal';
 import ArtifactViewerModal from '../modals/ArtifactViewerModal';
+import MindMapModal from '../modals/MindMapModal';
+import SmartNotesModal from '../modals/SmartNotesModal';
+import CreateStudyDocModal from '../modals/CreateStudyDocModal';
+import SynthesisModal from '../modals/SynthesisModal';
 import { getEngineKey } from '../../utils/engine';
+import NeedMoreInfo from '../NeedMoreInfo';
+import { buildRoadmapIcs, downloadIcs } from '../../utils/ics';
 
-const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
+const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona, collapsed = false, onToggle }) => {
   const { id } = useParams();
   const location = useLocation();
   const isProject = location.pathname.startsWith('/project/');
+  const navigate = useNavigate();
   const projectId = isProject ? id : null;
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -24,9 +31,15 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
   const [isStudyPlanOpen, setIsStudyPlanOpen] = useState(false);
   const [isCreateLessonPlanOpen, setIsCreateLessonPlanOpen] = useState(false);
   const [viewArtifactId, setViewArtifactId] = useState(null);
+  const [isMindMapOpen, setIsMindMapOpen] = useState(false);
+  const [isSmartNotesOpen, setIsSmartNotesOpen] = useState(false);
+  const [isStudyDocOpen, setIsStudyDocOpen] = useState(false);
+  const [isSynthesisOpen, setIsSynthesisOpen] = useState(false);
 
   const [roadmapItems, setRoadmapItems] = useState([]);
   const [isGeneratingRoadmap, setIsGeneratingRoadmap] = useState(false);
+  const [roadmapQuestions, setRoadmapQuestions] = useState(null); // backend asked for more info
+  const [roadmapCaveats, setRoadmapCaveats] = useState([]);
   const [artifacts, setArtifacts] = useState([]);
   const [documents, setDocuments] = useState([]);
 
@@ -85,22 +98,27 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
     return () => window.removeEventListener('artifacts-updated', handler);
   }, [id, isProject]);
 
-  const generateRoadmap = async () => {
+  const generateRoadmap = async (answers = {}) => {
     if (!projectId && !id) return alert("Roadmap requires a context.");
     setIsGeneratingRoadmap(true);
     try {
-      const url = projectId 
+      const url = projectId
         ? `http://127.0.0.1:8000/api/projects/${projectId}/roadmap/generate`
         : `http://127.0.0.1:8000/api/documents/${id}/roadmap/generate`;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic_or_text: "general", api_key: getEngineKey() })
+        body: JSON.stringify({ topic_or_text: "general", api_key: getEngineKey(), ...answers })
       });
-      if (res.ok) {
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.status === 'need_more_info') {
+        // Not enough material for the subject: ask instead of inventing a roadmap.
+        setRoadmapQuestions(body);
+      } else if (res.ok) {
+        setRoadmapQuestions(null);
+        setRoadmapCaveats(body.caveats || []);
         fetchData();
       } else {
-        const body = await res.json().catch(() => ({}));
         alert(body.detail || 'Tạo giáo án thất bại.');
       }
     } catch (err) {
@@ -146,10 +164,25 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
     }
   };
 
+  const railBtn = { width: 36, height: 36, borderRadius: 10, border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' };
+
   return (
     <>
+    {collapsed ? (
+      // Collapsed: a thin rail so the document gets the width; the main actions stay one click away.
+      <aside data-testid="studio-rail" style={{ width: '56px', flexShrink: 0, height: '100%', backgroundColor: 'var(--bg-tertiary)', borderLeft: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', paddingTop: '16px' }}>
+        <button style={railBtn} onClick={onToggle} title="Mở Studio"><PanelRightOpen size={18} /></button>
+        <button style={railBtn} onClick={() => setIsUploadOpen(true)} title="Upload"><Upload size={16} /></button>
+        <button style={railBtn} onClick={() => setIsStudyPlanOpen(true)} title="Roadmap"><Calendar size={16} /></button>
+        <button style={railBtn} onClick={() => setIsSearchOpen(true)} title="Search"><Search size={16} /></button>
+        <button style={railBtn} onClick={() => setIsMindMapOpen(true)} title="Sơ đồ tư duy"><GitBranch size={16} /></button>
+        <button style={railBtn} onClick={() => setIsFlashcardOpen(true)} title="Flashcard"><Layers size={16} /></button>
+        <button style={railBtn} onClick={() => setIsExamOpen(true)} title="Đề thi / Quiz"><ClipboardList size={16} /></button>
+      </aside>
+    ) : (
     <aside style={{
-      width: '360px',
+      width: '340px',
+      flexShrink: 0,
       height: '100%',
       backgroundColor: 'var(--bg-tertiary)',
       borderLeft: '1px solid var(--border-light)',
@@ -158,14 +191,19 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
       overflowY: 'auto'
     }}>
       {/* Header Actions */}
-      <div style={{ padding: '24px 24px 16px', display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-light)' }}>
-        <button onClick={() => setIsUploadOpen(true)} style={{ flex: 1, backgroundColor: '#FDF8F5', color: '#1B2A4E', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+      <div style={{ padding: '16px 16px 12px', display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-light)', alignItems: 'center' }}>
+        {onToggle && (
+          <button onClick={onToggle} title="Thu gọn Studio" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: 2, flexShrink: 0 }}>
+            <PanelRightClose size={18} />
+          </button>
+        )}
+        <button onClick={() => setIsUploadOpen(true)} style={{ flex: 1, backgroundColor: 'var(--bg-primary)', color: 'var(--text-navy)', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
           <Upload size={16} /> <span style={{ fontSize: '0.85rem' }}>Upload</span>
         </button>
-        <button onClick={() => setIsStudyPlanOpen(true)} style={{ flex: 1, backgroundColor: '#FDF8F5', color: '#1B2A4E', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer', overflow: 'hidden' }}>
+        <button onClick={() => setIsStudyPlanOpen(true)} style={{ flex: 1, backgroundColor: 'var(--bg-primary)', color: 'var(--text-navy)', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer', overflow: 'hidden' }}>
           <Calendar size={16} style={{ flexShrink: 0 }} /> <span style={{ fontSize: '0.85rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Roadmap</span>
         </button>
-        <button onClick={() => setIsSearchOpen(true)} style={{ flex: 1, backgroundColor: '#FDF8F5', color: '#1B2A4E', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+        <button onClick={() => setIsSearchOpen(true)} style={{ flex: 1, backgroundColor: 'var(--bg-primary)', color: 'var(--text-navy)', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
           <Search size={16} /> <span style={{ fontSize: '0.85rem' }}>Search</span>
         </button>
       </div>
@@ -175,7 +213,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
         {/* Uploaded Documents */}
         <div style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>UPLOADED</h3>
+            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-navy)', letterSpacing: '0.05em' }}>UPLOADED</h3>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {documents.length === 0 ? (
@@ -185,11 +223,11 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
             ) : (
               documents.map(doc => (
                 <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)' }}>
-                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: 'var(--surface-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <FileText size={16} color="var(--text-secondary)" />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1B2A4E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-navy)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {doc.filename}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
@@ -206,12 +244,33 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
           </div>
         </div>
 
+        {/* Study tools — every generator reachable from the document view */}
+        <div style={{ marginBottom: '20px' }}>
+          <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-navy)', letterSpacing: '0.05em', marginBottom: '10px' }}>CÔNG CỤ HỌC</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            {[
+              { label: 'Sơ đồ tư duy', icon: GitBranch, onClick: () => setIsMindMapOpen(true) },
+              { label: 'AI Tổng hợp', icon: Sparkles, onClick: () => setIsSynthesisOpen(true) },
+              { label: 'Không gian Canvas', icon: LayoutDashboard, onClick: () => navigate(`/canvas/${isProject ? 'project' : 'document'}/${id}`) },
+              { label: 'Bản đồ khái niệm', icon: Network, onClick: () => setIsConceptMapOpen(true) },
+              { label: 'Flashcard', icon: Layers, onClick: () => setIsFlashcardOpen(true) },
+              { label: 'Đề thi / Quiz', icon: ClipboardList, onClick: () => setIsExamOpen(true) },
+              { label: 'Ghi chú thông minh', icon: NotebookPen, onClick: () => setIsSmartNotesOpen(true) },
+              { label: 'Tài liệu ôn tập', icon: BookOpenText, onClick: () => setIsStudyDocOpen(true) },
+            ].map(({ label, icon: Icon, onClick }) => (
+              <button key={label} onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px', borderRadius: '12px', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-navy)', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', textAlign: 'left' }}>
+                <Icon size={16} color="var(--brand-primary)" style={{ flexShrink: 0 }} /> {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Personas */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
           {['Gia sư thân thiện', 'Coach nghiêm túc', 'Socratic hỏi gợi mở', 'Bạn học Gen Z'].map(persona => (
             <button key={persona} onClick={() => setSelectedPersona(persona)} style={{
               padding: '10px 8px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', textAlign: 'center',
-              backgroundColor: selectedPersona === persona ? 'var(--brand-primary)' : 'white',
+              backgroundColor: selectedPersona === persona ? 'var(--brand-primary)' : 'var(--bg-tertiary)',
               color: selectedPersona === persona ? 'white' : 'var(--text-secondary)',
               border: `1px solid ${selectedPersona === persona ? 'var(--brand-primary)' : 'var(--border-medium)'}`
             }}>
@@ -223,11 +282,33 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
         {/* Giáo Án (Roadmap) */}
         <div style={{ marginTop: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>GIÁO ÁN</h3>
+            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-navy)', letterSpacing: '0.05em' }}>GIÁO ÁN</h3>
+            {roadmapItems.some(it => it.due_date) && !roadmapQuestions && (
+              <button onClick={() => downloadIcs(buildRoadmapIcs(roadmapItems), 'lo-trinh-hoc.ics')} title="Tải lịch .ics (Google Calendar, Outlook, Apple Calendar)"
+                style={{ background: 'none', border: 'none', color: 'var(--brand-primary)', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', marginLeft: 'auto', marginRight: '8px' }}>
+                📅 Thêm vào lịch
+              </button>
+            )}
+            {roadmapItems.length > 0 && !roadmapQuestions && (
+              <button onClick={() => generateRoadmap()} disabled={isGeneratingRoadmap} style={{ background: 'none', border: 'none', color: 'var(--brand-primary)', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
+                {isGeneratingRoadmap ? 'Đang tạo…' : 'Tạo lại'}
+              </button>
+            )}
           </div>
+          {roadmapCaveats.length > 0 && roadmapItems.length > 0 && !roadmapQuestions && (
+            <div style={{ fontSize: '0.72rem', color: 'var(--accent-amber-text)', backgroundColor: 'var(--accent-amber-bg)', borderRadius: '10px', padding: '8px 10px', marginBottom: '12px', lineHeight: 1.4 }}>
+              Lưu ý: {roadmapCaveats.map(c => c.message).join(' ')}
+            </div>
+          )}
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-            {roadmapItems.length === 0 ? (
+            {roadmapQuestions ? (
+              <NeedMoreInfo compact busy={isGeneratingRoadmap} assessment={roadmapQuestions}
+                onSubmit={(answers) => generateRoadmap(answers)}
+                onForce={() => generateRoadmap({ force: true })}
+                onUpload={() => setIsUploadOpen(true)}
+                onSearch={() => setIsSearchOpen(true)} />
+            ) : roadmapItems.length === 0 ? (
               <div style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px' }}>
                 <div style={{ marginBottom: '12px' }}>
                   <span style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '16px', padding: '4px 12px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Chưa tạo</span>
@@ -238,16 +319,16 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button 
                     onClick={() => setIsCreateLessonPlanOpen(true)}
-                    style={{ flex: 1, backgroundColor: '#8A334C', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '12px', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+                    style={{ flex: 1, backgroundColor: 'var(--brand-primary)', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '12px', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
                   >
                     Tạo giáo án
                   </button>
                   <button 
-                    onClick={generateRoadmap}
+                    onClick={() => generateRoadmap()}
                     disabled={isGeneratingRoadmap}
-                    style={{ flex: 1, backgroundColor: 'var(--bg-tertiary)', color: '#8A334C', border: '1px solid var(--border-medium)', padding: '10px 16px', borderRadius: '12px', fontWeight: 700, fontSize: '0.8rem', cursor: isGeneratingRoadmap ? 'not-allowed' : 'pointer', opacity: isGeneratingRoadmap ? 0.7 : 1 }}
+                    style={{ flex: 1, backgroundColor: 'var(--bg-tertiary)', color: 'var(--brand-primary)', border: '1px solid var(--border-medium)', padding: '10px 16px', borderRadius: '12px', fontWeight: 700, fontSize: '0.8rem', cursor: isGeneratingRoadmap ? 'not-allowed' : 'pointer', opacity: isGeneratingRoadmap ? 0.7 : 1 }}
                   >
-                    {isGeneratingRoadmap ? 'Đang tạo...' : 'Dùng LLM'}
+                    {isGeneratingRoadmap ? 'Đang tạo...' : 'Tạo roadmap nhanh'}
                   </button>
                 </div>
               </div>
@@ -266,7 +347,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                     >
                       <div style={{ 
                         width: '24px', height: '24px', borderRadius: '50%', 
-                        backgroundColor: isCompleted ? '#8A334C' : 'white', 
+                        backgroundColor: isCompleted ? 'var(--brand-primary)' : 'var(--bg-tertiary)', 
                         border: `2px solid ${isCompleted ? '#8A334C' : '#D6C5B3'}`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         color: isCompleted ? 'white' : 'var(--text-muted)'
@@ -278,7 +359,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                       onClick={() => handleSelectActive(item.id, isActive)}
                       style={{ 
                         flex: 1, 
-                        backgroundColor: isActive ? '#FDF8F5' : 'white', 
+                        backgroundColor: isActive ? '#FDF8F5' : 'var(--bg-tertiary)', 
                         border: isActive ? '2px solid #8A334C' : '1px solid var(--border-light)', 
                         padding: '12px', 
                         borderRadius: '12px', 
@@ -287,8 +368,22 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                         transition: 'all 0.2s'
                       }}
                     >
-                      <h4 style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 700, color: isActive ? '#8A334C' : '#1B2A4E' }}>{item.title}</h4>
+                      <h4 style={{ margin: '0 0 4px', fontSize: '0.85rem', fontWeight: 700, color: isActive ? 'var(--brand-primary)' : 'var(--text-navy)' }}>{item.title}</h4>
                       <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{item.description}</p>
+                      {(item.due_date || item.estimated_time || item.needs_material) ? (
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                          {item.due_date && <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--brand-primary)', backgroundColor: 'var(--surface-blush)', borderRadius: '10px', padding: '2px 8px' }}>📅 {new Date(item.due_date + 'T00:00:00').toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}</span>}
+                          {item.due_date && !isCompleted && (() => {
+                            const today = new Date(); today.setHours(0, 0, 0, 0);
+                            const due = new Date(item.due_date + 'T00:00:00');
+                            const days = Math.round((due - today) / 86400000);
+                            const [label, bg, fg] = days < 0 ? ['Quá hạn', '#FEE2E2', '#B91C1C'] : days === 0 ? ['Hôm nay', '#DCFCE7', '#166534'] : days <= 6 ? ['Tuần này', 'var(--accent-amber-bg)', 'var(--accent-amber-text)'] : [null];
+                            return label ? <span style={{ fontSize: '0.68rem', fontWeight: 800, color: fg, backgroundColor: bg, borderRadius: '10px', padding: '2px 8px' }}>{label}</span> : null;
+                          })()}
+                          {item.estimated_time && <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--accent-amber-text)', backgroundColor: 'var(--accent-amber-bg)', borderRadius: '10px', padding: '2px 8px' }}>⏱ {item.estimated_time}</span>}
+                          {item.needs_material ? <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#B91C1C', backgroundColor: '#FEE2E2', borderRadius: '10px', padding: '2px 8px' }}>Thiếu tài liệu</span> : null}
+                        </div>
+                      ) : null}
                       
                       {isActive && (
                         <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
@@ -310,8 +405,8 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                             }}
                             style={{ 
                               background: 'transparent', 
-                              border: '1px solid #8A334C', 
-                              color: '#8A334C', 
+                              border: '1px solid var(--brand-primary)', 
+                              color: 'var(--brand-primary)', 
                               padding: '4px 8px', 
                               borderRadius: '16px', 
                               fontSize: '0.65rem', 
@@ -353,8 +448,8 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                 onClick={() => setIsCreateLessonPlanOpen(true)}
                 style={{
                   flex: 1,
-                  backgroundColor: '#FDF8F5',
-                  color: '#8A334C',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--brand-primary)',
                   border: '1px solid #D6C5B3',
                   padding: '8px 12px',
                   borderRadius: '12px',
@@ -371,8 +466,8 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                 disabled={isGeneratingRoadmap}
                 style={{
                   flex: 1,
-                  backgroundColor: '#FDF8F5',
-                  color: '#8A334C',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--brand-primary)',
                   border: '1px solid #D6C5B3',
                   padding: '8px 12px',
                   borderRadius: '12px',
@@ -383,7 +478,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                   textAlign: 'center'
                 }}
               >
-                {isGeneratingRoadmap ? 'Đang tạo...' : 'Dùng LLM'}
+                {isGeneratingRoadmap ? 'Đang tạo...' : 'Tạo roadmap nhanh'}
               </button>
             </div>
             )}
@@ -393,7 +488,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
         {/* Recent Artifacts */}
         <div style={{ marginTop: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>RECENT ARTIFACTS</h3>
+            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-navy)', letterSpacing: '0.05em' }}>RECENT ARTIFACTS</h3>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {artifacts.length === 0 ? (
@@ -412,7 +507,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                     {artifact.type === 'quiz' ? <AlertCircle size={16} /> : artifact.type === 'notes' ? <FileText size={16} /> : <Network size={16} />}
                   </div>
                   <div>
-                    <h4 style={{ margin: '0 0 2px', fontSize: '0.85rem', fontWeight: 600, color: '#1B2A4E' }}>{artifact.title}</h4>
+                    <h4 style={{ margin: '0 0 2px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-navy)' }}>{artifact.title}</h4>
                     <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{new Date(artifact.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>
@@ -423,6 +518,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
 
       </div>
     </aside>
+    )}
 
     <UploadSourcesModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} projectId={projectId} />
     <SearchMaterialsModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
@@ -432,6 +528,11 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
     <StudyPlanModal isOpen={isStudyPlanOpen} onClose={() => setIsStudyPlanOpen(false)} />
     <CreateLessonPlanModal isOpen={isCreateLessonPlanOpen} onClose={() => setIsCreateLessonPlanOpen(false)} projectId={projectId} documentId={isProject ? null : id} onSuccess={fetchData} />
     <ArtifactViewerModal isOpen={viewArtifactId !== null} artifactId={viewArtifactId} onClose={() => setViewArtifactId(null)} />
+    <MindMapModal isOpen={isMindMapOpen} onClose={() => setIsMindMapOpen(false)} documentId={isProject ? null : id} projectId={projectId}
+      onOpenConceptMap={() => { setIsMindMapOpen(false); setIsConceptMapOpen(true); }} />
+    <SynthesisModal isOpen={isSynthesisOpen} onClose={() => setIsSynthesisOpen(false)} projectId={projectId} documentId={isProject ? null : id} onSaved={fetchData} />
+    <SmartNotesModal isOpen={isSmartNotesOpen} onClose={() => setIsSmartNotesOpen(false)} />
+    <CreateStudyDocModal isOpen={isStudyDocOpen} onClose={() => setIsStudyDocOpen(false)} projectId={projectId} documentId={isProject ? null : id} onSuccess={fetchData} />
     </>
   );
 };

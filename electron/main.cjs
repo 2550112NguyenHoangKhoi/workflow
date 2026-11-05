@@ -1,10 +1,11 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { spawn } = require('child_process');
 const crypto = require('crypto');
 const os = require('os');
+const { createGoogleOAuth } = require('./googleOAuth.cjs');
 
 const BACKEND_PORT = 8000;
 const HEALTH_URL = `http://127.0.0.1:${BACKEND_PORT}/api/usage`;
@@ -88,8 +89,16 @@ async function createWindow() {
       contextIsolation: true,
       sandbox: true,
       preload: path.join(__dirname, 'preload.cjs'),
+      plugins: true, // built-in PDF viewer for private Drive files shown from a blob: URL
       additionalArguments: [`--workflow-token=${API_TOKEN}`],
     }
+  });
+
+  // Links with target=_blank (Drive downloads, help pages) open in the user's browser,
+  // never as new windows that would inherit the preload bridge.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
   });
 
   win.loadURL(LOADING_HTML);
@@ -148,6 +157,33 @@ app.whenReady().then(() => {
     }
     fs.writeFileSync(configPath, JSON.stringify({ workspace_path: target }, null, 2));
     return { path: target, moved, existing: targetHasDb, from: current };
+  });
+
+  // Google account (sign-in + Drive). See electron/googleOAuth.cjs for why this runs here.
+  const google = createGoogleOAuth({
+    openExternal: (url) => shell.openExternal(url),
+    storePath: path.join(app.getPath('userData'), 'google-session.bin'),
+    encrypt: (text) => (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text) : Buffer.from(text, 'utf8')),
+    decrypt: (buf) => (safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(buf) : buf.toString('utf8')),
+  });
+  const SCOPES = ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/drive.readonly'];
+  ipcMain.handle('google:signIn', (_e, cfg = {}) => google.signIn({ clientId: cfg.clientId, clientSecret: cfg.clientSecret, scopes: SCOPES }));
+  ipcMain.handle('google:getToken', (_e, cfg = {}) => google.getToken({ clientId: cfg.clientId, clientSecret: cfg.clientSecret }));
+  ipcMain.handle('google:signOut', () => google.signOut());
+
+  // Smart reminders: a native notification carrying the quiz question; clicking it brings the
+  // app forward and tells the renderer to open the in-app quiz card.
+  ipcMain.handle('notify:show', (e, { title, body } = {}) => {
+    if (!Notification.isSupported()) return false;
+    const n = new Notification({ title: String(title || 'Workflow').slice(0, 120), body: String(body || '').slice(0, 400), silent: false });
+    const sender = e.sender;
+    n.on('click', () => {
+      const w = BrowserWindow.fromWebContents(sender);
+      if (w) { if (w.isMinimized()) w.restore(); w.show(); w.focus(); }
+      if (!sender.isDestroyed()) sender.send('notify:clicked');
+    });
+    n.show();
+    return true;
   });
 
   ipcMain.handle('app:relaunch', () => {

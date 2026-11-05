@@ -108,6 +108,7 @@ def extract_chapter_text(pdf_path: str, page_start: int, page_end: int) -> str:
     parts = []
     with pdfplumber.open(pdf_path) as pdf:
         for p in range(max(0, page_start - 1), min(page_end, len(pdf.pages))):
-            txt = pdf.pages[p].extract_text() or ""
+            from nlp.pdf_text import page_text
+            txt = page_text(pdf.pages[p])
             parts.append(txt)
     return "\n".join(parts)

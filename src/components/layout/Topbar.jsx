@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Moon, Sun, User, LogOut, Sparkles, Users } from 'lucide-react';
+import { Search, Moon, Sun, User, LogOut, Sparkles, Users, MessageSquarePlus } from 'lucide-react';
 import { signInWithGoogle, signOutGoogle, getStoredUser, isAuthConfigured } from '../../utils/googleAuth';
 import UserProfileModal from '../modals/UserProfileModal';
 import ProjectCollaborationModal from '../modals/ProjectCollaborationModal';
@@ -181,6 +181,10 @@ const Topbar = () => {
           {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
+        <button onClick={() => window.dispatchEvent(new Event('open-feedback'))} title="Báo lỗi hoặc gửi feedback" aria-label="Báo lỗi hoặc gửi feedback"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', padding: 4 }}>
+          <MessageSquarePlus size={20} />
+        </button>
         <NotificationsBell />
         
         {/* Google Account */}

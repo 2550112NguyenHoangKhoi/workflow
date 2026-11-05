@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Folder, FileText, Download, Loader2, Cloud, ChevronRight, CheckCircle2, AlertCircle, FolderUp } from 'lucide-react';
 import {
-  isConfigured, isConnected, connectDrive, listChildren, importFileToLibrary,
+  isConfigured, isConnected, connectDrive, listChildren, importFileToLibrary, restoreSession, MISSING_CLIENT_MSG,
 } from '../../utils/googleDrive';
 import { readUploadResult } from '../../utils/uploads';
+import { useEscape } from '../../utils/useEscape';
 
 const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
+  useEscape(isOpen, onClose);
   // --- Local folder bulk import (no Google login needed) ---
   const folderInputRef = useRef(null);
   const [uploading, setUploading] = useState(null); // {done,total} | null
@@ -48,7 +50,7 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
   const [connected, setConnected] = useState(isConnected());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [path, setPath] = useState([{ id: 'root', name: 'My Drive' }]);
+  const [path, setPath] = useState([{ id: 'root', name: 'Drive của tôi' }]);
   const [folders, setFolders] = useState([]);
   const [files, setFiles] = useState([]);
   const [importing, setImporting] = useState({});
@@ -60,6 +62,10 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
       setFolders(fo); setFiles(fi);
     } catch (err) { setError(err.message); } finally { setLoading(false); }
   };
+
+  useEffect(() => {
+    if (isOpen && !connected) restoreSession().then(setConnected);
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && connected) browse(path[path.length - 1].id);
@@ -95,7 +101,7 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
         {/* Header */}
         <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ backgroundColor: '#8A334B', padding: '10px', borderRadius: '12px' }}><FolderUp color="white" size={22} /></div>
+            <div style={{ backgroundColor: 'var(--brand-primary)', padding: '10px', borderRadius: '12px' }}><FolderUp color="white" size={22} /></div>
             <div>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 900, color: 'var(--text-navy)', margin: 0 }}>Nhập tài liệu hàng loạt</h2>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>Từ thư mục máy tính hoặc Google Drive</p>
@@ -150,13 +156,13 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
           </div>
 
           {!isConfigured() ? (
-            <div style={{ textAlign: 'center', padding: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Chưa cấu hình OAuth Client ID.</div>
+            <div style={{ textAlign: 'center', padding: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{MISSING_CLIENT_MSG}</div>
           ) : !connected ? (
             <div style={{ textAlign: 'center', padding: '8px 16px' }}>
               <button onClick={handleConnect} style={{ padding: '12px 24px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--brand-primary)', border: '1px solid var(--brand-primary)', borderRadius: '12px', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                 <Cloud size={18} /> Kết nối Google Drive
               </button>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>Cần thêm email của bạn vào "Test users" trong Google Cloud Console.</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>Đăng nhập bằng tài khoản Google của bạn (chỉ quyền đọc).</div>
             </div>
           ) : (
             <>
@@ -164,7 +170,7 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
                 {path.map((c, i) => (
                   <React.Fragment key={c.id}>
                     {i > 0 && <ChevronRight size={14} color="var(--text-muted)" />}
-                    <button onClick={() => goToCrumb(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: i === path.length - 1 ? '#1B2A4E' : 'var(--brand-primary)', fontWeight: i === path.length - 1 ? 700 : 600 }}>{c.name}</button>
+                    <button onClick={() => goToCrumb(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: i === path.length - 1 ? 'var(--text-navy)' : 'var(--brand-primary)', fontWeight: i === path.length - 1 ? 700 : 600 }}>{c.name}</button>
                   </React.Fragment>
                 ))}
               </div>

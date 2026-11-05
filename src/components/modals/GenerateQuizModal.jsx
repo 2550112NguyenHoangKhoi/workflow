@@ -76,7 +76,7 @@ const GenerateQuizModal = ({ isOpen, onClose, document, onGenerate }) => {
           <button 
             onClick={handleGenerate}
             disabled={isGenerating}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 24px', borderRadius: '8px', backgroundColor: '#8A334B', color: 'white', border: 'none', cursor: isGenerating ? 'not-allowed' : 'pointer', fontWeight: 600, opacity: isGenerating ? 0.7 : 1 }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 24px', borderRadius: '8px', backgroundColor: 'var(--brand-primary)', color: 'white', border: 'none', cursor: isGenerating ? 'not-allowed' : 'pointer', fontWeight: 600, opacity: isGenerating ? 0.7 : 1 }}
           >
             {isGenerating ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
             Tạo Đề Ngay

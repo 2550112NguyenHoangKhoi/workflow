@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { X, Upload } from 'lucide-react';
 import { readUploadResult } from '../../utils/uploads';
+import { useEscape } from '../../utils/useEscape';
 
 const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
+  useEscape(isOpen, onClose);
   const [file, setFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [school, setSchool] = useState('ĐHBK-HCM');
@@ -89,7 +91,7 @@ const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
         <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           {/* File input / Selection */}
-          <div style={{ border: '1px solid #E6D0C1', backgroundColor: '#FDF8F5', borderRadius: '12px', padding: '16px' }}>
+          <div style={{ border: '1px solid #E6D0C1', backgroundColor: 'var(--bg-primary)', borderRadius: '12px', padding: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>FILE ĐÃ CHỌN</span>
               <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>1 file</span>
@@ -226,7 +228,7 @@ const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
           <button onClick={onClose} style={{ padding: '12px 24px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '12px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
             Hủy
           </button>
-          <button onClick={handleSubmit} disabled={isUploading || !file} style={{ flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: file ? '#1B2A4E' : '#E2E8F0', color: file ? 'white' : '#64748B', fontWeight: 700, border: 'none', cursor: file ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+          <button onClick={handleSubmit} disabled={isUploading || !file} style={{ flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: file ? 'var(--btn-navy)' : '#E2E8F0', color: file ? 'white' : '#64748B', fontWeight: 700, border: 'none', cursor: file ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
             <Upload size={18} /> Upload
           </button>
         </div>

@@ -972,6 +972,13 @@ def generate_lesson(mode: str, level: str, category: str = "", topic: str = "",
             ]
             
             prompt = random.choice(bank)
+            # Prefer a prompt that comes with its data, so the chart can be drawn.
+            from .practice_bank import TASK1_CHARTS
+            chart = random.choice(TASK1_CHARTS)
+            if not topic:
+                return {"exercise_id": f"task1:{chart['id']}", "mode": "ielts", "level": level, "category": "", "task": task,
+                        "sentences": [], "ielts_prompt": chart["prompt"], "min_words": 150, "question_type": "",
+                        "structure_hint": struct_hint, "chart": chart}
             if topic:
                 # bias toward a prompt containing a topic keyword, if any match
                 matches = [p for p in bank if topic.lower() in p.lower()]
@@ -987,6 +994,16 @@ def generate_lesson(mode: str, level: str, category: str = "", topic: str = "",
             "structure_hint": struct_hint
         }
 
+    if mode == "conversation":
+        from .practice_bank import CONVERSATIONS
+        cefr = {"b": ("A1", "A2"), "i": ("B1",), "a": ("B2",)}[lvl]
+        pool = [c for c in CONVERSATIONS if c["level"] in cefr and (not category or c["topic"] == category)] or CONVERSATIONS
+        c = random.choice(pool)
+        return {"exercise_id": f"conversation:{c['id']}", "mode": "conversation", "level": c["level"], "category": c["topic"],
+                "title": c["title"], "scene": c["scene"], "speakers": list(dict.fromkeys(sp for sp, _, _ in c["lines"])),
+                "sentences": [{"speaker": sp, "vi": vi, "reference_en": en, "hint": ""} for sp, vi, en in c["lines"]],
+                "ielts_prompt": "", "min_words": 0}
+
     if mode == "paragraph":
         content_type = category if category in PARAGRAPH_BANK else random.choice(list(PARAGRAPH_BANK))
         by_level = PARAGRAPH_BANK[content_type]
@@ -999,21 +1016,26 @@ def generate_lesson(mode: str, level: str, category: str = "", topic: str = "",
         }
 
     # sentence mode
+    # Nearest levels first, so a beginner lesson never jumps straight to advanced sentences.
+    nearest = {"b": ("b", "i", "a"), "i": ("i", "b", "a"), "a": ("a", "i", "b")}[lvl]
     if category in SENTENCE_BANK:
         by_level = SENTENCE_BANK[category]
-        pool = list(by_level.get(lvl, []))
-        # top up from other levels of the same category if not enough
-        if len(pool) < num_sentences:
-            for lk in ("b", "i", "a"):
-                if lk != lvl:
-                    pool.extend(by_level.get(lk, []))
+        # The bank holds only a few sentences per level: the chosen level comes first (shuffled),
+        # then the nearest level tops it up. Shuffling everything together used to mix
+        # "Trời hôm nay đẹp." with advanced sentences in one beginner lesson.
+        chosen = []
+        for lk in nearest:
+            group = list(by_level.get(lk, []))
+            random.shuffle(group)
+            chosen.extend(group)
+            if len(chosen) >= num_sentences:
+                break
     else:
-        pool = []
+        chosen = []
         for cat in SENTENCE_BANK.values():
-            pool.extend(cat.get(lvl, []))
-
-    random.shuffle(pool)
-    chosen = pool[:max(1, num_sentences)]
+            chosen.extend(cat.get(lvl, []))
+        random.shuffle(chosen)
+    chosen = chosen[:max(1, num_sentences)]
     return {
         "mode": "sentence", "level": level, "category": category,
         "sentences": _pairs_to_sentences(chosen),
@@ -1214,19 +1236,54 @@ def grade_ielts(prompt: str, essay: str, task: str = "task2", question_type: str
     def _band_step(x):
         return max(0.0, min(9.0, round(x * 2) / 2))
 
-    # task_response: driven by hitting the word-count requirement for the task
-    task_response = _band_step(4.5 + min(4.0, (word_count / min_words) * 4.0) - (0 if word_count >= min_words else 1.5))
-    # coherence: linking words + reasonable paragraphing signal (sentence count)
-    coherence = _band_step(4.0 + min(3.0, linking_count * 0.6) + min(1.5, sentence_count / 8))
-    # lexical: vocabulary diversity
-    lexical = _band_step(3.5 + diversity * 7.0)
-    # grammar: reasonable average sentence length (10-22 words is a sweet spot)
-    if 10 <= avg_sentence_len <= 22:
-        grammar = _band_step(6.5)
+    # Topic relevance: share of the prompt's content words the essay actually uses. Without
+    # it, any 250 words (even "banana banana …") scored like a real answer.
+    _STOP = {"the", "and", "that", "this", "with", "from", "have", "has", "are", "was", "were", "will",
+             "your", "their", "there", "these", "those", "which", "what", "some", "people", "other",
+             "both", "views", "give", "opinion", "discuss", "extent", "agree", "disagree", "reasons",
+             "answer", "include", "relevant", "examples", "knowledge", "experience", "own", "think",
+             "summarise", "information", "selecting", "reporting", "main", "features", "make",
+             "comparisons", "where", "below", "shows", "chart", "graph", "table", "about", "more",
+             "than", "into", "over", "should", "would", "could", "many", "much", "such", "they"}
+    prompt_terms = {w for w in _tokens(prompt or "") if len(w) > 3 and w not in _STOP}
+    def _stem(w):
+        return w[:6]
+    essay_stems = {_stem(w) for w in words}
+    relevance = (sum(1 for w in prompt_terms if _stem(w) in essay_stems) / len(prompt_terms)) if prompt_terms else 0.6
+
+    length_ratio = min(1.0, word_count / min_words)
+    sentence_starts = [s.strip()[:1] for s in sentences if s.strip()]
+    capitalised = (sum(1 for c in sentence_starts if c.isupper()) / len(sentence_starts)) if sentence_starts else 0.0
+
+    # task_response: answers the prompt (relevance) at the required length
+    task_response = _band_step(2.0 + 3.0 * length_ratio + 4.0 * min(1.0, relevance / 0.6) * length_ratio ** 0.5)
+    # coherence: linking words, paragraphing and a sensible number of sentences
+    para_bonus = 1.5 if num_paragraphs >= 4 else 1.0 if num_paragraphs >= 3 else 0.5 if num_paragraphs == 2 else 0.0
+    coherence = _band_step(2.5 + min(3.0, linking_count * 0.5) + para_bonus + min(1.0, sentence_count / 12))
+    # lexical: vocabulary diversity (real essays sit around 0.45-0.65) plus word sophistication
+    long_words = (sum(1 for w in words if len(w) >= 7) / word_count) if word_count else 0.0
+    lexical = _band_step(1.0 + diversity * 8.0 + min(1.5, long_words * 6))
+    # grammar: punctuated sentences of sensible length that start with a capital letter
+    if 10 <= avg_sentence_len <= 24:
+        grammar = 6.0
     elif avg_sentence_len < 10:
-        grammar = _band_step(5.0)
+        grammar = 5.0
+    elif avg_sentence_len <= 35:
+        grammar = 5.0
     else:
-        grammar = _band_step(5.5)
+        grammar = 3.5  # run-on text / missing sentence punctuation
+    grammar = _band_step(grammar + (capitalised - 0.5) * 2)
+
+    # A few lines can't demonstrate range: vocabulary diversity is trivially 100% in a 15-word
+    # answer. Cap every criterion by how much of the required length was written.
+    length_cap = 3.0 + 6.0 * length_ratio
+    coherence, lexical, grammar = (_band_step(min(x, length_cap)) for x in (coherence, lexical, grammar))
+
+    # Hard caps for text that isn't a real attempt at an answer.
+    if diversity < 0.2:          # the same few words repeated
+        task_response, coherence, lexical, grammar = (min(x, 3.0) for x in (task_response, coherence, lexical, grammar))
+    if prompt_terms and relevance == 0:
+        task_response = min(task_response, 2.0)
 
     band = round(((task_response + coherence + lexical + grammar) / 4) * 2) / 2
 
@@ -1238,15 +1295,19 @@ def grade_ielts(prompt: str, essay: str, task: str = "task2", question_type: str
         f"• Số từ nối (linking words): {linking_count}. "
         + ("Liên kết ý tốt." if linking_count >= 4 else "Nên dùng thêm từ nối để bài mạch lạc hơn.") + "\n"
         f"• Độ dài câu trung bình: {avg_sentence_len:.1f} từ/câu. "
-        + ("Hợp lý." if 10 <= avg_sentence_len <= 22 else "Nên điều chỉnh độ dài câu cho cân đối.")
+        + ("Hợp lý." if 10 <= avg_sentence_len <= 24 else "Nên điều chỉnh độ dài câu cho cân đối.") + "\n"
+        f"• Bám sát đề: dùng {relevance:.0%} từ khoá của đề. "
+        + ("Tốt." if relevance >= 0.5 else "Bài viết chưa bám sát đề — hãy trả lời trực tiếp các ý trong đề bài.")
     )
 
-    intro_sentences = sentences[:2]
-    improved_intro = ". ".join(s.strip() for s in intro_sentences).strip()
-    if improved_intro and not improved_intro.endswith("."):
-        improved_intro += "."
-    if not improved_intro:
-        improved_intro = "Hãy mở bài bằng cách diễn giải lại đề và nêu quan điểm của bạn."
+    # Offline we can't rewrite the learner's intro (it used to echo their own first two
+    # sentences back as "improved"), so give a concrete intro pattern for the task instead.
+    if task == "task1":
+        improved_intro = ("The [chart/graph/table] illustrates [what is measured] in [places/groups] "
+                          "over [time period]. Overall, [main trend 1], while [main trend 2].")
+    else:
+        improved_intro = ("It is often argued that [paraphrase the statement in the prompt]. "
+                          "In my view, [your clear position], for the reasons outlined below.")
 
     descriptors = {
         "task_response": _band_descriptor("task_response", task_response),

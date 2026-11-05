@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { X, FileText, Loader2, Download, RefreshCw } from 'lucide-react';
-import { getEngineKey } from '../../utils/engine';
+import { getEngineKey, engineLabel } from '../../utils/engine';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { useEscape } from '../../utils/useEscape';
 
 const SmartNotesModal = ({ isOpen, onClose }) => {
+  useEscape(isOpen, onClose);
   const [markdown, setMarkdown] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -113,7 +115,7 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
       backdropFilter: 'blur(4px)'
     }}>
       <div className="animate-fade-in" style={{
-        backgroundColor: '#FAFAFA', borderRadius: '24px', width: '90%', maxWidth: '800px',
+        backgroundColor: 'var(--surface-plain)', borderRadius: '24px', width: '90%', maxWidth: '800px',
         maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
         boxShadow: '0 24px 48px rgba(0,0,0,0.2)'
       }}>
@@ -132,12 +134,12 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             {(markdown || error) && !isLoading && (
-              <button onClick={() => generateNotes(true)} title="Tạo lại ghi chú bằng bộ máy AI hiện tại" style={{ background: '#F3F4F6', border: 'none', cursor: 'pointer', color: 'var(--text-navy)', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
+              <button onClick={() => generateNotes(true)} title="Tạo lại ghi chú bằng bộ máy AI hiện tại" style={{ background: 'var(--surface-muted)', border: 'none', cursor: 'pointer', color: 'var(--text-navy)', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
                 <RefreshCw size={16} /> Tạo lại
               </button>
             )}
             {markdown && (
-              <button onClick={exportToMD} title="Download Markdown" style={{ background: '#E8F5E9', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
+              <button onClick={exportToMD} title="Download Markdown" style={{ background: 'var(--surface-green)', border: 'none', cursor: 'pointer', color: '#065F46', padding: '8px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.875rem' }}>
                 <Download size={16} /> Export MD
               </button>
             )}
@@ -152,7 +154,7 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
           {isLoading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--brand-primary)' }}>
               <Loader2 size={48} className="animate-spin" style={{ marginBottom: '16px' }} />
-              <div style={{ fontWeight: 600 }}>Running TextRank extraction...</div>
+              <div style={{ fontWeight: 600 }}>Đang tạo ghi chú bằng {engineLabel()}...</div>
             </div>
           ) : error ? (
             <div style={{ color: 'red', textAlign: 'center', fontWeight: 600 }}>{error}</div>

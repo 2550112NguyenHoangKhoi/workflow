@@ -7,10 +7,27 @@
     <title>Workflow</title>
   </head>
   <body>
-    <div id="error-log" style="color: red; padding: 20px; font-family: monospace; z-index: 9999; position: absolute;"></div>
+    <div id="error-log" style="display: none; color: #B91C1C; background: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 8px; padding: 8px 32px 8px 12px; font-family: monospace; font-size: 12px; z-index: 9999; position: fixed; left: 12px; bottom: 12px; max-width: 60vw; max-height: 30vh; overflow: auto;"></div>
     <script>
-      window.onerror = function(message, source, lineno, colno, error) {
-        document.getElementById('error-log').innerHTML += '<p>' + message + ' at ' + source + ':' + lineno + '</p>';
+      // Startup-crash visibility (a blank window is worse than an error message). The benign
+      // "ResizeObserver loop" warning (canvas / mind map resizing) is ignored; text is never
+      // interpreted as HTML; the box can be dismissed.
+      window.onerror = function(message, source, lineno) {
+        if (/ResizeObserver loop/.test(String(message))) return true;
+        var box = document.getElementById('error-log');
+        if (!box) return;
+        if (!box.firstChild) {
+          var close = document.createElement('button');
+          close.textContent = '×';
+          close.setAttribute('aria-label', 'Đóng');
+          close.style.cssText = 'position:absolute;right:6px;top:4px;border:none;background:none;cursor:pointer;font-size:16px;color:#B91C1C';
+          close.onclick = function () { box.style.display = 'none'; };
+          box.appendChild(close);
+        }
+        var p = document.createElement('div');
+        p.textContent = message + ' (' + String(source).split('/').pop() + ':' + lineno + ')';
+        box.appendChild(p);
+        box.style.display = 'block';
       };
     </script>
     <div id="root"></div>

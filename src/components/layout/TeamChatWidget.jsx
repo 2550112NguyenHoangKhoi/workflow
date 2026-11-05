@@ -70,7 +70,12 @@ export default function TeamChatWidget({ projectId }) {
       const res = await fetch(`http://127.0.0.1:8000/api/projects/${projectId}/messages`);
       if (res.ok) {
         const data = await res.json();
-        setAiMessages(data.messages || []);
+        const next = data.messages || [];
+        // Only replace when something changed: a new array every 3 s re-ran the
+        // scroll-to-bottom effect and kept yanking the reader back down.
+        setAiMessages(prev => (
+          prev.length === next.length && prev[prev.length - 1]?.id === next[next.length - 1]?.id ? prev : next
+        ));
       }
     } catch {}
   }, [projectId]);
@@ -204,13 +209,13 @@ export default function TeamChatWidget({ projectId }) {
     return (
       <div style={{ 
         marginTop: '8px', border: '1px solid #D6C5B3', borderRadius: '12px', 
-        padding: '12px', backgroundColor: '#FAFAF9', color: '#1F2937'
+        padding: '12px', backgroundColor: 'var(--surface-plain)', color: 'var(--text-ink)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-          <div style={{ padding: '4px', backgroundColor: '#F0E6D2', borderRadius: '6px', color: '#8A334C' }}>
+          <div style={{ padding: '4px', backgroundColor: '#F0E6D2', borderRadius: '6px', color: 'var(--brand-primary)' }}>
             <Layers size={16} />
           </div>
-          <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#8A334C' }}>MCQ</span>
+          <span style={{ fontWeight: 800, fontSize: '0.85rem', color: 'var(--brand-primary)' }}>MCQ</span>
         </div>
         <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '12px' }}>
           {card?.question || "Ý chính cần hiểu về 'Chủ đề hiện tại' là gì?"}
@@ -221,8 +226,8 @@ export default function TeamChatWidget({ projectId }) {
           placeholder="Nhập câu trả lời..."
           style={{
             width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #D6C5B3',
-            backgroundColor: '#FAFAF9', resize: 'vertical', minHeight: '60px', marginBottom: '12px',
-            outline: 'none', fontSize: '0.85rem', color: '#4B5563', boxSizing: 'border-box'
+            backgroundColor: 'var(--surface-plain)', resize: 'vertical', minHeight: '60px', marginBottom: '12px',
+            outline: 'none', fontSize: '0.85rem', color: 'var(--text-slate)', boxSizing: 'border-box'
           }}
         />
         <button 
@@ -245,7 +250,7 @@ export default function TeamChatWidget({ projectId }) {
       {['Tạo câu nữa', 'Giải thích đáp án', 'Tạo flashcard'].map(act => (
         <button key={act} onClick={() => send(act)} style={{
           padding: '6px 12px', borderRadius: '16px', border: '1px solid #D6C5B3',
-          backgroundColor: '#FFFFFF', color: '#8A334C', fontSize: '0.8rem', fontWeight: 600,
+          backgroundColor: 'var(--bg-tertiary)', color: 'var(--brand-primary)', fontSize: '0.8rem', fontWeight: 600,
           cursor: 'pointer', whiteSpace: 'nowrap'
         }}>{act}</button>
       ))}
@@ -278,7 +283,7 @@ export default function TeamChatWidget({ projectId }) {
             position: 'fixed', bottom: 30, right: 30, zIndex: 90,
             width: 360, height: 540, borderRadius: 24,
             boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--bg-tertiary)',
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}>
             {/* Header */}
@@ -287,7 +292,7 @@ export default function TeamChatWidget({ projectId }) {
               padding: '16px 20px', borderBottom: '1px solid #F3F4F6', flexShrink: 0,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#1F2937' }}>
+                <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--text-ink)' }}>
                   {activeTab === 'teacher' ? 'AI giáo viên' : 'Nhóm học tập'}
                 </div>
                 <div style={{ display: 'flex', marginLeft: '4px' }}>
@@ -321,7 +326,7 @@ export default function TeamChatWidget({ projectId }) {
                 <button
                   onClick={() => setOpen(false)}
                   style={{ 
-                    background: '#F3F4F6', border: 'none', cursor: 'pointer', 
+                    background: 'var(--surface-muted)', border: 'none', cursor: 'pointer', 
                     width: '28px', height: '28px', borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center' 
                   }}
@@ -333,7 +338,7 @@ export default function TeamChatWidget({ projectId }) {
 
             {/* Tabs */}
             <div style={{ padding: '12px 20px', borderBottom: '1px solid #F3F4F6' }}>
-              <div style={{ display: 'flex', backgroundColor: '#F3F4F6', borderRadius: '24px', padding: '4px' }}>
+              <div style={{ display: 'flex', backgroundColor: 'var(--surface-muted)', borderRadius: '24px', padding: '4px' }}>
                 <button
                   onClick={() => setActiveTab('normal')}
                   style={{
@@ -375,7 +380,7 @@ export default function TeamChatWidget({ projectId }) {
                     send(promptText);
                   }} style={{
                     padding: '6px 16px', borderRadius: '20px', border: '1px solid #D6C5B3',
-                    backgroundColor: '#FFFFFF', color: '#8A334C', fontSize: '0.85rem', fontWeight: 600,
+                    backgroundColor: 'var(--bg-tertiary)', color: 'var(--brand-primary)', fontSize: '0.85rem', fontWeight: 600,
                     cursor: 'pointer'
                   }}>{act}</button>
                 ))}
@@ -405,7 +410,7 @@ export default function TeamChatWidget({ projectId }) {
                       }}>
                         {getInitials(name)}
                       </div>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#4B5563' }}>{name}</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-slate)' }}>{name}</span>
                     </div>
                   );
                 })}
@@ -413,13 +418,13 @@ export default function TeamChatWidget({ projectId }) {
             </div>
 
             {/* Body */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', backgroundColor: '#FAFAFA' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', backgroundColor: 'var(--surface-plain)' }}>
               {activeMessages.length === 0 ? (
                 <div style={{
                   height: '100%', display: 'flex', flexDirection: 'column',
                   alignItems: 'center', justifyContent: 'center', textAlign: 'center',
                 }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1F2937' }}>Bắt đầu trò chuyện</div>
+                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-ink)' }}>Bắt đầu trò chuyện</div>
                   <div style={{ fontSize: '0.8rem', color: '#6B7280', maxWidth: 200, marginTop: '4px' }}>
                     {activeTab === 'teacher' ? 'Hỏi giáo viên AI bất kỳ điều gì.' : 'Hãy là người đầu tiên nhắn tin trong nhóm này.'}
                   </div>
@@ -464,8 +469,8 @@ export default function TeamChatWidget({ projectId }) {
                           </span>
                         )}
                         <div style={{
-                          backgroundColor: isOwn ? '#8A334C' : '#E5E7EB',
-                          color: isOwn ? '#FFFFFF' : '#1F2937',
+                          backgroundColor: isOwn ? 'var(--brand-primary)' : 'var(--surface-grey)',
+                          color: isOwn ? '#FFFFFF' : 'var(--text-ink)',
                           borderRadius: isOwn ? '16px 16px 4px 16px' : '16px 16px 16px 4px', 
                           padding: '10px 14px',
                           fontSize: '0.9rem', wordBreak: 'break-word',
@@ -489,11 +494,11 @@ export default function TeamChatWidget({ projectId }) {
 
             {/* Input */}
             <div style={{
-              padding: '12px 20px', borderTop: '1px solid #F3F4F6', backgroundColor: '#FFFFFF', flexShrink: 0,
+              padding: '12px 20px', borderTop: '1px solid #F3F4F6', backgroundColor: 'var(--bg-tertiary)', flexShrink: 0,
             }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '8px',
-                backgroundColor: '#F3F4F6', borderRadius: '24px', padding: '6px 16px',
+                backgroundColor: 'var(--surface-muted)', borderRadius: '24px', padding: '6px 16px',
                 border: activeTab === 'teacher' ? '1px solid #D6C5B3' : 'none'
               }}>
                 <input
@@ -502,7 +507,7 @@ export default function TeamChatWidget({ projectId }) {
                   onKeyDown={handleKey}
                   placeholder="Nhắn tin..."
                   style={{
-                    flex: 1, background: 'transparent', border: 'none', color: '#1F2937',
+                    flex: 1, background: 'transparent', border: 'none', color: 'var(--text-ink)',
                     fontSize: '0.9rem', outline: 'none', padding: '8px 0'
                   }}
                 />

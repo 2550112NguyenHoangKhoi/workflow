@@ -6,7 +6,10 @@ python-dotenv
 python-multipart
 
 # AI (Gemini via the Antigravity agent SDK) + web search
-google-antigravity
+google-antigravity>=0.1.23
+# Local models: Gemma 4 on Google AI Edge LiteRT-LM (Metal on Apple Silicon, DirectX 12 on
+# Windows x64, CPU/GPU on Linux). No wheel for Intel Macs / Windows ARM: those use Ollama.
+litert-lm-api>=0.19.0; (sys_platform == "darwin" and platform_machine == "arm64") or (sys_platform == "win32" and platform_machine == "AMD64") or sys_platform == "linux"
 ddgs
 
 # Document ingestion

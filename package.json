@@ -22,7 +22,10 @@
     ],
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.education"
+      "category": "public.app-category.education",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Workflow dùng micro để bạn dạy lại kiến thức, luyện nói và phát âm bằng giọng nói."
+      }
     },
     "directories": {
       "output": "release"

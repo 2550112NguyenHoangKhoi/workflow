@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { X, Search } from 'lucide-react';
 import { getEngineKey } from '../../utils/engine';
 import { readUploadResult } from '../../utils/uploads';
+import { useEscape } from '../../utils/useEscape';
 
 const SearchMaterialsModal = ({ isOpen, onClose }) => {
+  useEscape(isOpen, onClose);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -165,7 +167,7 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
                            style={{ 
                              border: `2px solid ${selectedUrls.has(res.url) ? 'var(--brand-primary)' : 'transparent'}`, 
                              borderRadius: '12px', padding: '16px', 
-                             backgroundColor: selectedUrls.has(res.url) ? '#FDF8F5' : 'white',
+                             backgroundColor: selectedUrls.has(res.url) ? '#FDF8F5' : 'var(--bg-tertiary)',
                              boxShadow: 'var(--shadow-sm)',
                              cursor: 'pointer',
                              transition: 'all 0.2s',
@@ -182,11 +184,17 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
                                 {res.relevancy_score}% Match
                               </span>
                             )}
-                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', backgroundColor: '#E6F0EC', padding: '4px 8px', borderRadius: '8px' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', backgroundColor: 'var(--accent-green)', padding: '4px 8px', borderRadius: '8px' }}>
                               {res.type}
                             </span>
+                            {res.trusted && (
+                              <span title={res.trust_reason || 'Nguồn giáo dục / học thuật'} style={{ fontSize: '0.75rem', fontWeight: 700, color: '#065F46', backgroundColor: '#D1FAE5', padding: '4px 8px', borderRadius: '8px' }}>
+                                ✓ Tin cậy
+                              </span>
+                            )}
                           </div>
                         </div>
+                        {res.source && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>{res.source}{res.trust_reason ? ` · ${res.trust_reason}` : ''}</div>}
                         <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
                           {res.snippet}
                         </p>

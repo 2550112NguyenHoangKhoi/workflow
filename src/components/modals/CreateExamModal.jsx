@@ -4,9 +4,11 @@ import { X, UploadCloud, Sparkles, CheckCircle2, XCircle, RotateCcw, FileText } 
 import { getSelectedSources, extractFileText, getOwnerEmail } from '../../utils/examSources';
 import ArtifactViewerModal from './ArtifactViewerModal';
 import { getEngineKey } from '../../utils/engine';
-import { getDriveApiKey } from '../../utils/googleDrive';
+import { getDriveApiKey, getAccessToken, restoreSession } from '../../utils/googleDrive';
+import { useEscape } from '../../utils/useEscape';
 
 const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) => {
+  useEscape(isOpen, onClose);
   const navigate = useNavigate();
   const activeDocId = documentId || (() => { const match = window.location.hash.match(/#\/document\/([^/]+)/); return match ? parseInt(match[1], 10) : null; })();
   const [title, setTitle] = useState(`Đề thi ôn tập ${new Date().toLocaleDateString('vi-VN')}`);
@@ -71,6 +73,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
         sources,
         api_key: getEngineKey(),
         drive_api_key: getDriveApiKey(),
+        drive_access_token: (await restoreSession()) ? getAccessToken() : null,
         project_id: projectId ? parseInt(projectId) : null,
         document_id: activeDocId ? parseInt(activeDocId) : null,
         owner_email: getOwnerEmail(),
@@ -96,7 +99,8 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
           setViewMode('result');
         }
       } else {
-        alert("Tạo đề thi thất bại.");
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || "Tạo đề thi thất bại.");
       }
     } catch (e) {
       console.error(e);
@@ -164,7 +168,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
           <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', padding: '12px 16px', backgroundColor: '#F3EAE3', borderRadius: '12px' }}>
               <Sparkles size={16} color="#8A334C" />
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#8A334C' }}>{questions.length} câu hỏi • Chọn đáp án rồi nhấn "Kiểm tra"</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--brand-primary)' }}>{questions.length} câu hỏi • Chọn đáp án rồi nhấn "Kiểm tra"</span>
             </div>
 
             {questions.map((q, idx) => {
@@ -180,7 +184,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
                   transition: 'border-color 0.2s'
                 }}>
                   <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-navy)', marginBottom: '14px' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#8A334C', color: 'white', fontSize: '0.8rem', fontWeight: 800, marginRight: '10px' }}>{idx + 1}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--brand-primary)', color: 'white', fontSize: '0.8rem', fontWeight: 800, marginRight: '10px' }}>{idx + 1}</span>
                     {q.question}
                   </div>
 
@@ -226,7 +230,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
                       disabled={selectedId === undefined}
                       style={{
                         marginTop: '12px', padding: '8px 20px', borderRadius: '20px', fontWeight: 600, fontSize: '0.85rem',
-                        backgroundColor: selectedId !== undefined ? '#8A334C' : '#D1D5DB', color: 'white',
+                        backgroundColor: selectedId !== undefined ? 'var(--brand-primary)' : '#D1D5DB', color: 'white',
                         border: 'none', cursor: selectedId !== undefined ? 'pointer' : 'not-allowed', transition: 'background-color 0.2s'
                       }}
                     >
@@ -241,7 +245,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
                         {isCorrect ? '✓ Chính xác!' : '✗ Sai rồi!'}
                       </div>
                       {q.explanation && (
-                        <div style={{ fontSize: '0.85rem', color: '#4B5563', lineHeight: 1.5 }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-slate)', lineHeight: 1.5 }}>
                           <strong>Giải thích:</strong> {q.explanation}
                         </div>
                       )}
@@ -257,7 +261,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
             <button onClick={handleRetry} style={{ padding: '12px 28px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '24px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <RotateCcw size={15} /> Làm lại
             </button>
-            <button onClick={handleClose} style={{ padding: '12px 28px', backgroundColor: '#8A334C', border: 'none', borderRadius: '24px', fontWeight: 600, color: 'white', cursor: 'pointer' }}>
+            <button onClick={handleClose} style={{ padding: '12px 28px', backgroundColor: 'var(--brand-primary)', border: 'none', borderRadius: '24px', fontWeight: 600, color: 'white', cursor: 'pointer' }}>
               Đóng
             </button>
           </div>
@@ -297,7 +301,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
               type="text" 
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem', fontWeight: 600 }} 
+              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem', fontWeight: 600 }} 
             />
           </div>
 
@@ -307,7 +311,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
               rows={3} 
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem', resize: 'none' }}
+              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem', resize: 'none' }}
             ></textarea>
           </div>
 
@@ -317,7 +321,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
               <select 
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem' }}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem' }}
               >
                 <option>15 phút</option>
                 <option>30 phút</option>
@@ -332,7 +336,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
               <select 
                 value={questionCount}
                 onChange={(e) => setQuestionCount(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem' }}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem' }}
               >
                 <option>5 câu</option>
                 <option>10 câu</option>
@@ -350,7 +354,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
               <select 
                 value={difficulty}
                 onChange={(e) => setDifficulty(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem' }}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem' }}
               >
                 <option>Dễ</option>
                 <option>Trung bình</option>
@@ -362,7 +366,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
               <select 
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem' }}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem' }}
               >
                 <option>Tiếng Việt</option>
                 <option>English</option>
@@ -423,7 +427,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
           </label>
 
           {/* Data Source Block */}
-          <div style={{ border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', backgroundColor: '#FDF8F5', marginTop: '8px' }}>
+          <div style={{ border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', backgroundColor: 'var(--bg-primary)', marginTop: '8px' }}>
             <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em', marginBottom: '16px' }}>TÀI LIỆU LÀM NGUỒN DỮ LIỆU</div>
             
             <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '12px', border: '1px solid var(--border-light)', padding: '16px', marginBottom: '16px' }}>
@@ -432,7 +436,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
                 rows={5} 
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-light)', backgroundColor: '#FDF8F5', fontSize: '0.9rem', resize: 'none' }}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem', resize: 'none' }}
               ></textarea>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 <span>Dùng được độc lập, không cần upload file.</span>
@@ -448,7 +452,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
                   </span>
                 ))}
                 {uploadedSources.map((s, i) => (
-                  <span key={`up-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', backgroundColor: '#E8F5E9', border: '1px solid var(--brand-secondary)', borderRadius: '16px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--brand-secondary)', maxWidth: '100%' }}>
+                  <span key={`up-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', backgroundColor: 'var(--surface-green)', border: '1px solid var(--brand-secondary)', borderRadius: '16px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--brand-secondary)', maxWidth: '100%' }}>
                     <UploadCloud size={12} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>{s.name}</span>
                     <X size={12} style={{ cursor: 'pointer' }} onClick={() => setUploadedSources(prev => prev.filter((_, j) => j !== i))} />
                   </span>
@@ -481,7 +485,7 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
             disabled={isSubmitting}
             style={{ 
               padding: '12px 32px', 
-              backgroundColor: isSubmitting ? '#9CA3AF' : '#1B2A4E', 
+              backgroundColor: isSubmitting ? '#9CA3AF' : 'var(--btn-navy)', 
               border: 'none', 
               borderRadius: '24px', 
               fontWeight: 600, 

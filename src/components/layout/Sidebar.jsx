@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { FolderOpen, MessageCircle, Folder, Settings, Zap, FileText, User, LogOut, ChevronRight, ChevronDown, PenTool, Brain, BookMarked, Pencil, Trash2 } from 'lucide-react';
-import { LIBRARY_ROOT, LIBRARY_ROOT_NAME, listChildren } from '../../utils/googleDrive';
+import { FolderOpen, MessageCircle, Folder, Settings, Zap, FileText, User, LogOut, ChevronRight, ChevronDown, PenTool, Brain, BookMarked, Pencil, Trash2, Cloud, HardDrive, Users, Pin, X, Mic } from 'lucide-react';
+import * as drive from '../../utils/googleDrive';
 import UserProfileModal from '../modals/UserProfileModal';
 
 const Sidebar = () => {
@@ -135,30 +135,71 @@ const Sidebar = () => {
     setExpandedFolders(prev => ({ ...prev, [folderId]: !prev[folderId] }));
   };
 
-  // --- Public Drive library tree (lazy-loaded, mirrors the reference product's sidebar) ---
+  // --- Google Drive tree: the signed-in user's own Drive (lazy-loaded) + pinned folders ---
   const activeDriveFolder = new URLSearchParams(location.search).get('folder');
-  const [driveTree, setDriveTree] = useState({});      // parentId -> subfolders
-  const [driveExpanded, setDriveExpanded] = useState({ [LIBRARY_ROOT]: false });
+  const [driveConnected, setDriveConnected] = useState(drive.isConnected());
+  const [sharedDrives, setSharedDrives] = useState([]);
+  const [pinned, setPinned] = useState(drive.getPinnedFolders());
+  const [driveTree, setDriveTree] = useState({});      // parentId -> subfolders | {error}
+  const [driveExpanded, setDriveExpanded] = useState({});
+  const [driveBusy, setDriveBusy] = useState(false);
 
-  const toggleDriveNode = async (id) => {
-    const opening = !driveExpanded[id];
-    setDriveExpanded(prev => ({ ...prev, [id]: opening }));
-    if (opening && !driveTree[id]) {
-      try {
-        const { folders: subs } = await listChildren(id);
-        setDriveTree(prev => ({ ...prev, [id]: subs }));
-      } catch {
-        setDriveTree(prev => ({ ...prev, [id]: [] }));
-      }
+  useEffect(() => {
+    const sync = () => {
+      setDriveConnected(drive.isConnected());
+      setPinned(drive.getPinnedFolders());
+      setDriveTree({});
+    };
+    window.addEventListener(drive.AUTH_EVENT, sync);
+    drive.restoreSession().then(sync);
+    return () => window.removeEventListener(drive.AUTH_EVENT, sync);
+  }, []);
+
+  useEffect(() => {
+    if (!driveConnected) { setSharedDrives([]); return; }
+    drive.listSharedDrives().then(setSharedDrives).catch(() => setSharedDrives([]));
+  }, [driveConnected]);
+
+  const handleConnectDrive = async () => {
+    if (!drive.isConfigured()) { navigate('/settings'); return; }
+    setDriveBusy(true);
+    try {
+      await drive.connectDrive();
+      setDriveExpanded({ [drive.MY_DRIVE]: true });
+      navigate(`/documents?folder=${drive.MY_DRIVE}`);
+    } catch (err) {
+      alert(err.message || String(err));
     }
+    setDriveBusy(false);
   };
 
-  const DriveNode = ({ id, name, depth }) => {
+  const toggleDriveNode = (id) => setDriveExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+
+  // Load the subfolders of every expanded node that has none yet (also after sign-in, when
+  // the tree cache is cleared but nodes stay expanded).
+  const loadingNodes = React.useRef(new Set());
+  useEffect(() => {
+    Object.keys(driveExpanded).forEach(async (id) => {
+      if (!driveExpanded[id] || driveTree[id] !== undefined || loadingNodes.current.has(id)) return;
+      loadingNodes.current.add(id);
+      try {
+        const { folders: subs } = await drive.listChildren(id);
+        setDriveTree(prev => ({ ...prev, [id]: subs }));
+      } catch (err) {
+        setDriveTree(prev => ({ ...prev, [id]: { error: err.message || String(err) } }));
+      } finally {
+        loadingNodes.current.delete(id);
+      }
+    });
+  }, [driveExpanded, driveTree]);
+
+  const DriveNode = ({ id, name, depth, icon: Icon = Folder, onRemove }) => {
     const isActive = activeDriveFolder === id;
     const isOpen = driveExpanded[id];
+    const children = driveTree[id];
     return (
       <div>
-        <div style={{
+        <div title={name} style={{
           display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 8px', paddingLeft: `${8 + depth * 14}px`,
           borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: isActive ? 700 : 500,
           color: isActive ? 'var(--brand-secondary)' : 'var(--text-secondary)',
@@ -168,18 +209,31 @@ const Sidebar = () => {
             {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
           </span>
           <span onClick={() => navigate(`/documents?folder=${id}`)} style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
-            <Folder size={13} style={{ flexShrink: 0 }} />
-            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase' }}>{name}</span>
+            <Icon size={13} style={{ flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
           </span>
+          {onRemove && (
+            <button onClick={(e) => { e.stopPropagation(); onRemove(); }} title="Bỏ ghim"
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex' }}>
+              <X size={12} />
+            </button>
+          )}
         </div>
-        {isOpen && (driveTree[id] || []).map(sub => (
+        {isOpen && children === undefined && (
+          <div style={{ paddingLeft: `${30 + depth * 14}px`, fontSize: '0.72rem', color: 'var(--text-muted)', padding: '4px 0' }}>Đang tải…</div>
+        )}
+        {isOpen && children?.error && (
+          <div style={{ paddingLeft: `${30 + depth * 14}px`, fontSize: '0.72rem', color: 'var(--danger, #B91C1C)', padding: '4px 8px 4px 30px' }}>{children.error}</div>
+        )}
+        {isOpen && Array.isArray(children) && children.length === 0 && (
+          <div style={{ paddingLeft: `${30 + depth * 14}px`, fontSize: '0.72rem', color: 'var(--text-muted)', padding: '4px 0' }}>Không có thư mục con</div>
+        )}
+        {isOpen && Array.isArray(children) && children.map(sub => (
           <DriveNode key={sub.id} id={sub.id} name={sub.name} depth={depth + 1} />
         ))}
       </div>
     );
   };
-
-
 
   return (
     <aside style={{
@@ -231,6 +285,18 @@ const Sidebar = () => {
           </div>
         </NavLink>
 
+        <NavLink to="/speaking" style={({ isActive }) => ({
+          display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px',
+          color: isActive ? 'var(--bg-tertiary)' : 'var(--text-primary)',
+          backgroundColor: isActive ? 'var(--brand-primary)' : 'transparent',
+          fontWeight: 600, textDecoration: 'none'
+        })}>
+          <Mic size={20} />
+          <div>
+            <div>Luyện nói</div>
+          </div>
+        </NavLink>
+
         <NavLink to="/active-learning" style={({ isActive }) => ({
           display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px',
           color: (isActive || location.pathname === '/active-learning') ? 'var(--bg-tertiary)' : 'var(--text-primary)',
@@ -259,17 +325,32 @@ const Sidebar = () => {
       {/* Contextual Sections */}
       {isDocumentView ? (
         <>
-          {/* Public Drive library tree */}
+          {/* Google Drive: the user's own folders */}
           <div style={{ padding: '0 24px', marginBottom: '8px' }}>
-            <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>THƯ VIỆN DRIVE</h3>
+            <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>GOOGLE DRIVE</h3>
           </div>
-          <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', marginBottom: '20px', padding: '0 12px', maxHeight: '220px', overflowY: 'auto' }}>
-            <DriveNode id={LIBRARY_ROOT} name={LIBRARY_ROOT_NAME} depth={0} />
+          <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', marginBottom: '20px', padding: '0 12px', maxHeight: '260px', overflowY: 'auto' }}>
+            {driveConnected ? (
+              <>
+                <DriveNode id={drive.MY_DRIVE} name="Drive của tôi" depth={0} icon={HardDrive} />
+                <DriveNode id={drive.SHARED_WITH_ME} name="Được chia sẻ với tôi" depth={0} icon={Users} />
+                {sharedDrives.map(d => <DriveNode key={d.id} id={d.id} name={d.name} depth={0} icon={HardDrive} />)}
+              </>
+            ) : (
+              <button onClick={handleConnectDrive} disabled={driveBusy}
+                title={drive.isConfigured() ? 'Đăng nhập Google để xem các thư mục Drive của bạn' : 'Cần nhập OAuth Client ID trong Cài đặt'}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', margin: '0 4px 6px', borderRadius: '10px', border: '1px dashed var(--brand-primary)', background: 'transparent', color: 'var(--brand-primary)', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', opacity: driveBusy ? 0.6 : 1 }}>
+                <Cloud size={15} /> {driveBusy ? 'Đang chờ Google…' : 'Kết nối Google Drive'}
+              </button>
+            )}
+            {pinned.map(f => (
+              <DriveNode key={f.id} id={f.id} name={f.name} depth={0} icon={Pin} onRemove={() => drive.unpinFolder(f.id)} />
+            ))}
           </div>
 
           {/* Drive Folders */}
       <div style={{ padding: '0 24px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>THƯ MỤC DRIVE</h3>
+        <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>THƯ MỤC DỰ ÁN</h3>
         <button onClick={handleNewFolder} title="New Folder" style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
           <span style={{ fontSize: '1.2rem', fontWeight: 500 }}>+</span>
         </button>
@@ -439,8 +520,7 @@ const Sidebar = () => {
 
         <button onClick={() => {
           import('../../utils/googleAuth').then(m => {
-            m.signOutGoogle();
-            window.location.reload();
+            m.signOutGoogle().finally(() => window.location.reload());
           });
         }} style={{
           display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px',

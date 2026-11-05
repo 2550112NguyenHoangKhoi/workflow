@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Check } from 'lucide-react';
+import { renderInline } from '../../utils/inlineMarkdown';
+import { useEscape } from '../../utils/useEscape';
+import { bumpStreak } from '../SmartReminder';
 
 const DueFlashcardModal = ({ isOpen, onClose }) => {
+  useEscape(isOpen, onClose);
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -76,6 +80,7 @@ const DueFlashcardModal = ({ isOpen, onClose }) => {
   const submitReview = async (quality) => {
     try {
       const currentState = cardStates[currentIndex];
+      bumpStreak(); // a review keeps the daily streak (smart reminders)
       const response = await fetch('http://127.0.0.1:8000/api/flashcards/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -116,7 +121,7 @@ const DueFlashcardModal = ({ isOpen, onClose }) => {
       backdropFilter: 'blur(4px)'
     }}>
       <div style={{
-        backgroundColor: '#FAFAFA', borderRadius: '24px', width: '90%', maxWidth: '600px',
+        backgroundColor: 'var(--surface-plain)', borderRadius: '24px', width: '90%', maxWidth: '600px',
         display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)'
       }}>
         {/* Header */}
@@ -171,12 +176,12 @@ const DueFlashcardModal = ({ isOpen, onClose }) => {
                 }}
               >
                 {!isFlipped ? (
-                  <h3 style={{ fontSize: '1.5rem', color: 'var(--text-navy)', fontWeight: 700, margin: 0 }}>{currentCard?.front}</h3>
+                  <h3 style={{ fontSize: '1.5rem', color: 'var(--text-navy)', fontWeight: 700, margin: 0 }}>{renderInline(currentCard?.front)}</h3>
                 ) : (
                   <div>
-                    <h3 style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '16px', opacity: 0.7 }}>{currentCard?.front}</h3>
+                    <h3 style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '16px', opacity: 0.7 }}>{renderInline(currentCard?.front)}</h3>
                     <div style={{ height: '1px', width: '40px', backgroundColor: 'var(--border-medium)', margin: '0 auto 16px' }} />
-                    <p style={{ fontSize: '1.25rem', color: 'var(--text-navy)', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{currentCard?.back}</p>
+                    <p style={{ fontSize: '1.25rem', color: 'var(--text-navy)', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{renderInline(currentCard?.back)}</p>
                   </div>
                 )}
               </div>
@@ -186,7 +191,7 @@ const DueFlashcardModal = ({ isOpen, onClose }) => {
                 <button onClick={() => submitReview(1)} style={{ flex: 1, padding: '12px', backgroundColor: '#FEE2E2', color: '#991B1B', border: '1px solid #FCA5A5', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>
                   Hard (1)
                 </button>
-                <button onClick={() => submitReview(3)} style={{ flex: 1, padding: '12px', backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                <button onClick={() => submitReview(3)} style={{ flex: 1, padding: '12px', backgroundColor: 'var(--accent-amber-bg)', color: '#92400E', border: '1px solid #FCD34D', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>
                   Good (3)
                 </button>
                 <button onClick={() => submitReview(5)} style={{ flex: 1, padding: '12px', backgroundColor: '#D1FAE5', color: '#065F46', border: '1px solid #6EE7B7', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' }}>

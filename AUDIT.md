@@ -4,9 +4,11 @@
 > Regression tests for the backend fixes live in `tests/backend/` and run in CI before the build.
 >
 > **Not fixed, needs a decision or outside action:**
-> - Personal DB (P2): untracked, but still in **git history**. Purging it needs a history rewrite and a force-push to `main`.
+> - Release tags `v1.0.0` / `v1.0.1` still point at pre-purge commits (the session can't push tags). Move them to `16976a7` / `d17ba68` and rotate the leaked Gemini and Drive keys.
 > - Collaboration (invites / members / team chat / shares): needs a shared server. That's an architecture decision, so it's left as-is.
 > - Login bypass (hard-coded local user): kept on purpose (commit 9968c97). The user is now registered in the backend.
+>
+> **History purged (all branches):** `.env` (Gemini + Drive keys), the personal DB files, and AI-agent notes / build output / caches containing the Mac username and machine name.
 >
 > **Drive API key:** no longer built into the app. Users enter it in Settings → Google Drive (stored locally); `.env` is a dev-only fallback.
 >

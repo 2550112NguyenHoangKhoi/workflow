@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { User, X, Mail, Award, Clock } from 'lucide-react';
+import { useEscape } from '../../utils/useEscape';
 
-const UserProfileModal = ({ isOpen, onClose, user }) => {
-  const [stats, setStats] = useState({ document_count: 0, project_count: 0, last_login: null });
+const storedUser = () => { try { return JSON.parse(localStorage.getItem('workflow_user') || 'null'); } catch { return null; } };
+
+// The sidebar's "Hồ sơ của tôi" opens this without a user prop: fall back to the signed-in
+// user (it used to render nothing, so the button did nothing).
+const UserProfileModal = ({ isOpen, onClose, user: userProp }) => {
+  const user = userProp || (isOpen ? storedUser() : null);
+  useEscape(isOpen, onClose);
+  const [stats, setStats] = useState({ document_count: 0, project_count: 0, last_login: undefined });
+  const [progress, setProgress] = useState(null);
 
   useEffect(() => {
     if (isOpen && user?.email) {
@@ -10,8 +18,19 @@ const UserProfileModal = ({ isOpen, onClose, user }) => {
         .then(res => (res.ok ? res.json() : null))
         .then(data => { if (data) setStats(data); })
         .catch(err => console.error("Failed to load user stats", err));
+      // Points, streak and recent activity across writing, speaking and pronunciation practice.
+      fetch(`http://127.0.0.1:8000/api/writing/progress?email=${encodeURIComponent(user.email)}`)
+        .then(res => (res.ok ? res.json() : null)).then(setProgress).catch(() => setProgress(null));
     }
-  }, [isOpen, user]);
+  }, [isOpen, user?.email]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  let teachXp = 0, reviewStreak = 0;
+  try {
+    teachXp = Object.values(JSON.parse(localStorage.getItem('workflow_teach_xp') || '{}')).reduce((a, c) => a + (c.xp || 0), 0);
+    reviewStreak = JSON.parse(localStorage.getItem('workflow_streak') || '{}').count || 0;
+  } catch { /* storage off */ }
+  const MODE_LABEL = { sentence: 'Luyện câu', paragraph: 'Luyện đoạn văn', conversation: 'Hội thoại', ielts: 'IELTS Writing',
+    ielts_translate: 'IELTS · dịch bài mẫu', speaking: 'IELTS Speaking', pronunciation: 'Phát âm' };
 
   if (!isOpen || !user) return null;
 
@@ -69,12 +88,35 @@ const UserProfileModal = ({ isOpen, onClose, user }) => {
             </div>
           </div>
 
+          <div data-testid="profile-achievements" style={{ backgroundColor: 'var(--bg-tertiary)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '10px' }}>
+              <Award size={16} color="var(--brand-primary)" /> Thành tích luyện tập
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', textAlign: 'center', marginBottom: '10px' }}>
+              {[['Tổng điểm', (progress?.total_points ?? 0) + teachXp], ['Chuỗi luyện viết/nói', `${progress?.streak ?? 0} ngày`], ['Chuỗi ôn tập', `${reviewStreak} ngày`], ['Số buổi', progress?.sessions ?? 0]].map(([l, v]) => (
+                <div key={l} style={{ padding: '8px 4px', borderRadius: '10px', backgroundColor: 'var(--surface-plain)' }}>
+                  <div style={{ fontWeight: 900, color: 'var(--brand-primary)', fontSize: '1.05rem' }}>{v}</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>{l}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '4px' }}>Hoạt động gần đây</div>
+            {(progress?.recent || []).length === 0 ? (
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Chưa có buổi luyện tập nào.</div>
+            ) : progress.recent.slice(0, 5).map((r, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '3px 0', color: 'var(--text-primary)' }}>
+                <span>{MODE_LABEL[r.mode] || r.mode}{r.category ? ` · ${r.category}` : r.task ? ` · ${r.task}` : ''}</span>
+                <span style={{ color: 'var(--text-muted)' }}>+{r.points} · {r.created_at ? new Date(r.created_at).toLocaleDateString('vi-VN') : ''}</span>
+              </div>
+            ))}
+          </div>
+
           <div style={{ backgroundColor: 'var(--bg-tertiary)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '8px' }}>
               <Clock size={16} color="var(--brand-primary)" /> Lịch sử đăng nhập
             </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Đăng nhập gần nhất: {stats.last_login ? new Date(stats.last_login).toLocaleString() : 'Đang tải...'}
+              Đăng nhập gần nhất: {stats.last_login ? new Date(stats.last_login).toLocaleString() : stats.last_login === null ? '—' : 'Đang tải...'}
             </div>
           </div>
 

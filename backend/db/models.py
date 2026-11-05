@@ -42,6 +42,9 @@ class RoadmapItem(Base):
     description = Column(String, nullable=True)
     completed = Column(Integer, default=0) # 0 or 1 for boolean
     active = Column(Integer, default=0) # 0 or 1 for boolean
+    due_date = Column(String, nullable=True)      # ISO date when a deadline was given
+    estimated_time = Column(String, nullable=True)
+    needs_material = Column(Integer, default=0)   # 1 = syllabus topic with no uploaded source yet
 
     roadmap = relationship("Roadmap", back_populates="items")
 
@@ -136,6 +139,8 @@ class ChatMessage(Base):
     content = Column(String)
     persona = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    # Branching chat: the message this one answers / follows. NULL on legacy (linear) rows.
+    parent_id = Column(Integer, nullable=True)
 
     project = relationship("Project", back_populates="messages")
     document = relationship("Document")
@@ -198,6 +203,8 @@ class WritingAttempt(Base):
     points = Column(Integer, default=0)     # points earned this session
     num_items = Column(Integer, default=0)  # sentences graded (0 for ielts)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    exercise_id = Column(String, nullable=True, index=True)  # library item (attempt counts per exercise)
+    detail = Column(Text, nullable=True)     # JSON: speaking question/transcript/feedback for history
 
 class VocabWord(Base):
     __tablename__ = "vocab_words"
@@ -227,3 +234,25 @@ class VocabReview(Base):
     correct = Column(Integer, default=0)         # 0/1
     points = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class Feedback(Base):
+    """"Báo lỗi hoặc gửi feedback": kept locally (single-user app; there is no server to send it to)."""
+    __tablename__ = "feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kind = Column(String, default="bug")        # bug | idea
+    message = Column(Text)
+    page = Column(String, nullable=True)        # route the user was on
+    screenshot = Column(Text, nullable=True)    # PNG data URL (optional)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class Canvas(Base):
+    """Canvas workspace (nodes + edges as JSON) for a project or a single document."""
+    __tablename__ = "canvases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scope = Column(String, unique=True, index=True)   # "project:<id>" | "document:<id>"
+    data = Column(Text, default="{}")
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)

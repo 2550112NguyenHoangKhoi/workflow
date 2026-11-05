@@ -82,7 +82,7 @@ export default function NotificationsBell() {
   }
 
   const kindMeta = {
-    exam: { Icon: Sparkles, color: '#8A334C' },
+    exam: { Icon: Sparkles, color: 'var(--brand-primary)' },
     examdoc: { Icon: BookOpen, color: 'var(--brand-secondary)' },
     library: { Icon: FileText, color: '#3B82F6' },
   };

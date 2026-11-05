@@ -62,7 +62,7 @@ function SourcePdfPage({ doc, pageNum, zoom }) {
 
   return (
     <div ref={wrapRef} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-      <canvas ref={canvasRef} style={{ display: 'block', boxShadow: '0 1px 6px rgba(0,0,0,0.2)', borderRadius: 4, backgroundColor: '#fff' }} />
+      <canvas ref={canvasRef} style={{ display: 'block', boxShadow: '0 1px 6px rgba(0,0,0,0.2)', borderRadius: 4, backgroundColor: 'var(--bg-tertiary)' }} />
     </div>
   );
 }
@@ -88,6 +88,14 @@ function ExamTaker() {
   const submittedRef = useRef(false);
 
   const [sourceDoc, setSourceDoc] = useState(null);
+  const [essayFeedback, setEssayFeedback] = useState({}); // question index → grading result
+  const [cardsMade, setCardsMade] = useState(null);
+  // Teacher export: Word file with a saved print template (header, footer, logo).
+  const [wordOpen, setWordOpen] = useState(false);
+  const [tpl, setTpl] = useState(() => { try { return JSON.parse(localStorage.getItem('workflow_exam_template') || '{}'); } catch { return {}; } });
+  const [withKey, setWithKey] = useState(true);
+  const [withGuide, setWithGuide] = useState(true);
+  const [wordBusy, setWordBusy] = useState(false);
   const [sourcePage, setSourcePage] = useState(0);
   const [sourceMode, setSourceMode] = useState('pdf'); // 'pdf' | 'text'
   const [pdfDoc, setPdfDoc] = useState(null);
@@ -139,7 +147,9 @@ function ExamTaker() {
       setSeconds((s) => {
         if (s <= 1) {
           clearInterval(timerRef.current);
-          doSubmit(true);
+          // Submit via the ref: the doSubmit captured when this interval started saw the
+          // initial (empty) answers, so a timed-out exam was graded as all blank.
+          setTimeout(() => doSubmitRef.current(true), 0);
           return 0;
         }
         return s - 1;
@@ -172,10 +182,22 @@ function ExamTaker() {
 
   function isGradeable(q) { return q.type === 'mcq' || q.type === 'true_false' || q.type === 'short_answer'; }
 
+  // Short answers: ignore case, punctuation, extra spaces and a leading article, so
+  // "Mitochondria." or "the Calvin cycle" isn't marked wrong. Vietnamese diacritics still count.
+  function normalizeAnswer(s) {
+    return String(s ?? '')
+      .normalize('NFC')
+      .toLowerCase()
+      .replace(/[.,;:!?"'“”‘’()[\]{}]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^(the|a|an) /, '');
+  }
+
   function isCorrect(q, i) {
     const a = answers[i];
     if (q.type === 'mcq' || q.type === 'true_false') return a != null && a === q.correct_option_id;
-    if (q.type === 'short_answer') return a != null && String(a).trim().toLowerCase() === String(q.answer || '').trim().toLowerCase();
+    if (q.type === 'short_answer') return a != null && normalizeAnswer(a) !== '' && normalizeAnswer(a) === normalizeAnswer(q.answer);
     return false;
   }
 
@@ -201,11 +223,45 @@ function ExamTaker() {
     setSubmitted(true);
   }
 
+  const doSubmitRef = useRef(doSubmit);
+  doSubmitRef.current = doSubmit;
+
+  async function gradeEssay(q, i) {
+    setEssayFeedback(f => ({ ...f, [i]: { loading: true } }));
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/essay/grade', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q.question, answer: answers[i] || '', reference: q.answer || '', api_key: getEngineKey() }),
+      });
+      const data = await res.json();
+      setEssayFeedback(f => ({ ...f, [i]: res.ok ? data : { error: data.detail || 'Không chấm được.' } }));
+    } catch { setEssayFeedback(f => ({ ...f, [i]: { error: 'Không kết nối được máy chủ.' } })); }
+  }
+
+  // Missed questions → flashcards (question on the front, the right answer + why on the back).
+  async function wrongToFlashcards() {
+    const cards = questions.map((q, i) => ({ q, i })).filter(({ q, i }) => isGradeable(q) && !isCorrect(q, i)).map(({ q }) => {
+      const right = (q.type === 'mcq' || q.type === 'true_false') ? (q.options || []).find(o => o.id === q.correct_option_id)?.text : q.answer;
+      return { front: q.question, back: [right && `Đáp án: ${right}`, q.explanation].filter(Boolean).join('\n\n') };
+    }).filter(c => c.back);
+    if (!cards.length) { setCardsMade(0); return; }
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/flashcards', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cards, document_id: sourceDoc?.id ?? null }),
+      });
+      const data = await res.json();
+      setCardsMade(res.ok ? data.count : -1);
+    } catch { setCardsMade(-1); }
+  }
+
   function reset() {
     submittedRef.current = false;
     setAnswers({});
     setSubmitted(false);
     setScore({ correct: 0, total: 0 });
+    setEssayFeedback({});
+    setCardsMade(null);
     setSeconds((config.duration_minutes || 45) * 60);
   }
 
@@ -270,6 +326,24 @@ function ExamTaker() {
     win.print();
   }
 
+  async function downloadWord() {
+    setWordBusy(true);
+    try { localStorage.setItem('workflow_exam_template', JSON.stringify(tpl)); } catch { /* storage full (large logo) */ }
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/exams/${artifactId}/export.docx`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: { ...tpl, duration: tpl.duration || config.duration_minutes }, answer_key: withKey, grading_guide: withGuide }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Không xuất được file Word.');
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url; a.download = `${(title || 'de-thi').replace(/[\\/:*?"<>|]+/g, '_')}.docx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setWordOpen(false);
+    } catch (e) { alert(e.message); } finally { setWordBusy(false); }
+  }
+
   function renderOptions(q, i) {
     return (q.options || []).map((o, oi) => {
       const selected = answers[i] === o.id;
@@ -306,7 +380,7 @@ function ExamTaker() {
     return (
       <div key={i} style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: 24, border: '1px solid var(--border-light)', padding: 24, marginBottom: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <span style={{ backgroundColor: '#F8EFEA', color: '#8A334C', fontWeight: 700, fontSize: '0.7rem', borderRadius: 8, padding: '4px 10px' }}>
+          <span style={{ backgroundColor: 'var(--surface-blush)', color: 'var(--brand-primary)', fontWeight: 700, fontSize: '0.7rem', borderRadius: 8, padding: '4px 10px' }}>
             CÂU {i + 1} · {TYPE_LABEL[q.type]}
           </span>
           {reveal && gradeable && (
@@ -341,9 +415,12 @@ function ExamTaker() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
               <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-navy)' }}>Giải thích chi tiết:</span>
               {q.source_ref && (
-                <span style={{ backgroundColor: '#F8EFEA', color: '#8A334C', fontSize: '0.75rem', padding: '2px 8px', borderRadius: 999, border: '1px solid #E5D5C5' }}>
-                  {q.source_ref}
-                </span>
+                // Jumps the source viewer (right column) to the cited page.
+                <button type="button" title="Mở trang này trong tài liệu nguồn"
+                  onClick={() => { const n = parseInt(String(q.source_ref).match(/\d+/)?.[0], 10); if (n) setSourcePage(Math.max(0, Math.min((totalPages || n) - 1, n - 1))); }}
+                  style={{ backgroundColor: 'var(--surface-blush)', color: 'var(--brand-primary)', fontSize: '0.75rem', padding: '2px 8px', borderRadius: 999, border: '1px solid #E5D5C5', cursor: 'pointer' }}>
+                  {q.source_ref} ↗
+                </button>
               )}
             </div>
             
@@ -364,6 +441,30 @@ function ExamTaker() {
                 {q.explanation}
               </div>
             )}
+            {q.type === 'essay' && submitted && (answers[i] || '').trim() && (() => {
+              const fb = essayFeedback[i];
+              if (!fb) return (
+                <button onClick={() => gradeEssay(q, i)} style={{ marginTop: 12, backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: 12, padding: '8px 14px', fontWeight: 700, cursor: 'pointer' }}>
+                  Chấm bài tự luận
+                </button>
+              );
+              if (fb.loading) return <div style={{ marginTop: 12, color: 'var(--text-muted)' }}>Đang chấm…</div>;
+              if (fb.error) return <div style={{ marginTop: 12, color: '#EF4444' }}>{fb.error}</div>;
+              return (
+                <div data-testid="essay-feedback" style={{ marginTop: 12, border: '2px solid var(--border-medium)', borderRadius: 12, padding: 12, backgroundColor: 'var(--bg-primary)' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.08em', color: 'var(--brand-primary)' }}>NHẬN XÉT {fb.engine === 'ai' ? 'CỦA AI' : '(OFFLINE)'}</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 900, color: fb.score >= 70 ? '#059669' : fb.score >= 50 ? '#D97706' : '#DC2626' }}>{fb.score}/100 · {fb.grade}</div>
+                  <div style={{ color: 'var(--text-navy)', margin: '4px 0 8px' }}>{fb.feedback}</div>
+                  {(fb.criteria || []).map((c, k) => (
+                    <div key={k} style={{ display: 'flex', gap: 6, fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 4 }}>
+                      {c.met ? <CheckCircle2 size={16} color="#059669" style={{ flexShrink: 0 }} /> : <XCircle size={16} color="#DC2626" style={{ flexShrink: 0 }} />}
+                      <span><b style={{ color: 'var(--text-navy)' }}>{c.criterion}</b> {c.note}</span>
+                    </div>
+                  ))}
+                  {fb.suggestions?.length > 0 && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 6 }}>Gợi ý: {fb.suggestions.join(' ')}</div>}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -372,6 +473,32 @@ function ExamTaker() {
 
   if (loading) return <div style={{ padding: 48, color: 'var(--text-secondary)' }}>Đang tải đề thi…</div>;
   if (error) return <div style={{ padding: 48, color: '#DC2626' }}>{error}</div>;
+
+  const wordDialog = wordOpen && (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div role="dialog" aria-label="Xuất đề Word" style={{ width: 520, maxWidth: '94vw', maxHeight: '90vh', overflowY: 'auto', backgroundColor: 'var(--bg-tertiary)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, flex: 1, color: 'var(--text-navy)' }}>Xuất đề (Word) · Template in</h3>
+          <button onClick={() => setWordOpen(false)} aria-label="Đóng" style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+        </div>
+        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Header, footer và logo được lưu lại cho lần xuất sau.</div>
+        {[['school', 'Tên trường'], ['department', 'Tổ / Khoa'], ['exam_name', 'Tên kỳ thi'], ['subject', 'Môn'], ['duration', 'Thời gian (phút)'], ['header_note', 'Ghi chú đầu đề (VD: Mã đề 101)'], ['footer', 'Chân trang']].map(([k, l]) => (
+          <label key={k} style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            {l}
+            <input name={k} value={tpl[k] || ''} onChange={e => setTpl(t => ({ ...t, [k]: e.target.value }))} style={{ padding: 8, borderRadius: 8, border: '1px solid var(--border-medium)', backgroundColor: 'var(--surface-plain)', color: 'var(--text-ink)' }} />
+          </label>
+        ))}
+        <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          Logo trường
+          <input type="file" accept="image/png,image/jpeg" onChange={e => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setTpl(t => ({ ...t, logo: r.result })); r.readAsDataURL(f); }} />
+          {tpl.logo && <img src={tpl.logo} alt="logo" style={{ height: 32 }} />}
+        </label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-navy)' }}><input type="checkbox" checked={withKey} onChange={e => setWithKey(e.target.checked)} /> Kèm đáp án và thang điểm</label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-navy)' }}><input type="checkbox" checked={withGuide} onChange={e => setWithGuide(e.target.checked)} /> Kèm hướng dẫn chấm tự luận</label>
+        <button onClick={downloadWord} disabled={wordBusy} style={{ backgroundColor: '#2B579A', color: '#fff', border: 'none', borderRadius: 10, padding: 12, fontWeight: 700, cursor: 'pointer' }}>{wordBusy ? 'Đang xuất…' : 'Tải file .docx'}</button>
+      </div>
+    </div>
+  );
 
   const btnRound = { width: 40, height: 40, borderRadius: '50%', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' };
   const lowTime = seconds < 5 * 60;
@@ -394,11 +521,12 @@ function ExamTaker() {
     display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 700,
     padding: '4px 10px', borderRadius: 8, cursor: 'pointer', border: '1px solid',
     borderColor: active ? '#8A334C' : 'var(--border-medium)',
-    backgroundColor: active ? '#8A334C' : 'var(--bg-primary)', color: active ? '#fff' : 'var(--text-secondary)',
+    backgroundColor: active ? 'var(--brand-primary)' : 'var(--bg-primary)', color: active ? '#fff' : 'var(--text-secondary)',
   });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
+      {wordDialog}
       {/* HEADER BAR */}
       <div style={{ height: 72, backgroundColor: '#E2F0D9', borderBottom: '1px solid var(--border-light)', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -411,6 +539,9 @@ function ExamTaker() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={downloadPDF} style={{ backgroundColor: '#3B6B59', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600 }}>
             <Download size={16} /> Tải PDF
+          </button>
+          <button onClick={() => setWordOpen(true)} data-testid="export-word" style={{ backgroundColor: '#2B579A', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600 }}>
+            <FileText size={16} /> Tải Word
           </button>
           <button onClick={downloadJSON} style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-navy)', border: '1px solid var(--border-medium)', borderRadius: 10, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600 }}>
             <FileText size={16} /> Tải JSON
@@ -462,7 +593,7 @@ function ExamTaker() {
               <button
                 onClick={addMore}
                 disabled={adding}
-                style={{ backgroundColor: adding ? 'transparent' : '#8A334C', color: adding ? '#8A334C' : '#fff', border: '1px solid #8A334C', borderRadius: 14, padding: 10, fontWeight: 700, width: '100%', cursor: adding ? 'not-allowed' : 'pointer' }}
+                style={{ backgroundColor: adding ? 'transparent' : '#8A334C', color: adding ? 'var(--brand-primary)' : '#fff', border: '1px solid var(--brand-primary)', borderRadius: 14, padding: 10, fontWeight: 700, width: '100%', cursor: adding ? 'not-allowed' : 'pointer' }}
               >
                 {adding ? 'Đang tạo…' : 'Tạo thêm'}
               </button>
@@ -471,7 +602,7 @@ function ExamTaker() {
 
           {!submitted ? (
             <>
-              <div style={{ backgroundColor: '#F8EFEA', borderRadius: 14, padding: 14, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>
+              <div style={{ backgroundColor: 'var(--surface-blush)', borderRadius: 14, padding: 14, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>
                 Làm thử đề thi được AI tạo trực tiếp dựa trên tài liệu bạn đã chọn. Bấm Nộp bài để xem điểm và giải thích chi tiết.
               </div>
               <button onClick={() => doSubmit(false)} style={{ backgroundColor: '#3B6B59', color: '#fff', border: 'none', borderRadius: 14, padding: 14, fontWeight: 800, width: '100%', cursor: 'pointer', marginBottom: 16 }}>
@@ -484,9 +615,14 @@ function ExamTaker() {
               <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-navy)', marginBottom: 4 }}>Kết quả làm bài</div>
               <div style={{ fontSize: '2rem', fontWeight: 900, color: '#3B6B59' }}>{score.correct} / {score.total}</div>
               <div style={{ color: 'var(--text-secondary)', marginBottom: 10 }}>Đúng {pct}%</div>
-              <button onClick={reset} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#8A334C', color: '#fff', border: 'none', borderRadius: 20, padding: '10px 16px', fontWeight: 700, cursor: 'pointer', width: '100%' }}>
+              <button onClick={reset} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: 20, padding: '10px 16px', fontWeight: 700, cursor: 'pointer', width: '100%' }}>
                 <RotateCcw size={16} /> Làm lại bài thi
               </button>
+              {score.correct < score.total && (
+                <button onClick={wrongToFlashcards} disabled={cardsMade !== null && cardsMade >= 0} style={{ marginTop: 8, width: '100%', borderRadius: 20, padding: '9px 14px', fontWeight: 700, cursor: 'pointer', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-navy)' }}>
+                  {cardsMade === null ? 'Biến câu sai thành flashcard' : cardsMade > 0 ? `✓ Đã tạo ${cardsMade} flashcard` : cardsMade === 0 ? 'Không có thẻ mới' : 'Không tạo được'}
+                </button>
+              )}
             </div>
           )}
 
@@ -501,7 +637,7 @@ function ExamTaker() {
           <div style={{ fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: 1, fontSize: '0.75rem', marginBottom: 16 }}>NGUỒN: TÀI LIỆU ĐỐI CHIẾU</div>
           
           {sourceDoc ? (
-            <div style={{ border: '2px solid #8A334C', borderRadius: 16, display: 'flex', flexDirection: 'column', height: 'calc(100% - 32px)' }}>
+            <div style={{ border: '2px solid var(--brand-primary)', borderRadius: 16, display: 'flex', flexDirection: 'column', height: 'calc(100% - 32px)' }}>
               <div style={{ padding: 16, borderBottom: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)', borderTopLeftRadius: 14, borderTopRightRadius: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
                   <div style={{ fontWeight: 700, color: 'var(--text-navy)', fontSize: '0.9rem', wordBreak: 'break-word', flex: 1 }}>{sourceDoc.filename}</div>

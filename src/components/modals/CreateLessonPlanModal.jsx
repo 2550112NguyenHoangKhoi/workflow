@@ -1,14 +1,26 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, UploadCloud, BookOpen, Loader2, RotateCcw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { useEscape } from '../../utils/useEscape';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { getEngineKey } from '../../utils/engine';
 import { readUploadResult } from '../../utils/uploads';
 
 const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) => {
+  useEscape(isOpen, onClose);
   const activeDocId = documentId || (() => { const match = window.location.hash.match(/#\/document\/([^/]+)/); return match ? parseInt(match[1], 10) : null; })();
-  const [title, setTitle] = useState("Giáo án 1 tiết - Tiêu hóa ở dạ dày");
+  // Default title from the open document (it was hard-coded to "Tiêu hóa ở dạ dày").
+  const [title, setTitle] = useState("");
+  useEffect(() => {
+    if (!isOpen || title) return;
+    if (!documentId) { setTitle(`Giáo án ${new Date().toLocaleDateString('vi-VN')}`); return; }
+    fetch(`http://127.0.0.1:8000/api/documents/${documentId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setTitle(`Giáo án - ${(d?.filename || 'tài liệu').replace(/\.[^.]+$/, '')}`))
+      .catch(() => setTitle('Giáo án'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, documentId]);
   const [description, setDescription] = useState("");
   const [target, setTarget] = useState("");
   const [length, setLength] = useState("Chuẩn giáo án 45 phút");
@@ -145,7 +157,7 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
             <button onClick={handleRegenerate} style={{ padding: '12px 28px', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)', borderRadius: '24px', fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <RotateCcw size={15} /> Tạo lại
             </button>
-            <button onClick={handleClose} style={{ padding: '12px 28px', backgroundColor: '#8A334C', border: 'none', borderRadius: '24px', fontWeight: 600, color: 'white', cursor: 'pointer' }}>
+            <button onClick={handleClose} style={{ padding: '12px 28px', backgroundColor: 'var(--brand-primary)', border: 'none', borderRadius: '24px', fontWeight: 600, color: 'white', cursor: 'pointer' }}>
               Đóng
             </button>
           </div>
@@ -185,7 +197,7 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
               type="text" 
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem', fontWeight: 600 }} 
+              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem', fontWeight: 600 }} 
             />
           </div>
 
@@ -195,7 +207,7 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
               rows={3} 
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem', resize: 'none' }}
+              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem', resize: 'none' }}
             ></textarea>
           </div>
 
@@ -206,7 +218,7 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder="Ví dụ: Học sinh lớp 8, người đi làm mất gốc..." 
-              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem' }} 
+              style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem' }} 
             />
           </div>
 
@@ -215,7 +227,7 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
             <select 
               value={length}
               onChange={(e) => setLength(e.target.value)}
-              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: '#FDF8F5', fontSize: '0.9rem' }}
+              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-medium)', backgroundColor: 'var(--bg-primary)', fontSize: '0.9rem' }}
             >
               <option>Chuẩn giáo án 45 phút</option>
               <option>Giáo án 90 phút</option>
@@ -224,7 +236,7 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
           </div>
 
           {/* Data Source Block */}
-          <div style={{ border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', backgroundColor: '#FDF8F5', marginTop: '8px' }}>
+          <div style={{ border: '1px dashed var(--border-medium)', borderRadius: '16px', padding: '16px', backgroundColor: 'var(--bg-primary)', marginTop: '8px' }}>
             <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em', marginBottom: '16px' }}>TÀI LIỆU LÀM NGUỒN DỮ LIỆU</div>
             
             <input 
