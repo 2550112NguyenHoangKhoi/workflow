@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Upload } from 'lucide-react';
+import { readUploadResult } from '../../utils/uploads';
 
 const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
   const [file, setFile] = useState(null);
@@ -47,10 +48,12 @@ const UploadModal = ({ isOpen, onClose, onUpload, projectId, documentId }) => {
         method: 'POST',
         body: formData,
       });
-      if (res.ok) {
+      const result = await readUploadResult(res);
+      if (result.ok) {
+        if (result.warning) alert(result.message);
         onUpload();
       } else {
-        alert("Upload failed.");
+        alert(result.message);
       }
     } catch (err) {
       console.error(err);

@@ -819,116 +819,180 @@ async def generate_flashcards(request: FlashcardRequest, db: Session = Depends(g
 
 from fastapi import Form
 
+TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".csv", ".json", ".html", ".htm", ".tex", ".rtf", ".srt", ".vtt", ""}
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+MEDIA_SUFFIXES = {".mp4", ".mp3", ".m4a", ".wav"}
+
+
+def _decode_text_file(raw: bytes) -> str:
+    """Plain-text uploads: reject binaries, then try the common encodings in order."""
+    if b"\x00" in raw[:4096] and not raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        raise ValueError("binary")
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16")
+    # cp1258 = Windows Vietnamese, the usual non-UTF-8 encoding for Vietnamese .txt files.
+    for enc in ("utf-8-sig", "cp1258"):
+        try:
+            return raw.decode(enc)
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
 @app.post("/api/documents/upload")
 def upload_document(
     file: UploadFile = File(...),
     project_id: int | None = Form(None),
     db: Session = Depends(get_db)
 ):
-    import tempfile, os, shutil
-    
-    suffix = os.path.splitext(file.filename)[1].lower()
+    """Store an uploaded source and its extracted text.
+
+    Unsupported or unreadable files are rejected (422) instead of being stored as empty
+    documents that every AI feature then silently runs on. When the file is fine but no text
+    could be extracted (scanned PDF, OCR/transcription extras not installed) the document is
+    kept — it can still be viewed — and the response carries a `warning`."""
+    import tempfile, shutil
+
+    suffix = os.path.splitext(file.filename or "")[1].lower()
+    if suffix not in TEXT_SUFFIXES | IMAGE_SUFFIXES | MEDIA_SUFFIXES | {".pdf", ".docx"}:
+        raise HTTPException(status_code=422, detail=(
+            f"Định dạng '{suffix}' chưa được hỗ trợ. Hãy dùng PDF, DOCX, TXT/MD, ảnh (PNG/JPG) "
+            "hoặc âm thanh/video (MP3/MP4). Với PPTX/DOC, hãy xuất sang PDF trước."))
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         shutil.copyfileobj(file.file, tmp)
         path = tmp.name
-    
+
     try:
         text = ""
+        warning = None
         kind = "document"
         page_count = None
         pages_data = None
-        
+
         if suffix == ".pdf":
             kind = "pdf"
             import pdfplumber
             try:
                 with pdfplumber.open(path) as pdf:
-                    pages = []
-                    for page in pdf.pages:
-                        page_text = (page.extract_text() or "") + "\n"
-                        pages.append(page_text)
-                        text += page_text
-                    page_count = len(pages)
-                    pages_data = json.dumps(pages)
+                    pages = [(page.extract_text() or "") + "\n" for page in pdf.pages]
             except Exception:
-                pass
-        elif suffix in [".docx"]:
+                raise HTTPException(status_code=422, detail="Không đọc được file PDF (file hỏng hoặc có mật khẩu).")
+            text = "".join(pages)
+            page_count = len(pages)
+            pages_data = json.dumps(pages)
+            if not text.strip():
+                warning = "PDF không có lớp chữ (có thể là bản scan) nên các tính năng AI sẽ không có nội dung để dùng."
+        elif suffix == ".docx":
             kind = "docx"
             try:
                 import docx
                 d = docx.Document(path)
-                text = "\n".join([p.text for p in d.paragraphs])
+                text = "\n".join(p.text for p in d.paragraphs)
             except Exception:
-                pass
-        elif suffix in [".png", ".jpg", ".jpeg", ".webp"]:
+                raise HTTPException(status_code=422, detail="Không đọc được file DOCX (file hỏng?).")
+        elif suffix in IMAGE_SUFFIXES:
             kind = "image"
             try:
                 import pytesseract
                 from PIL import Image
                 text = pytesseract.image_to_string(Image.open(path), lang="vie+eng")
-            except Exception:
-                pass
-        elif suffix in [".mp4", ".mp3", ".m4a", ".wav"]:
+            except ImportError:
+                warning = "Chưa cài OCR (pytesseract + Tesseract) nên chưa trích được chữ từ ảnh."
+            except Exception as e:
+                warning = f"Không nhận dạng được chữ trong ảnh: {e}"
+        elif suffix in MEDIA_SUFFIXES:
             kind = "audio" if suffix in [".mp3", ".m4a", ".wav"] else "video"
             try:
                 from faster_whisper import WhisperModel
                 model = WhisperModel("tiny", device="cpu", compute_type="int8")
                 segments, info = model.transcribe(path)
-                text = "\n".join([segment.text for segment in segments])
-            except Exception:
-                pass
+                text = "\n".join(segment.text for segment in segments)
+            except ImportError:
+                warning = "Chưa cài faster-whisper nên chưa chuyển được âm thanh thành chữ."
+            except Exception as e:
+                warning = f"Không chuyển được âm thanh thành chữ: {e}"
         else:
+            with open(path, "rb") as f:
+                raw = f.read()
             try:
-                with open(path, "r", encoding="utf-8") as f:
-                    text = f.read()
-            except Exception:
-                pass
-                
+                text = _decode_text_file(raw)
+            except ValueError:
+                raise HTTPException(status_code=422, detail="File không phải văn bản thuần (có vẻ là file nhị phân).")
+
         doc = crud.create_document(db, filename=file.filename, content=text, kind=kind, project_id=project_id, page_count=page_count, pages_data=pages_data)
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         shutil.copyfile(path, os.path.join(UPLOAD_DIR, f"{doc.id}{suffix}"))
-        return {"id": doc.id, "filename": doc.filename, "kind": doc.kind, "upload_date": doc.upload_date.isoformat()}
+        out = {"id": doc.id, "filename": doc.filename, "kind": doc.kind, "upload_date": doc.upload_date.isoformat()}
+        if warning:
+            out["warning"] = warning
+        return out
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         os.unlink(path)
 
+
+def _youtube_video_id(url: str) -> str | None:
+    import urllib.parse
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if host.endswith("youtu.be"):
+        return parsed.path.lstrip("/").split("/")[0] or None
+    if "youtube" in host:
+        q = urllib.parse.parse_qs(parsed.query).get("v")
+        if q:
+            return q[0]
+        parts = [p for p in parsed.path.split("/") if p]
+        if len(parts) >= 2 and parts[0] in ("shorts", "embed", "live", "v"):
+            return parts[1]
+    return None
+
+
+def _youtube_transcript(video_id: str) -> str:
+    from youtube_transcript_api import YouTubeTranscriptApi
+    langs = ["vi", "en"]
+    if hasattr(YouTubeTranscriptApi, "get_transcript"):  # youtube-transcript-api < 1.0
+        return "\n".join(t["text"] for t in YouTubeTranscriptApi.get_transcript(video_id, languages=langs))
+    fetched = YouTubeTranscriptApi().fetch(video_id, languages=langs)  # >= 1.0
+    return "\n".join(snippet.text for snippet in fetched)
+
+
 @app.post("/api/documents/ingest_url")
 @app.post("/api/documents/url")
 def ingest_url(request: UrlIngestRequest, db: Session = Depends(get_db)):
-    url = request.url
+    url = (request.url or "").strip()
+    if not url.lower().startswith(("http://", "https://")):
+        raise HTTPException(status_code=422, detail="Liên kết phải bắt đầu bằng http:// hoặc https://")
     text = ""
     filename = url
     kind = "link"
-    
-    if "youtube.com" in url or "youtu.be" in url:
+
+    video_id = _youtube_video_id(url)
+    if video_id:
         kind = "video"
+        filename = f"YouTube: {video_id}"
         try:
-            from youtube_transcript_api import YouTubeTranscriptApi
-            import urllib.parse
-            if "youtu.be" in url:
-                video_id = url.split("/")[-1].split("?")[0]
-            else:
-                parsed = urllib.parse.urlparse(url)
-                video_id = urllib.parse.parse_qs(parsed.query).get('v', [None])[0]
-            if video_id:
-                try:
-                    transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['vi', 'en'])
-                    text = "\n".join([t['text'] for t in transcript])
-                    filename = f"YouTube: {video_id}"
-                except Exception:
-                    pass
-        except ImportError:
-            pass
+            text = _youtube_transcript(video_id)
+        except Exception as e:
+            print(f"[ingest] YouTube transcript failed for {video_id}: {e}")
+            raise HTTPException(status_code=422, detail="Video này không có phụ đề (vi/en) để trích nội dung.")
     else:
         try:
             import trafilatura
             downloaded = trafilatura.fetch_url(url)
             if downloaded:
                 text = trafilatura.extract(downloaded) or ""
-        except ImportError:
-            pass
-            
+                meta = trafilatura.extract_metadata(downloaded)
+                if meta is not None and getattr(meta, "title", None):
+                    filename = meta.title
+        except Exception as e:
+            print(f"[ingest] fetch failed for {url}: {e}")
+        if not text.strip():
+            raise HTTPException(status_code=422, detail="Không lấy được nội dung từ trang này (trang cần đăng nhập, chặn tải, hoặc không có văn bản).")
+
     doc = crud.create_document(db, filename=filename, content=text, kind=kind, project_id=request.project_id)
     return {"id": doc.id, "filename": doc.filename, "kind": doc.kind, "upload_date": doc.upload_date.isoformat()}
 

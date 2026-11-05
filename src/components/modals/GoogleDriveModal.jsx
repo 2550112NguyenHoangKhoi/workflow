@@ -3,6 +3,7 @@ import { X, Folder, FileText, Download, Loader2, Cloud, ChevronRight, CheckCircl
 import {
   isConfigured, isConnected, connectDrive, listChildren, importFileToLibrary,
 } from '../../utils/googleDrive';
+import { readUploadResult } from '../../utils/uploads';
 
 const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
   // --- Local folder bulk import (no Google login needed) ---
@@ -25,17 +26,21 @@ const GoogleDriveModal = ({ isOpen, onClose, onImport }) => {
     setError(null);
     setUploading({ done: 0, total: docs.length });
     let ok = 0;
+    const problems = [];
     for (let i = 0; i < docs.length; i++) {
       try {
         const form = new FormData();
         form.append('file', docs[i]);
         const res = await fetch('http://127.0.0.1:8000/api/documents/upload', { method: 'POST', body: form });
-        if (res.ok) ok++;
-      } catch { /* skip bad file */ }
+        const result = await readUploadResult(res);
+        if (result.ok) ok++;
+        if (result.message) problems.push(`${docs[i].name}: ${result.message}`);
+      } catch { problems.push(`${docs[i].name}: lỗi kết nối`); }
       setUploading({ done: i + 1, total: docs.length });
     }
     setUploading(null);
     setImportedCount(ok);
+    if (problems.length) setError(problems.join('\n'));
     onImport?.();
   };
 
