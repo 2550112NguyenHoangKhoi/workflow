@@ -492,6 +492,35 @@ Columns: **ID**, **Where** (file and symbol), **Symptom**, **Root cause**, **Fix
 
 ---
 
+## 11b. Reference products and feature gaps (surveyed 2026-11-05)
+
+The owner names two products as inspiration. Copy **features and mechanics, not branding, text or assets**. A search found no copied marketing text in `src/`.
+
+**english.datpmt.com** (public pages; the exercises themselves need sign-in):
+
+| Their feature | Workflow today | Gap |
+|---|---|---|
+| Sentence writing: 3 levels × 20 categories | `WritingPractice` sentence mode, same 20 categories | none |
+| Paragraph writing: Emails / Diaries / Essays / Articles / Stories / Reports | same 6 content types | none |
+| IELTS Writing: level → task → **exercise library** (Task 1: 360, filter by Bar / Pie / Mixed / Line / Table; Task 2: 539), each with an attempt count, a "New" badge and "last practiced" | one random prompt per click; Task 1 prompts are text-only; no history per exercise | **Exercise library with per-exercise attempt history; chart-type filter; rendered Task 1 charts** |
+| Pronunciation (AI feedback on spoken sentences, 3 levels) + conversations | none | speech recording + scoring (e.g. Web Speech API or Whisper, then compare with the target sentence) |
+| IELTS Speaking Parts 1–3 (full simulation and history "coming soon" on their side) | none | cue cards + recording + offline/AI rubric |
+| Leaderboard (points) | points/streaks exist locally (vocabulary, writing) | single-user app: a personal progress/history page instead |
+
+**omilearn.com** (public landing page; the app needs an account):
+
+| Their feature | Workflow today | Gap |
+|---|---|---|
+| AI roadmap **scheduled on a calendar from a deadline / exam date** ("Lịch học tuần này") | roadmap steps without dates; Study Plan → `.ics` export | deadline input → dated schedule, a "today" view and reminders |
+| AI material search with "trusted" source labels | `/api/search` (DuckDuckGo + AI curation) | source-trust labelling |
+| **Smart reminders: a quiz inside the notification**, streak nudges | `NotificationsBell` only lists shared items | Electron native notifications with a due flashcard/quiz question; daily streak reminder |
+| **Branching (non-linear) chat**: each follow-up opens a branch | linear chat per document/project | `parent_id` on `chat_messages` + a thread/branch UI |
+| Active learning (teach-back) with XP and a "memory %" | `ActiveLearning` (understanding score) | XP/memory tracking over time |
+| Auto summary / flashcards / quizzes / spaced repetition | present | — |
+| Public HUST study library | `LIBRARY_ROOT` in `src/utils/googleDrive.js` **is omilearn's public Drive folder** | depends on a third party keeping it public; make it configurable or self-hosted (backlog #12) |
+
+---
+
 ## 12. Verification recipes
 
 - **Endpoint fuzz** (offline): post every generator endpoint with EN, VI, empty, symbol and very long inputs. Assert no 5xx and valid shapes (MCQ `correct_option_id` ∈ option ids; concept-map edges reference existing nodes).
