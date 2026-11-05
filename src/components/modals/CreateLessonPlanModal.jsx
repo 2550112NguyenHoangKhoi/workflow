@@ -3,6 +3,7 @@ import { X, UploadCloud, BookOpen, Loader2, RotateCcw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import { getEngineKey } from '../../utils/engine';
 
 const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) => {
   const activeDocId = documentId || (() => { const match = window.location.hash.match(/#\/document\/([^/]+)/); return match ? parseInt(match[1], 10) : null; })();
@@ -64,7 +65,7 @@ const CreateLessonPlanModal = ({ isOpen, onClose, projectId, documentId, onSucce
       setIsSubmitting(true);
       const payload = {
         topic_or_text: target || `Tiêu đề: ${title}. Mô tả: ${description}. Độ dài: ${length}.`,
-        api_key: localStorage.getItem('workflow_gemini_key') || localStorage.getItem('workflow_api_key') || '',
+        api_key: getEngineKey(),
         project_id: projectId ? parseInt(projectId) : null,
         document_id: activeDocId ? parseInt(activeDocId) : null,
       };

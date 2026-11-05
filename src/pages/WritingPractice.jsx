@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Volume2, X } from 'lucide-react';
+import { getEngineKey } from '../utils/engine';
 
 function getEmail() {
   try { return JSON.parse(localStorage.getItem('workflow_user') || '{}').email; }
@@ -154,7 +155,7 @@ export default function WritingPractice() {
     }
     setLoading(true);
     try {
-      const apiKey = localStorage.getItem('workflow_api_key') || '';
+      const apiKey = getEngineKey();
       const email = getEmail();
 
       const res = await fetch('http://127.0.0.1:8000/api/writing/lessons/generate', {
@@ -189,7 +190,7 @@ export default function WritingPractice() {
 
     setLoading(true);
     try {
-      const apiKey = localStorage.getItem('workflow_api_key') || '';
+      const apiKey = getEngineKey();
       const currentVi = lesson.sentences[currentIndex].vi;
       const refEn = lesson.sentences[currentIndex].reference_en;
       const res = await fetch('http://127.0.0.1:8000/api/writing/grade', {
@@ -234,7 +235,7 @@ export default function WritingPractice() {
     setDictLoading(true);
     setDictOpen(true);
     try {
-      const apiKey = localStorage.getItem('workflow_api_key') || '';
+      const apiKey = getEngineKey();
       const text = lesson.sentences.map(s => s.reference_en).join(' ');
       const res = await fetch('http://127.0.0.1:8000/api/writing/vocab_bank', {
         method: 'POST',
@@ -267,7 +268,7 @@ export default function WritingPractice() {
   const showHint = async () => {
     setHintLoading(true);
     try {
-      const apiKey = localStorage.getItem('workflow_api_key') || '';
+      const apiKey = getEngineKey();
       const text = lesson.sentences[currentIndex].reference_en;
       const res = await fetch('http://127.0.0.1:8000/api/writing/vocab_bank', {
         method: 'POST',
@@ -291,7 +292,7 @@ export default function WritingPractice() {
   const handleSaveFlashcards = async () => {
     setLoading(true);
     try {
-      const apiKey = localStorage.getItem('workflow_api_key') || '';
+      const apiKey = getEngineKey();
       const textToSave = Object.values(grades).map(g => g.corrected).join('\n');
       
       const res = await fetch('http://127.0.0.1:8000/api/generate_flashcards', {
@@ -327,7 +328,7 @@ export default function WritingPractice() {
           example_en: wordObj.example_en,
           example_vi: '',
           owner_email: getEmail(),
-          api_key: localStorage.getItem('workflow_api_key') || ''
+          api_key: getEngineKey()
         })
       });
       const data = await res.json();

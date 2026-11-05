@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Volume2, X } from 'lucide-react';
+import { getEngineKey } from '../utils/engine';
 
 function getEmail() {
   try { return JSON.parse(localStorage.getItem('workflow_user') || '{}').email; }
@@ -125,7 +126,7 @@ export default function Vocabulary() {
     e.preventDefault();
     if (!newWord.trim()) return;
     try {
-      const apiKey = localStorage.getItem('workflow_api_key') || '';
+      const apiKey = getEngineKey();
       const res = await fetch('http://127.0.0.1:8000/api/vocabulary/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -152,7 +153,7 @@ export default function Vocabulary() {
     if (!aiPrompt.trim()) return;
     setIsGenerating(true);
     try {
-      const apiKey = localStorage.getItem('workflow_api_key') || '';
+      const apiKey = getEngineKey();
       const res = await fetch('http://127.0.0.1:8000/api/vocabulary/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -512,7 +513,7 @@ export default function Vocabulary() {
                           example_en: lookupResult.example_en,
                           example_vi: lookupResult.example_vi,
                           owner_email: getEmail(),
-                          api_key: localStorage.getItem('workflow_api_key') || ''
+                          api_key: getEngineKey()
                         })
                       });
                       if (res.ok) {

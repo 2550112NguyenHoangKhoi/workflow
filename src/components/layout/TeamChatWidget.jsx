@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MessageCircle, X, Send, UserPlus, Layers } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import ProjectCollaborationModal from '../modals/ProjectCollaborationModal';
+import { getEngineKey } from '../../utils/engine';
 
 export default function TeamChatWidget({ projectId }) {
   const [open, setOpen] = useState(false);
@@ -113,7 +114,8 @@ export default function TeamChatWidget({ projectId }) {
           project_id: projectId,
           role: "user",
           content: content,
-          persona: "Giáo viên"
+          persona: "Giáo viên",
+          api_key: getEngineKey()
         };
         const tempId = Date.now();
         setAiMessages(prev => [...prev, { id: tempId, role: 'user', content, created_at: new Date().toISOString() }]);

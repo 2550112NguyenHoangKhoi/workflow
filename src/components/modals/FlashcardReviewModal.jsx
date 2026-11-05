@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, ArrowRight, ArrowLeft, Download, Shuffle, Star, RotateCcw, Sparkles, Check } from 'lucide-react';
+import { getEngineKey } from '../../utils/engine';
 
 const FlashcardReviewModal = ({ isOpen, onClose }) => {
   const [cards, setCards] = useState([]);
@@ -66,7 +67,7 @@ const FlashcardReviewModal = ({ isOpen, onClose }) => {
           topic_or_text: textContent,
           project_id: projectId ? parseInt(projectId, 10) : null,
           document_id: documentId ? parseInt(documentId, 10) : null,
-          api_key: localStorage.getItem('workflow_api_key') || ''
+          api_key: getEngineKey()
         })
       });
       const data = await response.json();

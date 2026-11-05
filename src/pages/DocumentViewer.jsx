@@ -15,6 +15,7 @@ import remarkMath from 'remark-math';
 import remarkBreaks from 'remark-breaks';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import { getEngineKey } from '../utils/engine';
 
 const DocumentViewer = () => {
   const { id } = useParams();
@@ -144,7 +145,8 @@ const DocumentViewer = () => {
     const payload = {
       message: content,
       context: activeDoc ? activeDoc.content.slice(0, 6000) : '',
-      persona: chatMode === 'omiguide' ? selectedPersona : null
+      persona: chatMode === 'omiguide' ? selectedPersona : null,
+      api_key: getEngineKey()
     };
     
     if (isProjectRoute && id) {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Search } from 'lucide-react';
+import { getEngineKey } from '../../utils/engine';
 
 const SearchMaterialsModal = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
@@ -42,7 +43,7 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': localStorage.getItem('workflow_api_key') || ''
+          'x-api-key': getEngineKey()
         },
         body: JSON.stringify({ query: query.trim() })
       });

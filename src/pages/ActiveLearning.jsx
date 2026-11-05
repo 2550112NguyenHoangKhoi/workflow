@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Volume2 } from 'lucide-react';
+import { getEngineKey } from '../utils/engine';
 
 function getEmail() {
   try { return JSON.parse(localStorage.getItem('workflow_user') || '{}').email; }
@@ -52,7 +53,7 @@ export default function ActiveLearning() {
     }
     setLoading(true);
     try {
-      const apiKey = localStorage.getItem('workflow_api_key') || '';
+      const apiKey = getEngineKey();
       const res = await fetch('http://127.0.0.1:8000/api/teachback/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,7 +84,7 @@ export default function ActiveLearning() {
     }
     setLoading(true);
     try {
-      const apiKey = localStorage.getItem('workflow_api_key') || '';
+      const apiKey = getEngineKey();
       const res = await fetch('http://127.0.0.1:8000/api/teachback/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

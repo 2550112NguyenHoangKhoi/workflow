@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle, XCircle, BrainCircuit, FileText } from 'lucide-react';
+import { getEngineKey } from '../../utils/engine';
 
 const TakeQuizModal = ({ isOpen, onClose }) => {
   const [documents, setDocuments] = useState([]);
@@ -75,7 +76,7 @@ const TakeQuizModal = ({ isOpen, onClose }) => {
         },
         body: JSON.stringify({ 
           topic_or_text: activeDoc.content,
-          api_key: localStorage.getItem('workflow_api_key') || ''
+          api_key: getEngineKey()
         })
       });
       const data = await res.json();

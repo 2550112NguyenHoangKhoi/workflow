@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Loader2, Clock, BookOpen } from 'lucide-react';
+import { getEngineKey } from '../../utils/engine';
 
 const StudyPlanModal = ({ isOpen, onClose }) => {
   const [pathData, setPathData] = useState(null);
@@ -60,7 +61,7 @@ const StudyPlanModal = ({ isOpen, onClose }) => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-api-key': localStorage.getItem('workflow_api_key') || ''
+          'x-api-key': getEngineKey()
         },
         body: JSON.stringify({ 
           topic: `${topicName} - Thời lượng: ${duration}, Mục tiêu: ${targetLevel}`

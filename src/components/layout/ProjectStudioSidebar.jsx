@@ -9,6 +9,7 @@ import FlashcardReviewModal from '../modals/FlashcardReviewModal';
 import StudyPlanModal from '../modals/StudyPlanModal';
 import CreateLessonPlanModal from '../modals/CreateLessonPlanModal';
 import ArtifactViewerModal from '../modals/ArtifactViewerModal';
+import { getEngineKey } from '../../utils/engine';
 
 const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
   const { id } = useParams();
@@ -94,7 +95,7 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic_or_text: "general" })
+        body: JSON.stringify({ topic_or_text: "general", api_key: getEngineKey() })
       });
       if (res.ok) {
         fetchData();
