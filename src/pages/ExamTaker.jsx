@@ -172,10 +172,22 @@ function ExamTaker() {
 
   function isGradeable(q) { return q.type === 'mcq' || q.type === 'true_false' || q.type === 'short_answer'; }
 
+  // Short answers: ignore case, punctuation, extra spaces and a leading article, so
+  // "Mitochondria." or "the Calvin cycle" isn't marked wrong. Vietnamese diacritics still count.
+  function normalizeAnswer(s) {
+    return String(s ?? '')
+      .normalize('NFC')
+      .toLowerCase()
+      .replace(/[.,;:!?"'“”‘’()[\]{}]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^(the|a|an) /, '');
+  }
+
   function isCorrect(q, i) {
     const a = answers[i];
     if (q.type === 'mcq' || q.type === 'true_false') return a != null && a === q.correct_option_id;
-    if (q.type === 'short_answer') return a != null && String(a).trim().toLowerCase() === String(q.answer || '').trim().toLowerCase();
+    if (q.type === 'short_answer') return a != null && normalizeAnswer(a) !== '' && normalizeAnswer(a) === normalizeAnswer(q.answer);
     return false;
   }
 

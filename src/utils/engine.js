@@ -12,3 +12,11 @@ export function getEngineKey() {
     return '';
   }
 }
+
+/** Human-readable name of the selected engine, for subtitles/loading text. */
+export function engineLabel() {
+  const k = getEngineKey();
+  if (k === 'OFFLINE') return 'bộ máy NLP tích hợp (offline)';
+  if (k.startsWith('LOCAL')) return `model cục bộ${k.includes(':') ? ` (${k.split(':')[1]})` : ' (Ollama)'}`;
+  return 'Gemini (Cloud)';
+}

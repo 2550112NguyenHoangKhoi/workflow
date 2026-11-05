@@ -4,17 +4,20 @@ import { ReactFlow, Controls, Background, applyNodeChanges, applyEdgeChanges } f
 import { toPng } from 'html-to-image';
 import dagre from 'dagre';
 import '@xyflow/react/dist/style.css';
-import { getEngineKey } from '../../utils/engine';
+import { getEngineKey, engineLabel } from '../../utils/engine';
 
-const dagreGraph = new dagre.graphlib.Graph();
-dagreGraph.setDefaultEdgeLabel(() => ({}));
-
-const nodeWidth = 220;
-const nodeHeight = 80;
+// Layout and rendering must agree on node size, or dagre spaces nodes for a box much larger
+// than what's drawn and fitView has to zoom far out (unreadable labels).
+const nodeWidth = 170;
+const nodeHeight = 56;
 
 const getLayoutedElements = (nodes, edges, direction = 'TB') => {
   const isHorizontal = direction === 'LR';
-  dagreGraph.setGraph({ rankdir: direction, nodesep: 60, ranksep: 100 });
+  // A fresh graph per layout: a module-level graph kept every node from earlier maps, so
+  // each new map was laid out around stale nodes and drifted out of view.
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+  dagreGraph.setGraph({ rankdir: direction, nodesep: 30, ranksep: 70 });
 
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
@@ -40,11 +43,24 @@ const getLayoutedElements = (nodes, edges, direction = 'TB') => {
     return newNode;
   });
 
-  return { nodes: newNodes, edges };
+  const xs = newNodes.map((n) => n.position.x), ys = newNodes.map((n) => n.position.y);
+  const width = newNodes.length ? Math.max(...xs) - Math.min(...xs) + nodeWidth : 0;
+  const height = newNodes.length ? Math.max(...ys) - Math.min(...ys) + nodeHeight : 0;
+  return { nodes: newNodes, edges, width, height };
+};
+
+// Lay out top-down and left-right; keep whichever fits the (wide) canvas at the larger zoom.
+// Maps with several separate clusters are very wide top-down, which made labels unreadable.
+const layoutToFit = (nodes, edges, viewW = 950, viewH = 560) => {
+  const fit = (l) => Math.min(viewW / Math.max(l.width, 1), viewH / Math.max(l.height, 1));
+  const tb = getLayoutedElements(nodes, edges, 'TB');
+  const lr = getLayoutedElements(nodes, edges, 'LR');
+  return fit(lr) > fit(tb) * 1.1 ? lr : tb;
 };
 
 const ConceptMapModal = ({ isOpen, onClose }) => {
   const [nodes, setNodes] = useState([]);
+  const [layoutVersion, setLayoutVersion] = useState(0);
   const [edges, setEdges] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -129,7 +145,12 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
           backgroundColor: '#F8EFEA', 
           border: '2px solid #8A334B', 
           borderRadius: '8px',
-          padding: '10px',
+          padding: '8px 10px',
+          width: nodeWidth,
+          minHeight: nodeHeight,
+          boxSizing: 'border-box',
+          fontSize: '13px',
+          lineHeight: 1.3,
           fontWeight: 600,
           color: 'var(--text-navy)',
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
@@ -144,9 +165,10 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
         style: { stroke: '#3B6B59', strokeWidth: 2 }
       }));
 
-      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(flowNodes, flowEdges);
+      const { nodes: layoutedNodes, edges: layoutedEdges } = layoutToFit(flowNodes, flowEdges);
 
       setNodes(layoutedNodes);
+      setLayoutVersion((v) => v + 1); // remount ReactFlow so fitView frames the new map
       setEdges(layoutedEdges);
     } catch (err) {
       setError(err.message);
@@ -201,7 +223,7 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
             </div>
             <div>
               <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-navy)', fontWeight: 800 }}>Semantic Concept Map</h2>
-              <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Generated locally via TF-IDF clustering</p>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Tạo bằng {engineLabel()} — tự chuyển sang offline nếu AI không phản hồi</p>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -235,7 +257,10 @@ const ConceptMapModal = ({ isOpen, onClose }) => {
               onEdgesChange={onEdgesChange}
               onNodeClick={onNodeClick}
               onPaneClick={() => setSelectedNode(null)}
+              key={layoutVersion}
               fitView
+              fitViewOptions={{ padding: 0.15 }}
+              minZoom={0.2}
             >
               <Background color="#ccc" gap={16} />
               <Controls />

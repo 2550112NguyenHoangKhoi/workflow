@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, FileText, Loader2, Download, RefreshCw } from 'lucide-react';
-import { getEngineKey } from '../../utils/engine';
+import { getEngineKey, engineLabel } from '../../utils/engine';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -152,7 +152,7 @@ const SmartNotesModal = ({ isOpen, onClose }) => {
           {isLoading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--brand-primary)' }}>
               <Loader2 size={48} className="animate-spin" style={{ marginBottom: '16px' }} />
-              <div style={{ fontWeight: 600 }}>Running TextRank extraction...</div>
+              <div style={{ fontWeight: 600 }}>Đang tạo ghi chú bằng {engineLabel()}...</div>
             </div>
           ) : error ? (
             <div style={{ color: 'red', textAlign: 'center', fontWeight: 600 }}>{error}</div>
