@@ -88,7 +88,7 @@ const IELTS_TYPES = [
 ];
 
 export default function WritingPractice() {
-  const [screen, setScreen] = useState('setup'); // setup, practice, summary
+  const [screen, setScreen] = useState('setup'); // setup, practice, essay, summary
   const [mode, setMode] = useState('sentence');
   const [level, setLevel] = useState('beginner');
   const [category, setCategory] = useState('');
@@ -113,6 +113,11 @@ export default function WritingPractice() {
   const [ieltsTask, setIeltsTask] = useState('task2');
   const [ieltsType, setIeltsType] = useState('opinion');
   const [showOutline, setShowOutline] = useState(true);
+  // IELTS: 'translate' = translate a band-8 model essay sentence by sentence (Task 2 only);
+  // 'essay' = write your own answer and get it band-scored (/api/writing/ielts/grade).
+  const [ieltsPractice, setIeltsPractice] = useState('essay');
+  const [essay, setEssay] = useState('');
+  const [ieltsResult, setIeltsResult] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(null);
@@ -175,7 +180,12 @@ export default function WritingPractice() {
       setCurrentIndex(0);
       setDictOpen(false);
       setHintPopover(null);
-      setScreen('practice');
+      setEssay('');
+      setIeltsResult(null);
+      // Task 1 has no model essay to translate; an empty sentence list also means essay mode.
+      const essayMode = mode === 'ielts' &&
+        (ieltsTask === 'task1' || ieltsPractice === 'essay' || !(data.sentences || []).length);
+      setScreen(essayMode ? 'essay' : 'practice');
     } catch (e) {
       console.error(e);
       notify('Lỗi tạo bài tập', 'error');
@@ -223,8 +233,12 @@ export default function WritingPractice() {
       const avg = gradeValues.length
         ? gradeValues.reduce((sum, g) => sum + (g.score || 0), 0) / gradeValues.length
         : 0;
+      // IELTS model-essay translation is scored /10 per sentence like the other translation
+      // modes; logging it as 'ielts' would treat that average as a band (x20 points).
       logAttempt({
-        mode, level, category: lesson.category || category, task: mode === 'ielts' ? ieltsTask : '',
+        mode: mode === 'ielts' ? 'ielts_translate' : mode, level,
+        category: mode === 'ielts' ? 'IELTS · dịch bài mẫu' : (lesson.category || category),
+        task: mode === 'ielts' ? ieltsTask : '',
         score: Math.round(avg * 10) / 10, num_items: gradeValues.length,
       });
       setScreen('summary');
@@ -341,6 +355,35 @@ export default function WritingPractice() {
     }
   };
 
+  const countWords = (t) => (t.trim().match(/[A-Za-z0-9'’-]+/g) || []).length;
+
+  const handleGradeEssay = async () => {
+    if (!essay.trim()) return;
+    setLoading(true);
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/writing/ielts/grade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: lesson?.ielts_prompt || '',
+          essay,
+          task: ieltsTask,
+          question_type: lesson?.question_type || (ieltsTask === 'task2' ? ieltsType : ''),
+          api_key: getEngineKey(),
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setIeltsResult(data);
+      logAttempt({ mode: 'ielts', level, category: '', task: ieltsTask, score: data.band || 0, num_items: 0 });
+    } catch (e) {
+      console.error(e);
+      notify('Lỗi chấm bài', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ----------------------------------------------------
   // Render functions
   // ----------------------------------------------------
@@ -432,6 +475,24 @@ export default function WritingPractice() {
                 }}
               >
                 {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {mode === 'ielts' && ieltsTask === 'task2' && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            {[{ id: 'essay', label: 'Tự viết bài luận (chấm band)' }, { id: 'translate', label: 'Dịch bài mẫu band 8' }].map(o => (
+              <button
+                key={o.id}
+                onClick={() => setIeltsPractice(o.id)}
+                style={{
+                  padding: '6px 14px', borderRadius: '16px', cursor: 'pointer',
+                  border: `1px solid ${ieltsPractice === o.id ? '#8A334C' : 'var(--border-medium)'}`,
+                  backgroundColor: ieltsPractice === o.id ? 'rgba(138, 51, 76, 0.08)' : 'transparent',
+                  color: ieltsPractice === o.id ? '#8A334C' : 'var(--text-primary)', fontWeight: 600
+                }}
+              >
+                {o.label}
               </button>
             ))}
           </div>
@@ -695,6 +756,139 @@ export default function WritingPractice() {
     );
   };
 
+  const renderEssay = () => {
+    if (!lesson) return null;
+    const words = countWords(essay);
+    const minWords = lesson.min_words || (ieltsTask === 'task1' ? 150 : 250);
+    const r = ieltsResult;
+    const box = { padding: '16px', borderRadius: '12px', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)' };
+    const criteria = [
+      ['task_response', ieltsTask === 'task1' ? 'Task Achievement' : 'Task Response'],
+      ['coherence', 'Coherence & Cohesion'],
+      ['lexical', 'Lexical Resource'],
+      ['grammar', 'Grammatical Range & Accuracy'],
+    ];
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ margin: 0, fontSize: '1.25rem' }}>IELTS Writing {ieltsTask === 'task1' ? 'Task 1' : 'Task 2'} — tự viết</h2>
+          <button onClick={() => setScreen('setup')} style={{ background: 'none', border: '1px solid var(--border-medium)', borderRadius: '16px', padding: '6px 14px', cursor: 'pointer' }}>Đổi đề</button>
+        </div>
+
+        <div style={{ padding: '16px', backgroundColor: 'rgba(138, 51, 76, 0.05)', border: '1px solid #D6C5B3', borderRadius: '8px' }}>
+          <div style={{ fontWeight: 600, marginBottom: '8px', color: '#8A334C' }}>Đề bài: {lesson.ielts_prompt}</div>
+          {ieltsTask === 'task1' && (
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+              Đề Task 1 ở đây là đề mô tả bằng chữ (không kèm hình biểu đồ): hãy viết dựa trên số liệu được nêu trong đề.
+            </div>
+          )}
+          {(lesson.structure_hint || []).length > 0 && (
+            <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '0.9rem' }}>
+              {lesson.structure_hint.map((h, i) => <li key={i} style={{ marginBottom: '4px' }}>{h}</li>)}
+            </ol>
+          )}
+        </div>
+
+        <textarea
+          value={essay}
+          onChange={(e) => setEssay(e.target.value)}
+          placeholder="Write your answer in English…"
+          spellCheck
+          style={{ width: '100%', minHeight: '280px', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-medium)', fontSize: '0.95rem', lineHeight: 1.7, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }}
+        />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.9rem', color: words >= minWords ? '#22C55E' : 'var(--text-muted)' }}>
+            {words} / {minWords} từ
+          </span>
+          <button
+            onClick={handleGradeEssay}
+            disabled={!essay.trim() || loading}
+            style={{ backgroundColor: '#8A334C', color: '#fff', borderRadius: '24px', padding: '10px 22px', border: 'none', fontWeight: 600, cursor: (!essay.trim() || loading) ? 'not-allowed' : 'pointer', opacity: (!essay.trim() || loading) ? 0.6 : 1 }}
+          >
+            {loading ? 'Đang chấm…' : 'Chấm bài'}
+          </button>
+        </div>
+
+        {r && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ ...box, display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ textAlign: 'center', minWidth: '90px' }}>
+                <div style={{ fontSize: '2.4rem', fontWeight: 800, color: '#8A334C' }}>{r.band}</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Band tổng</div>
+              </div>
+              <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px' }}>
+                {criteria.map(([k, label]) => (
+                  <div key={k} style={{ padding: '8px 10px', borderRadius: '8px', backgroundColor: '#fff', border: '1px solid var(--border-light)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{label}</div>
+                    <div style={{ fontWeight: 700 }}>{r[k]}</div>
+                    {r.descriptors?.[k] && <div style={{ fontSize: '0.75rem', marginTop: '2px' }}>{r.descriptors[k]}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {r.feedback_vi && (
+              <div style={box}>
+                <div style={{ fontWeight: 600, marginBottom: '6px' }}>Nhận xét</div>
+                <div style={{ whiteSpace: 'pre-line', fontSize: '0.9rem', lineHeight: 1.6 }}>{r.feedback_vi}</div>
+              </div>
+            )}
+
+            {r.structure && (r.structure.intro || r.structure.body || r.structure.conclusion) && (
+              <div style={box}>
+                <div style={{ fontWeight: 600, marginBottom: '6px' }}>Cấu trúc bài</div>
+                <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.9rem' }}>
+                  {r.structure.intro && <li><strong>Mở bài:</strong> {r.structure.intro}</li>}
+                  {r.structure.body && <li><strong>Thân bài:</strong> {r.structure.body}</li>}
+                  {r.structure.conclusion && <li><strong>Kết bài:</strong> {r.structure.conclusion}</li>}
+                </ul>
+              </div>
+            )}
+
+            {(r.annotations || []).length > 0 && (
+              <div style={box}>
+                <div style={{ fontWeight: 600, marginBottom: '6px' }}>Câu cần sửa</div>
+                {r.annotations.map((a, i) => (
+                  <div key={i} style={{ marginBottom: '10px', fontSize: '0.9rem' }}>
+                    <div style={{ color: '#EF4444', textDecoration: 'line-through' }}>{a.original}</div>
+                    <div style={{ color: '#22C55E' }}>{a.suggestion}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{a.issue_vi}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(r.vocabulary || []).length > 0 && (
+              <div style={box}>
+                <div style={{ fontWeight: 600, marginBottom: '6px' }}>Nâng cấp từ vựng</div>
+                {r.vocabulary.map((v, i) => (
+                  <div key={i} style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
+                    <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)' }}>{v.basic}</span> → <strong>{v.better}</strong>
+                    {v.note_vi && <span style={{ color: 'var(--text-muted)' }}> — {v.note_vi}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {r.improved_intro && (
+              <div style={box}>
+                <div style={{ fontWeight: 600, marginBottom: '6px' }}>Mở bài gợi ý</div>
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6 }}>{r.improved_intro}</div>
+              </div>
+            )}
+
+            {r.model_answer && (
+              <details style={box}>
+                <summary style={{ fontWeight: 600, cursor: 'pointer' }}>Bài mẫu tham khảo</summary>
+                <div style={{ whiteSpace: 'pre-line', fontSize: '0.9rem', lineHeight: 1.7, marginTop: '8px' }}>{r.model_answer}</div>
+              </details>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderSummary = () => {
     const gradeValues = Object.values(grades);
     const countGood = gradeValues.filter(g => g.is_good).length;
@@ -888,6 +1082,7 @@ export default function WritingPractice() {
     <div className="animate-fade-in" style={{ maxWidth: '820px', margin: '0 auto', padding: '32px 24px' }}>
       {screen === 'setup' && renderSetup()}
       {screen === 'practice' && renderPractice()}
+      {screen === 'essay' && renderEssay()}
       {screen === 'summary' && renderSummary()}
 
       {renderDictionaryModal()}
