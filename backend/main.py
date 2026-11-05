@@ -1094,17 +1094,12 @@ async def generate_path(request: LearningPathRequest, x_api_key: str | None = He
     current_key = get_api_key(x_api_key)
     if current_key:
         try:
-            config = LocalAgentConfig(
-                api_key=current_key,
-                response_schema=LearningPathSchema
-            )
+            config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite",
+                                      response_schema=LearningPathSchema, capabilities=FAST_CAPS)
             prompt = f"Create a comprehensive, step-by-step learning path for the topic: '{request.topic}'. Break it down into logical modules, and each module should have specific topics with descriptions and estimated study times."
-            
-            async with Agent(config) as agent:
-                response = await agent.chat(prompt)
-                data = await response.structured_output()
-                if data:
-                    return data
+            data = await agent_run(config, prompt, structured=True, timeout=40)
+            if data and data.get("modules"):
+                return data
         except Exception as e:
             print(f"Error generating learning path, falling back to offline: {e}")
 
@@ -1131,11 +1126,9 @@ async def search_materials(request: SearchRequest, x_api_key: str | None = Heade
                 })
         
         # If we have a valid key, use AI to filter and score for quality
-        if current_key:
-            config = LocalAgentConfig(
-                api_key=current_key,
-                response_schema=SearchMaterialSchema
-            )
+        if current_key and raw_results:
+            config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite",
+                                      response_schema=SearchMaterialSchema, capabilities=FAST_CAPS)
             prompt = f"""
             You are a helpful and intelligent curator. A user is searching for materials on the topic: '{request.query}'.
             I have queried a search engine and retrieved the following raw results:
@@ -1150,11 +1143,12 @@ async def search_materials(request: SearchRequest, x_api_key: str | None = Heade
             - Assign a 'relevancy_score' from 0 to 100 indicating how relevant and academically/professionally useful the result is.
             """
             
-            async with Agent(config) as agent:
-                response = await agent.chat(prompt)
-                data = await response.structured_output()
+            try:
+                data = await agent_run(config, prompt, structured=True, timeout=30)
                 if data and data.get("results"):
                     return data
+            except Exception as e:  # keep the raw search results if curation fails
+                print(f"[search] AI curation failed, returning raw results: {e}")
 
         # Fallback to top 5 if AI fails or no key
         fallback_results = []
@@ -1459,16 +1453,15 @@ async def generate_suggestions(request: TopicRequest, x_api_key: str | None = He
     
     if current_key:
         try:
-            config = LocalAgentConfig(api_key=current_key, response_schema=SuggestionSchema)
+            config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite",
+                                      response_schema=SuggestionSchema, capabilities=FAST_CAPS)
             prompt = f"""Analyze the following text corpus from a user's document library. Suggest 3 things: a topic for a structured learning path, a specific topic for a multiple-choice quiz, and a topic for a set of flashcards. Keep the suggestions concise.
 
 Corpus:
 {request.topic_or_text[:5000]}"""
-            async with Agent(config) as agent:
-                response = await agent.chat(prompt)
-                data = await response.structured_output()
-                if data:
-                    return data
+            data = await agent_run(config, prompt, structured=True, timeout=30)
+            if data:
+                return data
         except Exception as e:
             print(f"[suggestions] AI failed, falling back to offline: {e}")
 
