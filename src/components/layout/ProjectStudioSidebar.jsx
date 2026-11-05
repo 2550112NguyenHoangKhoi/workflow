@@ -99,9 +99,13 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
       });
       if (res.ok) {
         fetchData();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        alert(body.detail || 'Tạo giáo án thất bại.');
       }
     } catch (err) {
       console.error(err);
+      alert('Không kết nối được máy chủ.');
     }
     setIsGeneratingRoadmap(false);
   };

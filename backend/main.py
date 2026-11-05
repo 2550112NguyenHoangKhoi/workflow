@@ -437,7 +437,7 @@ async def generate_project_roadmap(project_id: int, req: TopicRequest, db: Sessi
         if doc.content:
             text_content += doc.content + "\n\n"
     if not text_content.strip():
-        text_content = "Vui lòng cung cấp nội dung chung."
+        raise HTTPException(status_code=422, detail="Dự án chưa có tài liệu nào có nội dung để lập giáo án.")
 
     # 2. Call roadmap generator
     from nlp.roadmap import generate_roadmap
@@ -471,8 +471,10 @@ async def update_roadmap_item_endpoint(item_id: int, req: RoadmapItemUpdate, db:
 @app.post("/api/documents/{document_id}/roadmap/generate")
 async def generate_document_roadmap(document_id: int, req: TopicRequest, db: Session = Depends(get_db)):
     doc = db.query(models.Document).filter(models.Document.id == document_id).first()
-    if not doc or not doc.content:
-        return {"status": "error", "message": "Không tìm thấy nội dung tài liệu."}
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu.")
+    if not (doc.content or "").strip():
+        raise HTTPException(status_code=422, detail="Tài liệu chưa có nội dung văn bản để lập giáo án.")
     from nlp.roadmap import generate_roadmap
     items = await generate_roadmap(doc.content, api_key=get_api_key(req.api_key))
     
