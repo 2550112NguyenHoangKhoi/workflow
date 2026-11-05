@@ -266,7 +266,7 @@ class ReviewRequest(BaseModel):
     ease: float
     repetitions: int
     due: str
-    quality: int
+    quality: int = Field(ge=0, le=5)  # SM-2 grade; out-of-range values corrupted the ease factor
 
 
 class SuggestionSchema(BaseModel):
@@ -291,8 +291,8 @@ class ConceptMapSchema(BaseModel):
 
 class QuizSubmitRequest(BaseModel):
     document_id: int
-    score: int
-    total_questions: int
+    score: int = Field(ge=0)
+    total_questions: int = Field(gt=0)
 
 class RoadmapItemUpdate(BaseModel):
     completed: bool | None = None
@@ -401,7 +401,12 @@ def update_project_api(project_id: int, req: ProjectUpdate, db: Session = Depend
 
 @app.post("/api/projects")
 async def create_project_api(project: ProjectCreate, db: Session = Depends(get_db)):
-    return crud.create_project(db, name=project.name, description=project.description, folder_id=project.folder_id)
+    name = (project.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Tên dự án không được để trống.")
+    if project.folder_id is not None and not db.query(models.Folder).filter(models.Folder.id == project.folder_id).first():
+        raise HTTPException(status_code=404, detail="Folder not found")
+    return crud.create_project(db, name=name, description=project.description, folder_id=project.folder_id)
 
 @app.get("/api/projects")
 async def get_projects_api(folder_id: int | None = None, db: Session = Depends(get_db)):
@@ -953,6 +958,8 @@ def upload_document(
     kept — it can still be viewed — and the response carries a `warning`."""
     import tempfile, shutil
 
+    if project_id is not None and not crud.get_project(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
     suffix = os.path.splitext(file.filename or "")[1].lower()
     if suffix not in TEXT_SUFFIXES | IMAGE_SUFFIXES | MEDIA_SUFFIXES | {".pdf", ".docx"}:
         raise HTTPException(status_code=422, detail=(
@@ -1064,6 +1071,8 @@ def _youtube_transcript(video_id: str) -> str:
 @app.post("/api/documents/url")
 def ingest_url(request: UrlIngestRequest, db: Session = Depends(get_db)):
     url = (request.url or "").strip()
+    if request.project_id is not None and not crud.get_project(db, request.project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
     if not url.lower().startswith(("http://", "https://")):
         raise HTTPException(status_code=422, detail="Liên kết phải bắt đầu bằng http:// hoặc https://")
     text = ""
@@ -1417,6 +1426,8 @@ async def submit_quiz(request: QuizSubmitRequest, db: Session = Depends(get_db))
         doc = db.query(models.Document).filter(models.Document.id == request.document_id).first()
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
+        if request.score > request.total_questions:
+            raise HTTPException(status_code=422, detail="score cannot exceed total_questions")
         score_record = crud.create_quiz_score(
             db, 
             document_id=request.document_id, 
@@ -2439,7 +2450,10 @@ async def add_vocab(req: VocabAddRequest, db: Session = Depends(get_db)):
     # status) instead of creating a duplicate — this is what wires the writing Dictionary
     # to the Vocabulary trainer (re-saving a word is a no-op that reports its status).
     from sqlalchemy import func
-    wlow = (req.word or "").strip().lower()
+    req.word = (req.word or "").strip()
+    wlow = req.word.lower()
+    if not wlow:
+        raise HTTPException(status_code=422, detail="Từ vựng không được để trống.")
     if wlow:
         dq = db.query(models.VocabWord).filter(func.lower(models.VocabWord.word) == wlow)
         dq = dq.filter(models.VocabWord.owner_email == req.owner_email) if req.owner_email \
@@ -2554,7 +2568,7 @@ async def generate_vocab(req: VocabGenerateRequest, db: Session = Depends(get_db
     try:
         config = LocalAgentConfig(
             api_key=current_key, 
-            model="gemini-3.1-flash", 
+            model="gemini-3.1-flash-lite",
             response_schema=VocabListSchema, 
             capabilities=FAST_CAPS
         )
@@ -2605,7 +2619,7 @@ async def generate_vocab(req: VocabGenerateRequest, db: Session = Depends(get_db
         
     except Exception as e:
         print(f"Generate vocab error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=502, detail="AI không phản hồi khi tạo từ vựng. Kiểm tra API key / kết nối rồi thử lại, hoặc dùng 'Từ bộ có sẵn'.")
 
 
 
@@ -2729,7 +2743,8 @@ def _dictionary_lookup(word: str, context: str = ""):
         translator = None
 
     try:
-        r = requests.get(f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}", timeout=5)
+        from urllib.parse import quote
+        r = requests.get(f"https://api.dictionaryapi.dev/api/v2/entries/en/{quote(word.strip(), safe='')}", timeout=5)
         if r.status_code == 200:
             json_data = r.json()
             
@@ -3344,6 +3359,8 @@ def get_team_messages(project_id: int, after_id: int = 0, db=Depends(get_db)):
 def post_team_message(project_id: int, body: TeamMessageIn, db=Depends(get_db)):
     if not body.content or not body.content.strip():
         raise HTTPException(status_code=400, detail="content must not be empty")
+    if not crud.get_project(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
     msg = models.TeamMessage(
         project_id=project_id,
         author_email=body.author_email,
