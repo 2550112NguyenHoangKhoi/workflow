@@ -199,3 +199,16 @@ def test_offline_ielts_band_rejects_nonsense():
     prompt = "Some people believe that university education should be free for all students. Do you agree?"
     assert grade_ielts(prompt, "banana " * 260, "task2")["band"] <= 3.0
     assert grade_ielts(prompt, "University should be free. I agree.", "task2")["band"] <= 3.5
+
+
+def test_difficulty_ranks_texts_sensibly():
+    from nlp.readability import score_difficulty
+    kids = "The cat sat on the mat. It was a sunny day. The dog ran to the park. Tom saw a red ball."
+    bio = ("Photosynthesis is the process by which plants convert light energy into chemical energy. "
+           "Chlorophyll is the green pigment that absorbs light. The Calvin cycle uses ATP to fix carbon dioxide into glucose.")
+    academic = ("Notwithstanding the considerable heterogeneity of experimental methodologies employed across longitudinal "
+                "investigations, the preponderance of empirical evidence substantiates the hypothesis that socioeconomic "
+                "stratification significantly moderates intergenerational occupational mobility.")
+    k, b, a = (score_difficulty(t)["score"] for t in (kids, bio, academic))
+    assert k < b < a
+    assert score_difficulty(bio)["level"] == "Intermediate"  # was 'Advanced' (entity density x40)

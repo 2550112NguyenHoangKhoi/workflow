@@ -6,6 +6,16 @@ try:
 except Exception:
     nlp = None
 
+def _syllables(word: str) -> int:
+    """English syllable estimate: vowel groups, minus a silent final 'e' (min 1)."""
+    import re
+    w = word.lower()
+    groups = len(re.findall(r"[aeiouy]+", w))
+    if w.endswith("e") and not w.endswith(("le", "ee")) and groups > 1:
+        groups -= 1
+    return max(1, groups)
+
+
 def score_difficulty(text: str) -> Dict:
     """
     Scores the readability and difficulty of a text based on structural and semantic density.
@@ -31,11 +41,15 @@ def score_difficulty(text: str) -> Dict:
     avg_sent_len = len(words) / len(sents)
     ent_density = len(doc.ents) / max(len(words), 1)
     rare_ratio = sum(1 for t in words if len(t.text) > 7) / len(words)
-    
-    # Formula combining sentence length, entity density, and long words
-    raw_score = (avg_sent_len * 0.3) + (ent_density * 40) + (rare_ratio * 15)
-    
-    # Normalize to a 1-10 scale approximately
+    syllables_per_word = sum(_syllables(t.text) for t in words) / len(words)
+
+    # Flesch-Kincaid grade level (validated readability measure) mapped onto 1-10, plus a
+    # small bump for jargon density. The old formula weighted named-entity density x40, and
+    # en_core_web_sm tags things like "ATP" / "Calvin" / "one" as entities, so any short
+    # science passage hit 10/10 "Advanced".
+    fk_grade = 0.39 * avg_sent_len + 11.8 * syllables_per_word - 15.59
+    raw_score = 1.0 + max(0.0, fk_grade) * 0.5 + max(0.0, rare_ratio - 0.15) * 4
+
     normalized_score = round(min(10.0, max(1.0, raw_score)), 1)
     
     if normalized_score < 4.0:
@@ -51,7 +65,8 @@ def score_difficulty(text: str) -> Dict:
         "metrics": {
             "avg_sentence_length": round(avg_sent_len, 1),
             "entity_density": round(ent_density, 3),
-            "rare_word_ratio": round(rare_ratio, 3)
+            "rare_word_ratio": round(rare_ratio, 3),
+            "fk_grade": round(fk_grade, 1)
         }
     }
 

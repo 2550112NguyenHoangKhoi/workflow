@@ -186,6 +186,14 @@ const DocumentViewer = () => {
   };
 
   // Quiz/flashcard pills open the real generators; the others are chat prompts.
+  // Sources the chat actually uses: the whole project on a project page; otherwise the
+  // selected document plus its project's other documents (it used to count the whole library).
+  const attachedCount = isProjectRoute
+    ? documents.length
+    : activeDoc
+      ? (activeDoc.project_id ? documents.filter(d => d.project_id === activeDoc.project_id).length : 1)
+      : 0;
+
   const actionPills = [
     { label: "Tạo quiz nhanh", action: () => setIsExamModalOpen(true) },
     { label: "Tạo flashcard", action: () => setIsFlashcardOpen(true) },
@@ -217,7 +225,7 @@ const DocumentViewer = () => {
             )}
           </h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>{documents.length} sources attached</div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>{attachedCount} {attachedCount === 1 ? 'source' : 'sources'} attached</div>
             {difficulty && (
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '6px',
