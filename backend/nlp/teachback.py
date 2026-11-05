@@ -23,19 +23,73 @@ def _keywords(text: str, n: int = 8) -> list[str]:
     counts = Counter(filtered)
     return [word for word, count in counts.most_common(n)]
 
+_spacy = None
+# Vietnamese nouns too generic to be a "key point" on their own.
+_VI_GENERIC = {"quá trình", "vấn đề", "trường hợp", "phương pháp", "cách thức", "hiện tượng", "đặc điểm", "khái niệm", "nội dung", "thông tin"}
+
+
+def _key_concepts(text: str, n: int = 5, exclude: str = "") -> list[str]:
+    """Concepts worth explaining, most frequent first: noun phrases in English (spaCy),
+    compound nouns in Vietnamese (pyvi). Frequency-ranked single words picked verbs and
+    filler ("happens"), and Vietnamese single syllables, as "key points". Falls back to
+    `_keywords` when the language models are unavailable."""
+    ex = (exclude or "").strip().lower()
+    try:
+        from nlp.vietnamese import is_vietnamese, vi_keywords
+        if is_vietnamese(text):
+            out = [k for k in vi_keywords(text, n + 6) if " " in k and k != ex and k not in _VI_GENERIC]
+            if len(out) >= 2:
+                return out[:n]
+        else:
+            global _spacy
+            if _spacy is None:
+                import spacy
+                _spacy = spacy.load("en_core_web_sm", disable=["ner"])
+            counts, first = Counter(), {}
+            for chunk in _spacy(text[:20000]).noun_chunks:
+                toks = [t for t in chunk if t.pos_ not in ("DET", "PRON", "NUM", "PUNCT") and not t.is_stop]
+                if not toks or toks[-1].pos_ not in ("NOUN", "PROPN"):
+                    continue
+                toks = toks[-3:]  # keep the head phrase: "the green pigment chlorophyll" → 3 words max
+                phrase = " ".join(t.lemma_.lower() if t is toks[-1] and t.pos_ == "NOUN" else t.text.lower() for t in toks)
+                if len(phrase) < 3 or phrase == ex or phrase in STOPWORDS:
+                    continue
+                counts[phrase] += 1
+                first.setdefault(phrase, len(first))
+            # Frequency first; on ties a specific multi-word term beats a single word.
+            ranked = sorted(counts, key=lambda k: (-counts[k], -min(2, len(k.split())), first[k]))
+            # Drop a single word already contained in a higher-ranked phrase ("cycle" vs "calvin cycle").
+            out = []
+            for k in ranked:
+                if not any(k in o.split() or o in k.split() for o in out):
+                    out.append(k)
+            if len(out) >= 2:
+                return out[:n]
+    except Exception:
+        pass
+    return [k for k in _keywords(text, n + 1) if k != ex][:n]
+
+
+def _stem(w: str) -> str:
+    for suf in ("ies", "es", "s"):
+        if len(w) > 4 and w.endswith(suf):
+            return w[: -len(suf)] + ("y" if suf == "ies" else "")
+    return w
+
+
 def make_prompt(topic: str, context: str = "", level: str = "") -> dict:
     concept = topic if topic else "Chủ đề"
     if context:
-        kws = _keywords(context, 5)
+        kws = _key_concepts(context, 5, exclude=topic)
         key_points = kws if len(kws) >= 3 else kws + ["định nghĩa", "ví dụ thực tế", "tại sao quan trọng"]
         key_points = key_points[:6]
     else:
         kws = _keywords(topic, 3)
         key_points = kws + ["định nghĩa", "ví dụ thực tế", "tại sao quan trọng"]
         key_points = key_points[:6]
-    
+
     question_vi = f"Hãy giải thích '{concept}' bằng lời của chính bạn, như thể bạn đang dạy cho một người bạn chưa biết gì về chủ đề này. Dùng ví dụ đơn giản."
-    
+
     return {
         "concept": concept,
         "key_points": key_points,
@@ -55,11 +109,12 @@ def evaluate(concept: str, key_points: list[str], explanation: str, context: str
         
         if re.search(r'\b' + re.escape(kp.lower()) + r'\b', explanation_lower):
             is_covered = True
-        else:
-            for w in kp_words:
-                if w in expl_words or re.search(r'\b' + re.escape(w) + r'\b', explanation_lower):
-                    is_covered = True
-                    break
+        elif kp_words:
+            # A phrase point ("calvin cycle") needs most of its words, not just any one;
+            # plurals count ("chloroplasts" covers "chloroplast").
+            expl_stems = {_stem(w) for w in expl_words} | {_stem(w) for w in re.findall(r'\w+', explanation_lower)}
+            hits = sum(1 for w in kp_words if _stem(w) in expl_stems)
+            is_covered = hits >= -(-len(kp_words) * 3 // 5)  # at least 60%: 2 of 2, 2 of 3, 3 of 4
         
         if is_covered:
             covered.append(kp)

@@ -289,3 +289,35 @@ def test_web_import_uses_proxy_aware_download(client, monkeypatch):
     assert r.status_code == 200, r.text
     assert seen["url"] == "https://example.org/calvin"
     assert r.json()["filename"] == "Calvin cycle"
+
+
+def test_teachback_key_points_are_concepts_not_filler_words():
+    """Offline key points were frequency-ranked single words, so verbs like 'happens' (and
+    single Vietnamese syllables) became points the learner was asked to explain."""
+    from nlp.teachback import make_prompt, evaluate
+    ctx = ("Photosynthesis happens in chloroplasts. Chlorophyll absorbs light. The light-dependent reactions "
+           "split water and release oxygen. The Calvin cycle in the stroma uses ATP and NADPH to fix carbon dioxide into glucose.")
+    kp = make_prompt("Photosynthesis", ctx)["key_points"]
+    assert "happens" not in kp and "photosynthesis" not in kp
+    assert "calvin cycle" in kp
+    # A phrase point isn't covered by one shared word.
+    assert evaluate("Photosynthesis", ["calvin cycle"], "Water goes round in a cycle.")["gaps"] == ["calvin cycle"]
+
+
+def test_offline_exam_questions_read_cleanly():
+    """PDF headings were glued onto the next sentence ("Photosynthesis Photosynthesis is…"),
+    distractors were generic words ("Place", "Process"), and an internal field leaked."""
+    from nlp.exam import extract_exam
+    text = ("[Trang 1]\nPhotosynthesis\nPhotosynthesis is the process by which green plants and some bacteria convert light energy "
+            "into chemical energy stored in glucose.\nThe process takes place mainly in the chloroplasts of leaf cells, where\n"
+            "chlorophyll absorbs red and blue light.\n[Trang 2]\nCellular respiration\nAerobic respiration requires oxygen and occurs "
+            "in the mitochondria of the cell.\nGlycolysis is the first stage of respiration and happens in the cytoplasm of the cell.\n"
+            "During fermentation, yeast produces ethanol and carbon dioxide from glucose in the absence of oxygen.")
+    qs = main._normalize_exam_questions(extract_exam(text, num_questions=6, types=["mcq", "true_false"])["questions"])
+    assert qs
+    for q in qs:
+        assert "Photosynthesis Photosynthesis" not in q["question"] and "respiration Aerobic" not in q["question"]
+        assert "\n" not in q["question"] and "terms" not in q
+        if q["type"] == "mcq":
+            opts = {o["text"].lower() if isinstance(o, dict) else o.lower() for o in q["options"]}
+            assert not opts & {"place", "process", "product", "way", "part"}

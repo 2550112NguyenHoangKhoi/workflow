@@ -1242,21 +1242,43 @@ async def generate_path(request: LearningPathRequest, x_api_key: str | None = He
 import json
 from ddgs import DDGS
 
+def _web_search(query: str, max_results: int = 15) -> list:
+    """DuckDuckGo text search that tolerates its flakiness: it intermittently answers "No
+    results found" for a query that worked a second earlier, and the English
+    "guide OR tutorial…" suffix found nothing for Vietnamese queries. Tries the study-oriented
+    query, then the plain one (Vietnamese region for Vietnamese text), with one retry each.
+    Returns [] when nothing is found; raises only if every attempt failed on the network."""
+    import time
+    from nlp.vietnamese import is_vietnamese
+    vi = is_vietnamese(query)
+    attempts = ([(query, "vn-vi"), (query, "wt-wt")] if vi
+                else [(f"{query} guide OR tutorial OR pdf OR course", "wt-wt"), (query, "wt-wt")])
+    last_error, network_failures = None, 0
+    for q, region in attempts:
+        for delay in (0, 1.5):
+            time.sleep(delay)
+            try:
+                with DDGS() as ddgs:
+                    results = list(ddgs.text(q, region=region, max_results=max_results))
+                if results:
+                    return results
+            except Exception as e:  # "No results found", rate limits, timeouts
+                last_error = e
+                if "no results" not in str(e).lower():
+                    network_failures += 1
+    if network_failures == len(attempts) * 2:
+        raise last_error
+    return []
+
+
 @app.post("/api/search")
 async def search_materials(request: SearchRequest, x_api_key: str | None = Header(default=None)):
     if not request.query or not request.query.strip():
         return {"results": []}
     current_key = get_api_key(x_api_key)
     try:
-        raw_results = []
-        with DDGS() as ddgs:
-            ddgs_results = list(ddgs.text(f"{request.query} guide OR tutorial OR pdf OR course", max_results=15))
-            for res in ddgs_results:
-                raw_results.append({
-                    "title": res.get('title', ''),
-                    "url": res.get('href', ''),
-                    "snippet": res.get('body', '')
-                })
+        raw_results = [{"title": r.get('title', ''), "url": r.get('href', ''), "snippet": r.get('body', '')}
+                       for r in _web_search(request.query.strip())]
         
         # If we have a valid key, use AI to filter and score for quality
         if current_key and raw_results:
@@ -1309,7 +1331,7 @@ async def search_materials(request: SearchRequest, x_api_key: str | None = Heade
             
     except Exception as e:
         print(f"Error searching materials: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=502, detail="Không kết nối được máy tìm kiếm. Kiểm tra mạng rồi thử lại.")
 
 def _clear_unshared_artifacts(db, art_type: str, project_id=None, document_id=None):
     """Regenerating a quiz / exam prep / study plan replaces the previous one for the same
@@ -2788,6 +2810,31 @@ def list_vocab(email: str | None = None, q: str | None = None, db: Session = Dep
         "suggestions": suggestions
     }
 
+_SPACY_TO_DICT_POS = {"NOUN": "noun", "PROPN": "noun", "VERB": "verb", "AUX": "verb", "ADJ": "adjective",
+                      "ADV": "adverb", "ADP": "preposition", "PRON": "pronoun", "CCONJ": "conjunction",
+                      "SCONJ": "conjunction", "INTJ": "interjection"}
+_spacy_en = None
+
+
+def _context_pos(word: str, context: str) -> str:
+    """Part of speech ('noun', 'adverb', …) of `word` as used in `context`, via spaCy; '' if
+    unknown (no context, word absent, or the model is unavailable)."""
+    global _spacy_en
+    w = (word or "").strip().lower()
+    if not w or not context or " " in w or w not in context.lower():
+        return ""
+    try:
+        if _spacy_en is None:
+            import spacy
+            _spacy_en = spacy.load("en_core_web_sm", disable=["ner", "lemmatizer"])
+        for tok in _spacy_en(context[:2000]):
+            if tok.text.lower() == w:
+                return _SPACY_TO_DICT_POS.get(tok.pos_, "")
+    except Exception:
+        _spacy_en = False if _spacy_en is None else _spacy_en
+    return ""
+
+
 def _dictionary_lookup(word: str, context: str = ""):
     """Fetch real word details from the free Dictionary API (api.dictionaryapi.dev):
     IPA, part of speech, English definition + example, then translate meaning/example to
@@ -2829,6 +2876,11 @@ def _dictionary_lookup(word: str, context: str = ""):
                         candidates.append((mpos, dfn.get("definition", ""), dfn.get("example", "")))
 
             pos, definition, example_en, grammar_tag = "", "", "", ""
+            # How the word is used in the passage ("go to bed early" → adverb) decides the part
+            # of speech; dictionaryapi often lists a rare sense first (early → noun "a shift").
+            used_as = _context_pos(word, context)
+            if used_as and any(c[0] == used_as for c in candidates):
+                candidates = [c for c in candidates if c[0] == used_as]
             if candidates:
                 best = candidates[0]
                 ctx_words = set(re.findall(r'[a-z]{4,}', (context or "").lower()))

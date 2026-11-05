@@ -999,21 +999,26 @@ def generate_lesson(mode: str, level: str, category: str = "", topic: str = "",
         }
 
     # sentence mode
+    # Nearest levels first, so a beginner lesson never jumps straight to advanced sentences.
+    nearest = {"b": ("b", "i", "a"), "i": ("i", "b", "a"), "a": ("a", "i", "b")}[lvl]
     if category in SENTENCE_BANK:
         by_level = SENTENCE_BANK[category]
-        pool = list(by_level.get(lvl, []))
-        # top up from other levels of the same category if not enough
-        if len(pool) < num_sentences:
-            for lk in ("b", "i", "a"):
-                if lk != lvl:
-                    pool.extend(by_level.get(lk, []))
+        # The bank holds only a few sentences per level: the chosen level comes first (shuffled),
+        # then the nearest level tops it up. Shuffling everything together used to mix
+        # "Trời hôm nay đẹp." with advanced sentences in one beginner lesson.
+        chosen = []
+        for lk in nearest:
+            group = list(by_level.get(lk, []))
+            random.shuffle(group)
+            chosen.extend(group)
+            if len(chosen) >= num_sentences:
+                break
     else:
-        pool = []
+        chosen = []
         for cat in SENTENCE_BANK.values():
-            pool.extend(cat.get(lvl, []))
-
-    random.shuffle(pool)
-    chosen = pool[:max(1, num_sentences)]
+            chosen.extend(cat.get(lvl, []))
+        random.shuffle(chosen)
+    chosen = chosen[:max(1, num_sentences)]
     return {
         "mode": "sentence", "level": level, "category": category,
         "sentences": _pairs_to_sentences(chosen),

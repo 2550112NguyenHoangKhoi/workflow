@@ -429,6 +429,10 @@ Columns: **ID**, **Where** (file and symbol), **Symptom**, **Root cause**, **Fix
 | D-17 | `ExamTaker.jsx:normalizeAnswer` | "Mitochondria." marked wrong | Only trim/lowercase | Ignore punctuation, spacing and a leading article; diacritics still count | manual |
 | D-18 | `main.py` request models / endpoints | Bad data stored (blank words / project names, orphan messages / uploads, quality=99, score>total) | No validation | 422/404; `ReviewRequest.quality` 0–5; dictionary URL encoded | manual (fuzz) |
 | D-19 | `src/pages/DocumentViewer.jsx:attachedCount` | "N sources attached" counted the whole library | Used `documents.length` | Count what chat actually uses | manual |
+| D-20 | `main.py:_download_page`, `ingest_url` | Web-page import failed on proxied (school/office) networks | trafilatura's downloader ignores HTTPS proxies | Download with `requests`, extract with trafilatura | ✅ |
+| D-21 | `main.py:_web_search`, `search_materials` | Search intermittently 500 "No results found"; Vietnamese queries found nothing | DuckDuckGo flakiness; English "guide OR tutorial" suffix | Retry; plain-query fallback; `vn-vi` region; 502 only on network failure | manual |
+| D-22 | `main.py:generate_concept_map_endpoint` | Ignored `document_id` | Only used `topic_or_text` | Falls back to the document text like quiz/flashcards | ✅ |
+| D-23 | `WritingPractice.jsx` (`hintPopover` effect, `location.key` effect) | Hint popup stayed over the menu after "Thoát"; sidebar "Luyện viết" didn't leave a lesson | Popover state never cleared; same-route navigation didn't reset | Clear on screen/sentence change; reset to setup on a new location key | Playwright |
 
 ### Offline-engine quality (Q)
 
@@ -440,6 +444,12 @@ Columns: **ID**, **Where** (file and symbol), **Symptom**, **Root cause**, **Fix
 | Q-4 | `nlp/writing.py:grade_ielts` | Nonsense essay = band 5.5; "improved intro" echoed the input | Score floors, no prompt relevance, no length cap | Relevance, paragraphing, punctuation, length cap, repetition / off-topic caps; task-specific intro pattern | ✅ |
 | Q-5 | `nlp/vietnamese.py:_merge_split_compounds` | Blanks cut "hóa học" in half | pyvi segmentation errors | Re-attach `_COMPOUND_TAILS` syllables to the preceding noun | ✅ |
 | Q-6 | `nlp/readability.py:score_difficulty` | Simple texts "Advanced 10/10" | Entity density ×40 | Flesch–Kincaid based | ✅ |
+| Q-7 | `main.py:offline_doc_answer` (`_LINE_WRAP`) | Offline chat answers stopped mid-sentence ("It splits glucose into two") | Split on every PDF hard wrap; dropped the pronoun sentence carrying the answer | Re-join lower-case continuation lines; keep a hit's anaphoric follow-up | ✅ |
+| Q-8 | `nlp/preprocessor.py:_mark_headings` (via `clean_text`) | Quiz/exam questions began "Photosynthesis Photosynthesis is…"; stray line breaks | Heading lines glued to the next sentence; wraps kept | Short unpunctuated line before a capital = own sentence; wraps re-joined | ✅ |
+| Q-9 | `nlp/quizzes.py` (`GENERIC_NOUNS`, `_resemblance`, `terms`), `nlp/exam.py:_as_true_false` | Distractors "Place / Process / Product"; "requires Algae" in false statements; "It produces…" questions | Any noun was a candidate; display capitalisation reused in sentences; pronoun-initial sentences | Generic-noun stoplist; rank distractors by resemblance; original-case `terms` (stripped before saving); skip pronoun-initial sentences | ✅ |
+| Q-10 | `nlp/teachback.py:_key_concepts` | Key points like "happens"; Vietnamese single syllables; "calvin cycle" covered by "cycle" | Frequency-ranked single words; any-word match | spaCy noun phrases (EN) / pyvi compounds (VI); phrase needs ≥60 % of its words; plural-tolerant | ✅ |
+| Q-11 | `nlp/writing.py:generate_lesson` | Beginner sentence lessons mixed in advanced sentences | Small per-level bank topped up from all levels, then shuffled | Chosen level first, then nearest level | manual |
+| Q-12 | `main.py:_context_pos`, `_dictionary_lookup` | "early" in "go to bed early" defined as the noun "a shift" | First dictionary sense | spaCy part of speech in context filters the senses | manual |
 
 ### Security and privacy (S, H)
 
@@ -474,6 +484,7 @@ Columns: **ID**, **Where** (file and symbol), **Symptom**, **Root cause**, **Fix
 | U-3 | `ConceptMapModal`, `SmartNotesModal` (`engineLabel`) | Labels claimed "TF-IDF / TextRank" even with Gemini |
 | U-4 | `TeamChatWidget.fetchAiMessages` | Auto-scrolled every 3 s |
 | U-5 | `package.json`, lint | `npm run lint` used a missing eslint → oxlint; package renamed `workflow` |
+| U-6 | `DocumentViewer.jsx` chat mode toggle | Tab was named "OmiGuide" (the reference product's name) → "Gia sư AI" |
 
 ---
 
@@ -528,6 +539,10 @@ The owner names two products as inspiration. Copy **features and mechanics, not 
 ---
 
 ## 12. Verification recipes
+
+- **Journeys** (`tests/journeys/`, need backend on :8000 and, for the UI one, Vite on :5173; use a throwaway `WORKFLOW_DATA_DIR`):
+  - `python tests/journeys/mkpdf.py /tmp/bio.pdf && python tests/journeys/api_journey.py /tmp/bio.pdf tests/journeys/strong_essay.txt` — 59 quality checks over every learning flow (answers in the right place, distractors valid, SM-2 1→6→15, exam cites pages 1–3, IELTS strong ≥6 / weak ≤4.5, teach-back good ≫ bad…). Search and web import need internet.
+  - `node tests/journeys/drive_ui.cjs <outdir> web|desktop` — Google Drive sidebar/browser with Google mocked (GIS popup, or the `window.workflowDesktop.google` bridge): connect, tree, shared drives, pin, import, private viewer, session restore, disconnect.
 
 - **Endpoint fuzz** (offline): post every generator endpoint with EN, VI, empty, symbol and very long inputs. Assert no 5xx and valid shapes (MCQ `correct_option_id` ∈ option ids; concept-map edges reference existing nodes).
 - **Browser flows:** run backend + Vite, then use Playwright (pre-installed; `require('playwright')`). Set `localStorage.workflow_user` and `workflow_api_key='OFFLINE'`. Collect `pageerror`, console errors and API responses ≥ 400. Useful pages: `/#/exam-take/{id}` (use `page.clock` for timer tests), `/#/project/{id}`, `/#/vocabulary`, `/#/writing`, `/#/settings`.

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Volume2, X } from 'lucide-react';
 import { getEngineKey } from '../utils/engine';
 
@@ -107,6 +108,14 @@ export default function WritingPractice() {
   const [savedWords, setSavedWords] = useState({});
   
   const [hintPopover, setHintPopover] = useState(null);
+  // A hint belongs to one sentence: close it when the sentence or the screen changes (it used
+  // to stay open over the setup menu after "Thoát").
+  useEffect(() => { setHintPopover(null); }, [screen, currentIndex]);
+  // Clicking "Luyện viết" in the sidebar while in a lesson goes back to the setup menu
+  // (same-route navigation gives a new location.key but didn't remount the page).
+  const location = useLocation();
+  const firstKey = React.useRef(location.key);
+  useEffect(() => { if (location.key !== firstKey.current) setScreen('setup'); }, [location.key]);
   const [hintLoading, setHintLoading] = useState(false);
   
   // IELTS setup states

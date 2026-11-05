@@ -306,10 +306,10 @@ const DocumentViewer = () => {
           
           {/* Chat Panel */}
           <>
-              {/* Chat mode toggle — Chat chính (plain AI) vs OmiGuide (persona tutor) */}
+              {/* Chat mode toggle — Chat chính (plain AI) vs Gia sư (persona tutor) */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 24px 0' }}>
                 <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--surface-grey)', padding: '4px', borderRadius: '24px' }}>
-                  {[['main', 'Chat chính'], ['omiguide', 'OmiGuide']].map(([mode, label]) => (
+                  {[['main', 'Chat chính'], ['omiguide', 'Gia sư AI']].map(([mode, label]) => (
                     <button key={mode} onClick={() => setChatMode(mode)} style={{
                       backgroundColor: chatMode === mode ? 'var(--brand-primary)' : 'transparent',
                       border: 'none', borderRadius: '20px', padding: '6px 16px', fontSize: '0.8rem',
@@ -331,7 +331,7 @@ const DocumentViewer = () => {
                     </div>
                     <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', maxWidth: '420px', textAlign: 'center', margin: 0 }}>
                       {chatMode === 'omiguide'
-                        ? 'OmiGuide dạy kèm theo persona đã chọn trong Studio, bám sát giáo án.'
+                        ? 'Gia sư AI dạy kèm theo persona đã chọn trong Studio, bám sát giáo án.'
                         : 'Chat chính hỏi đáp trực tiếp với AI trên nguồn tài liệu của dự án.'}
                     </p>
                   </div>

@@ -20,9 +20,10 @@ def _as_mcq(q):
 
 def _as_true_false(q):
     correct = _correct_text(q)
-    wrongs = [o["text"] for o in q["options"] if o["id"] != q["correct_option_id"]]
+    terms = q.get("terms") or {}
+    wrongs = [terms.get(o["id"], o["text"]) for o in q["options"] if o["id"] != q["correct_option_id"]]
     make_true = not wrongs or random.random() < 0.5
-    filler = correct if make_true else random.choice(wrongs)
+    filler = terms.get(q["correct_option_id"], correct) if make_true else random.choice(wrongs)
     statement = q["question"].replace("_______", filler, 1)
     return {
         "type": "true_false",
@@ -115,6 +116,7 @@ def extract_exam(text: str, num_questions: int = 10, types=None, with_explanatio
             expl = converted.get("explanation")
             if expl and not expl.strip().endswith(f"({ref})"):
                 converted["explanation"] = f"{expl.strip()} ({ref})"
+        converted.pop("terms", None)  # internal: original-case terms for the converters
         questions.append(converted)
         i += 1
 
