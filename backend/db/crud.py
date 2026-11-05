@@ -17,7 +17,7 @@ def remove_document_files(doc_id: int) -> None:
         except OSError:
             pass
 
-def get_flashcards(db: Session, project_id: int = None, document_id: int = None, skip: int = 0, limit: int = 100):
+def get_flashcards(db: Session, project_id: int = None, document_id: int = None, skip: int = 0, limit: int = 1000):
     query = db.query(models.Flashcard)
     if project_id is not None:
         query = query.filter(models.Flashcard.project_id == project_id)
@@ -79,8 +79,9 @@ def update_flashcard_sm2(db: Session, card_id: int, interval: int, ease: float, 
         db.refresh(db_card)
     return db_card
 
-def get_folders(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Folder).offset(skip).limit(limit).all()
+def get_folders(db: Session, skip: int = 0, limit: int | None = None):
+    query = db.query(models.Folder).order_by(models.Folder.id).offset(skip)
+    return (query.limit(limit) if limit else query).all()
 
 def create_folder(db: Session, name: str):
     db_folder = models.Folder(name=name)
@@ -89,11 +90,14 @@ def create_folder(db: Session, name: str):
     db.refresh(db_folder)
     return db_folder
 
-def get_documents(db: Session, project_id: int = None, skip: int = 0, limit: int = 100):
+def get_documents(db: Session, project_id: int = None, skip: int = 0, limit: int | None = None):
+    # No implicit cap: a default limit of 100 silently hid every document after the 100th
+    # (and the UI's "latest document" lookups then picked the wrong one).
     query = db.query(models.Document)
     if project_id is not None:
         query = query.filter(models.Document.project_id == project_id)
-    return query.offset(skip).limit(limit).all()
+    query = query.order_by(models.Document.id).offset(skip)
+    return (query.limit(limit) if limit else query).all()
 
 def create_document(db: Session, filename: str, content: str, kind: str = "pdf", project_id: int = None, page_count: int = None, pages_data: str = None):
     db_doc = models.Document(filename=filename, content=content, kind=kind, project_id=project_id, page_count=page_count, pages_data=pages_data)
@@ -142,11 +146,12 @@ def create_project(db: Session, name: str, description: str = "", folder_id: int
     db.refresh(db_project)
     return db_project
 
-def get_projects(db: Session, skip: int = 0, limit: int = 100, folder_id: int = None):
+def get_projects(db: Session, skip: int = 0, limit: int | None = None, folder_id: int = None):
     query = db.query(models.Project)
     if folder_id is not None:
         query = query.filter(models.Project.folder_id == folder_id)
-    return query.offset(skip).limit(limit).all()
+    query = query.order_by(models.Project.id).offset(skip)
+    return (query.limit(limit) if limit else query).all()
 
 def get_project(db: Session, project_id: int):
     return db.query(models.Project).filter(models.Project.id == project_id).first()
