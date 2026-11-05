@@ -1,6 +1,21 @@
 from sqlalchemy.orm import Session
 from . import models
+from .database import UPLOAD_DIR
 import datetime
+import glob
+import os
+
+
+def remove_document_files(doc_id: int) -> None:
+    """Delete every stored source file for a document id (uploads/{id}.*).
+
+    SQLite reuses the highest rowid after a delete, so leftover files would otherwise be
+    served as the source file of the NEXT document that gets this id."""
+    for path in glob.glob(os.path.join(UPLOAD_DIR, f"{int(doc_id)}.*")):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 def get_flashcards(db: Session, project_id: int = None, document_id: int = None, skip: int = 0, limit: int = 100):
     query = db.query(models.Flashcard)
@@ -85,6 +100,9 @@ def create_document(db: Session, filename: str, content: str, kind: str = "pdf",
     db.add(db_doc)
     db.commit()
     db.refresh(db_doc)
+    # A reused id may still have files from a deleted document (e.g. one removed by an
+    # older version that didn't clean up) — never let them leak into this one.
+    remove_document_files(db_doc.id)
     return db_doc
 
 def delete_document(db: Session, doc_id: int) -> bool:
@@ -103,6 +121,7 @@ def delete_document(db: Session, doc_id: int) -> bool:
     db.query(models.Flashcard).filter(models.Flashcard.document_id == doc_id).delete()
     db.delete(doc)
     db.commit()
+    remove_document_files(doc_id)
     return True
 
 
