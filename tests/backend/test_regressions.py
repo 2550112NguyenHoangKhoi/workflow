@@ -603,3 +603,21 @@ def test_canvas_workspace_persists_and_synthesis_takes_notes(client):
     # Chat history can be cleared.
     client.post("/api/chat", json={"message": "What is a stack?", "document_id": did, **OFFLINE})
     assert client.delete(f"/api/documents/{did}/messages").json()["deleted"] == 2
+
+
+def test_exam_word_export_and_no_placeholder_questions(client):
+    did = client.post("/api/documents/upload", files={"file": ("pda.txt", (
+        "A pushdown automaton is a finite automaton extended with a stack. The stack gives the automaton unbounded memory. "
+        "A context-free grammar generates a context-free language from its productions. "
+        "Every regular language is also a context-free language. Deterministic pushdown automata accept fewer languages.").encode(), "text/plain")}).json()["id"]
+    exam = client.post("/api/exams/generate", json={"document_id": did, "num_questions": 4, "question_types": ["mcq", "essay"], **OFFLINE}).json()
+    r = client.post(f"/api/exams/{exam['id']}/export.docx", json={"template": {"school": "THPT ABC", "subject": "Tin học", "footer": "Mã đề 101"}})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/vnd.openxmlformats")
+    import docx, io
+    d = docx.Document(io.BytesIO(r.content))
+    text = "\n".join(p.text for p in d.paragraphs) + "\n".join(c.text for t in d.tables for row in t.rows for c in row.cells)
+    assert "THPT ABC" in text and "ĐÁP ÁN VÀ HƯỚNG DẪN CHẤM" in text and "Câu 1" in text
+    # An empty source no longer produces a fake "What is 2+2?" exam.
+    bad = client.post("/api/exams/generate", json={"title": "x", "num_questions": 3, **OFFLINE})
+    assert bad.status_code == 422
+    assert client.post("/api/generate_quiz", json={"topic_or_text": "Hi.", **OFFLINE}).status_code == 422

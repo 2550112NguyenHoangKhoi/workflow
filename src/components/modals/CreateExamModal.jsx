@@ -99,7 +99,8 @@ const CreateExamModal = ({ isOpen, onClose, projectId, documentId, onSuccess }) 
           setViewMode('result');
         }
       } else {
-        alert("Tạo đề thi thất bại.");
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || "Tạo đề thi thất bại.");
       }
     } catch (e) {
       console.error(e);

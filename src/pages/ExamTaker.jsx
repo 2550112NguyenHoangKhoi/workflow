@@ -90,6 +90,12 @@ function ExamTaker() {
   const [sourceDoc, setSourceDoc] = useState(null);
   const [essayFeedback, setEssayFeedback] = useState({}); // question index → grading result
   const [cardsMade, setCardsMade] = useState(null);
+  // Teacher export: Word file with a saved print template (header, footer, logo).
+  const [wordOpen, setWordOpen] = useState(false);
+  const [tpl, setTpl] = useState(() => { try { return JSON.parse(localStorage.getItem('workflow_exam_template') || '{}'); } catch { return {}; } });
+  const [withKey, setWithKey] = useState(true);
+  const [withGuide, setWithGuide] = useState(true);
+  const [wordBusy, setWordBusy] = useState(false);
   const [sourcePage, setSourcePage] = useState(0);
   const [sourceMode, setSourceMode] = useState('pdf'); // 'pdf' | 'text'
   const [pdfDoc, setPdfDoc] = useState(null);
@@ -320,6 +326,24 @@ function ExamTaker() {
     win.print();
   }
 
+  async function downloadWord() {
+    setWordBusy(true);
+    try { localStorage.setItem('workflow_exam_template', JSON.stringify(tpl)); } catch { /* storage full (large logo) */ }
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/exams/${artifactId}/export.docx`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: { ...tpl, duration: tpl.duration || config.duration_minutes }, answer_key: withKey, grading_guide: withGuide }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Không xuất được file Word.');
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url; a.download = `${(title || 'de-thi').replace(/[\\/:*?"<>|]+/g, '_')}.docx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setWordOpen(false);
+    } catch (e) { alert(e.message); } finally { setWordBusy(false); }
+  }
+
   function renderOptions(q, i) {
     return (q.options || []).map((o, oi) => {
       const selected = answers[i] === o.id;
@@ -450,6 +474,32 @@ function ExamTaker() {
   if (loading) return <div style={{ padding: 48, color: 'var(--text-secondary)' }}>Đang tải đề thi…</div>;
   if (error) return <div style={{ padding: 48, color: '#DC2626' }}>{error}</div>;
 
+  const wordDialog = wordOpen && (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div role="dialog" aria-label="Xuất đề Word" style={{ width: 520, maxWidth: '94vw', maxHeight: '90vh', overflowY: 'auto', backgroundColor: 'var(--bg-tertiary)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, flex: 1, color: 'var(--text-navy)' }}>Xuất đề (Word) · Template in</h3>
+          <button onClick={() => setWordOpen(false)} aria-label="Đóng" style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+        </div>
+        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Header, footer và logo được lưu lại cho lần xuất sau.</div>
+        {[['school', 'Tên trường'], ['department', 'Tổ / Khoa'], ['exam_name', 'Tên kỳ thi'], ['subject', 'Môn'], ['duration', 'Thời gian (phút)'], ['header_note', 'Ghi chú đầu đề (VD: Mã đề 101)'], ['footer', 'Chân trang']].map(([k, l]) => (
+          <label key={k} style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            {l}
+            <input name={k} value={tpl[k] || ''} onChange={e => setTpl(t => ({ ...t, [k]: e.target.value }))} style={{ padding: 8, borderRadius: 8, border: '1px solid var(--border-medium)', backgroundColor: 'var(--surface-plain)', color: 'var(--text-ink)' }} />
+          </label>
+        ))}
+        <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          Logo trường
+          <input type="file" accept="image/png,image/jpeg" onChange={e => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setTpl(t => ({ ...t, logo: r.result })); r.readAsDataURL(f); }} />
+          {tpl.logo && <img src={tpl.logo} alt="logo" style={{ height: 32 }} />}
+        </label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-navy)' }}><input type="checkbox" checked={withKey} onChange={e => setWithKey(e.target.checked)} /> Kèm đáp án và thang điểm</label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-navy)' }}><input type="checkbox" checked={withGuide} onChange={e => setWithGuide(e.target.checked)} /> Kèm hướng dẫn chấm tự luận</label>
+        <button onClick={downloadWord} disabled={wordBusy} style={{ backgroundColor: '#2B579A', color: '#fff', border: 'none', borderRadius: 10, padding: 12, fontWeight: 700, cursor: 'pointer' }}>{wordBusy ? 'Đang xuất…' : 'Tải file .docx'}</button>
+      </div>
+    </div>
+  );
+
   const btnRound = { width: 40, height: 40, borderRadius: '50%', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' };
   const lowTime = seconds < 5 * 60;
   const pct = score.total ? Math.round((score.correct / score.total) * 100) : 0;
@@ -476,6 +526,7 @@ function ExamTaker() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
+      {wordDialog}
       {/* HEADER BAR */}
       <div style={{ height: 72, backgroundColor: '#E2F0D9', borderBottom: '1px solid var(--border-light)', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -488,6 +539,9 @@ function ExamTaker() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={downloadPDF} style={{ backgroundColor: '#3B6B59', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600 }}>
             <Download size={16} /> Tải PDF
+          </button>
+          <button onClick={() => setWordOpen(true)} data-testid="export-word" style={{ backgroundColor: '#2B579A', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600 }}>
+            <FileText size={16} /> Tải Word
           </button>
           <button onClick={downloadJSON} style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-navy)', border: '1px solid var(--border-medium)', borderRadius: 10, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600 }}>
             <FileText size={16} /> Tải JSON

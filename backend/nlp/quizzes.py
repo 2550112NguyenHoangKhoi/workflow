@@ -295,14 +295,8 @@ def _fallback_quiz(text: str) -> Dict:
                 "explanation": f"The missing word is '{target_clean}'."
             })
             
-    if not questions:
-        questions = [{
-            "question": "What is 2+2?",
-            "options": [{"id": "a", "text": "3"}, {"id": "b", "text": "4"}, {"id": "c", "text": "5"}, {"id": "d", "text": "6"}],
-            "correct_option_id": "b",
-            "answer": "b",
-            "explanation": "2+2 equals 4."
-        }]
+    # No usable facts → no questions. (A hard-coded "What is 2+2?" used to be returned, so an
+    # empty or too-short source silently produced a fake quiz/exam.) Endpoints report 422.
 
     return {
         "title": "Algorithmic Reading Comprehension Quiz",

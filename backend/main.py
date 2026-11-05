@@ -1714,6 +1714,8 @@ async def generate_quiz_endpoint(request: TopicRequest, db: Session = Depends(ge
     if request.project_id or request.document_id:
         _clear_unshared_artifacts(db, "quiz", request.project_id, request.document_id)
         crud.create_artifact(db, project_id=request.project_id, type="quiz", title=quiz_data.get("title", "Bài Trắc Nghiệm"), content=json.dumps(quiz_data), document_id=request.document_id)
+    if not quiz_data.get("questions"):
+        raise HTTPException(status_code=422, detail="Nội dung quá ngắn để tạo câu hỏi trắc nghiệm.")
     return quiz_data
 class ExamPrepSchema(BaseModel):
     title: str
@@ -2740,6 +2742,9 @@ async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
         )
 
     data["questions"] = _normalize_exam_questions(data.get("questions", []))
+    if not data["questions"]:
+        raise HTTPException(status_code=422, detail=(
+            "Nguồn đã chọn chưa đủ nội dung để tạo câu hỏi. Hãy chọn tài liệu dài hơn hoặc thêm nguồn."))
 
     # Link the exam to its source document even when it came from ticked library sources
     # (no document_id): the exam page shows that document beside the questions and its
@@ -2767,6 +2772,35 @@ async def generate_exam(req: ExamGenRequest, db=Depends(get_db)):
         owner_email=req.owner_email,
     )
     return {"id": artifact.id, "title": artifact.title, "config": cfg, "questions": data["questions"]}
+
+
+class ExamExportRequest(BaseModel):
+    template: dict = {}          # school, department, exam_name, subject, duration, header_note, footer, logo (data URL)
+    answer_key: bool = True
+    grading_guide: bool = True
+
+
+@app.post("/api/exams/{artifact_id}/export.docx")
+def export_exam_docx(artifact_id: int, req: ExamExportRequest, db: Session = Depends(get_db)):
+    """Teacher export: the exam as a Word file with the saved print template, an answer key
+    with marks and an essay grading guide."""
+    from fastapi.responses import Response
+    from nlp.exam_docx import build_exam_docx
+    art = db.query(models.Artifact).filter(models.Artifact.id == artifact_id).first()
+    if not art:
+        raise HTTPException(status_code=404, detail="Không tìm thấy đề thi.")
+    try:
+        content = json.loads(art.content or "{}")
+    except Exception:
+        content = {}
+    questions = content.get("questions") or []
+    if not questions:
+        raise HTTPException(status_code=422, detail="Đề thi chưa có câu hỏi.")
+    data = build_exam_docx(art.title or "Đề thi", questions, req.template, req.answer_key, req.grading_guide)
+    from urllib.parse import quote
+    name = quote(re.sub(r"[\\/:*?\"<>|]+", "_", art.title or "de-thi") + ".docx")
+    return Response(content=data, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{name}"})
 
 
 @app.post("/api/exams/{artifact_id}/questions")

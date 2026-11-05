@@ -508,6 +508,8 @@ Columns: **ID**, **Where** (file and symbol), **Symptom**, **Root cause**, **Fix
 | F-27 | `pages/CanvasWorkspace.jsx` (route `/canvas/:kind/:id`, Studio "Không gian Canvas"), `models.Canvas`, `GET/PUT /api/canvas`, `/api/synthesize` `texts` | No canvas workspace | Board per project/document: document, note, AI chat, review (quiz + flashcards, "Dạy AI" hands the content to Active learning), synthesis nodes; drag a node's dot onto another to connect — AI nodes use every connected node's content; "Tạo bài học từ ghi chú"; autosave |
 | F-28 | `/api/search` (`_source_trust`), `SearchMaterialsModal` | Offline results all showed a constant "80% Match"; no source labels | TF-IDF relevance; "✓ Tin cậy" for .edu/.gov/.ac/.edu.vn and known academic sites, with the domain shown |
 | F-29 | `DELETE /api/{documents,projects}/{id}/messages`, chat header bin icon | Chat history could not be cleared | "Xoá lịch sử chat" |
+| F-30 | `nlp/exam_docx.py`, `POST /api/exams/{id}/export.docx`, ExamTaker "Tải Word" | Exams exported only as a browser print / JSON | Word file: school header + logo, candidate line, marks per question, answer key table, essay grading guide, footer + page numbers; the print template is saved (`workflow_exam_template`) |
+| F-31 | `nlp/quizzes.py:extract_quiz`, `/api/exams/generate`, `/api/generate_quiz`, `CreateExamModal` | With no usable source text the offline engine returned a hard-coded "What is 2+2?" question, so empty sources produced a fake exam | No placeholder: 422 with a clear message, shown by the dialog |
 | U-8 | `index.html` error box | Debug log printed every window error on screen via `innerHTML`, including the benign ResizeObserver warning | Ignores ResizeObserver, uses `textContent`, dismissible box |
 
 ### UI (U)
@@ -565,7 +567,7 @@ Sources: public pages + sitemap + robots, and the public JS bundles (omilearn `_
 | Notes node → "Tạo bài học từ ghi chú", voice-recording node (speech → note) | Smart notes, study doc; voice input exists (VoiceInput) | ⚠️ no free-form note editor / voice note |
 | Canvas workspace (nodes: documents, notes, AI chat, review, synthesis; edges feed AI context) | F-27 | ✅ (no video / voice-recording node types) |
 | Subject selection ("Chọn môn chính") filtering the workspace | Projects/folders | ⚠️ |
-| Teacher workspace (lesson plans by subject/grade/textbook/style, exams with answer key + grading guide exported to Word/PDF, print templates, classes/live activity) | Lesson plan (giáo án), exam generator, examdoc | ⚠️ no Word export / print templates / classes |
+| Teacher workspace (lesson plans by subject/grade/textbook/style, exams with answer key + grading guide exported to Word/PDF, print templates, classes/live activity) | Lesson plan (giáo án), exam generator, Word export with template + key + guide (F-30) | ⚠️ no class management / live activity (needs a server) |
 | Feedback with screenshot | F-18 | ✅ |
 | AI material search with trust labels | `/api/search` + F-28 | ✅ (domain heuristics) |
 
