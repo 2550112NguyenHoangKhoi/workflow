@@ -112,20 +112,36 @@ def create_document(db: Session, filename: str, content: str, kind: str = "pdf",
     remove_document_files(db_doc.id)
     return db_doc
 
+def _delete_artifacts(db: Session, query) -> None:
+    """Delete artifacts and the shares that point at them (no dangling shares)."""
+    ids = [a.id for a in query.all()]
+    if ids:
+        db.query(models.Share).filter(models.Share.artifact_id.in_(ids)).delete(synchronize_session=False)
+        db.query(models.Artifact).filter(models.Artifact.id.in_(ids)).delete(synchronize_session=False)
+
+
+def _delete_roadmaps(db: Session, query) -> None:
+    for rm in query.all():
+        db.query(models.RoadmapItem).filter(models.RoadmapItem.roadmap_id == rm.id).delete()
+        db.delete(rm)
+
+
+def _purge_document_rows(db: Session, doc_id: int) -> None:
+    """Everything that belongs to a document, except the document row itself."""
+    db.query(models.QuizScore).filter(models.QuizScore.document_id == doc_id).delete()
+    _delete_roadmaps(db, db.query(models.Roadmap).filter(models.Roadmap.document_id == doc_id))
+    db.query(models.ChatMessage).filter(models.ChatMessage.document_id == doc_id).delete()
+    _delete_artifacts(db, db.query(models.Artifact).filter(models.Artifact.document_id == doc_id))
+    db.query(models.Flashcard).filter(models.Flashcard.document_id == doc_id).delete()
+    db.query(models.ProjectMember).filter(models.ProjectMember.document_id == doc_id).delete()
+    db.query(models.ProjectInvite).filter(models.ProjectInvite.document_id == doc_id).delete()
+
+
 def delete_document(db: Session, doc_id: int) -> bool:
     doc = db.query(models.Document).filter(models.Document.id == doc_id).first()
     if not doc:
         return False
-    # Clean up quiz scores tied to this document so we don't leave orphans.
-    db.query(models.QuizScore).filter(models.QuizScore.document_id == doc_id).delete()
-    # Clean up roadmap items to prevent orphans before deleting roadmaps.
-    roadmaps = db.query(models.Roadmap).filter(models.Roadmap.document_id == doc_id).all()
-    for rm in roadmaps:
-        db.query(models.RoadmapItem).filter(models.RoadmapItem.roadmap_id == rm.id).delete()
-    db.query(models.Roadmap).filter(models.Roadmap.document_id == doc_id).delete()
-    db.query(models.ChatMessage).filter(models.ChatMessage.document_id == doc_id).delete()
-    db.query(models.Artifact).filter(models.Artifact.document_id == doc_id).delete()
-    db.query(models.Flashcard).filter(models.Flashcard.document_id == doc_id).delete()
+    _purge_document_rows(db, doc_id)
     db.delete(doc)
     db.commit()
     remove_document_files(doc_id)
@@ -163,16 +179,20 @@ def delete_project(db: Session, project_id: int) -> bool:
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
         return False
-    # Clean up roadmap items to prevent orphans before deleting roadmaps.
-    roadmaps = db.query(models.Roadmap).filter(models.Roadmap.project_id == project_id).all()
-    for rm in roadmaps:
-        db.query(models.RoadmapItem).filter(models.RoadmapItem.roadmap_id == rm.id).delete()
-    db.query(models.Roadmap).filter(models.Roadmap.project_id == project_id).delete()
+    # The project's documents go too (Project.documents is delete-orphan), so first remove
+    # everything hanging off each document — rows and stored files.
+    doc_ids = [d.id for d in project.documents]
+    for doc_id in doc_ids:
+        _purge_document_rows(db, doc_id)
+    _delete_roadmaps(db, db.query(models.Roadmap).filter(models.Roadmap.project_id == project_id))
     db.query(models.ChatMessage).filter(models.ChatMessage.project_id == project_id).delete()
-    db.query(models.Artifact).filter(models.Artifact.project_id == project_id).delete()
+    _delete_artifacts(db, db.query(models.Artifact).filter(models.Artifact.project_id == project_id))
     db.query(models.Flashcard).filter(models.Flashcard.project_id == project_id).delete()
+    db.query(models.TeamMessage).filter(models.TeamMessage.project_id == project_id).delete()
     db.delete(project)
     db.commit()
+    for doc_id in doc_ids:
+        remove_document_files(doc_id)
     return True
 
 def save_chat_message(db: Session, project_id: int = None, role: str = "", content: str = "", persona: str = None, document_id: int = None):
