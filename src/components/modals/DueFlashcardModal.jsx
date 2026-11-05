@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, ArrowRight, Check, Download } from 'lucide-react';
+import { X, Calendar, Check } from 'lucide-react';
 
 const DueFlashcardModal = ({ isOpen, onClose }) => {
   const [cards, setCards] = useState([]);

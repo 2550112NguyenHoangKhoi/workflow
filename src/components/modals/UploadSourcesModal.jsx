@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Upload, Loader2, Link as LinkIcon, Check } from 'lucide-react';
+import { X, Upload, Loader2, Check } from 'lucide-react';
 import { readUploadResult } from '../../utils/uploads';
 
 const UploadSourcesModal = ({ isOpen, onClose, projectId, documentId }) => {
@@ -155,7 +155,7 @@ const UploadSourcesModal = ({ isOpen, onClose, projectId, documentId }) => {
                     } else {
                       setUploadStatus('error');
                     }
-                  } catch (e) {
+                  } catch {
                     setUploadStatus('error');
                   } finally {
                     setIsUploading(false);

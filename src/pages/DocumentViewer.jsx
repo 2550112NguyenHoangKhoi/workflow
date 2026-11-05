@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useOutletContext } from 'react-router-dom';
-import { Users, ArrowRight, BrainCircuit, FileText, Sparkles, MessageCircle, Settings, FileSearch, PenTool, LayoutTemplate, Briefcase, Languages, Network } from 'lucide-react';
+import { Users, ArrowRight, BrainCircuit, FileText, Sparkles } from 'lucide-react';
 import PdfViewer from '../components/PdfViewer';
 import ProjectCollaborationModal from '../components/modals/ProjectCollaborationModal';
 import CreateExamModal from '../components/modals/CreateExamModal';

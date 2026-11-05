@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Volume2, X } from 'lucide-react';
+import { Volume2 } from 'lucide-react';
 import { getEngineKey } from '../utils/engine';
 
 function getEmail() {
   try { return JSON.parse(localStorage.getItem('workflow_user') || '{}').email; }
-  catch (e) { return undefined; }
+  catch { return undefined; }
 }
 
 function playAudio(text) {
   if (!text) return;
   const url = 'https://translate.google.com/translate_tts?ie=UTF-8&q=' +
     encodeURIComponent(text) + '&tl=en&client=tw-ob';
-  try { new Audio(url).play(); } catch (e) {}
+  try { new Audio(url).play(); } catch {}
 }
 
 export default function Vocabulary() {
@@ -143,7 +143,7 @@ export default function Vocabulary() {
         fetchStats();
         notify('Đã thêm từ');
       }
-    } catch (e) {
+    } catch {
       notify('Lỗi thêm từ', 'error');
     }
   };
@@ -174,7 +174,7 @@ export default function Vocabulary() {
         const err = await res.json();
         notify(err.detail || 'Lỗi tạo từ', 'error');
       }
-    } catch (e) {
+    } catch {
       notify('Lỗi gọi API', 'error');
     } finally {
       setIsGenerating(false);
@@ -201,7 +201,7 @@ export default function Vocabulary() {
         fetchStats();
         notify(`Đã thêm ${data.added} từ mới, bỏ qua ${data.skipped || 0} từ trùng`);
       }
-    } catch (e) {
+    } catch {
       notify('Lỗi nhập từ', 'error');
     }
   };
@@ -213,7 +213,7 @@ export default function Vocabulary() {
         fetchWords();
         fetchStats();
       }
-    } catch (e) {
+    } catch {
       notify('Lỗi xoá từ', 'error');
     }
   };
@@ -244,7 +244,7 @@ export default function Vocabulary() {
           done: false
         });
       }
-    } catch (e) {
+    } catch {
       notify('Lỗi ôn tập', 'error');
     }
   };
@@ -262,7 +262,7 @@ export default function Vocabulary() {
           owner_email: getEmail()
         })
       });
-    } catch (e) {}
+    } catch {}
 
     const newCorrect = review.correct + (correct ? 1 : 0);
     const newWrong = review.wrong + (!correct ? 1 : 0);
@@ -522,7 +522,7 @@ export default function Vocabulary() {
                         fetchStats();
                         notify('Đã thêm từ: ' + lookupResult.word);
                       }
-                    } catch (e) {
+                    } catch {
                       notify('Lỗi thêm từ', 'error');
                     }
                   }}

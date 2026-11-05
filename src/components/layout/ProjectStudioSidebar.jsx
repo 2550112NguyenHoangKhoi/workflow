@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
-import { Check, MoreVertical, Search, Upload, Calendar, MessageCircle, AlertCircle, FileText, Network, BrainCircuit } from 'lucide-react';
+import { Check, Search, Upload, Calendar, AlertCircle, FileText, Network } from 'lucide-react';
 import UploadSourcesModal from '../modals/UploadSourcesModal';
 import SearchMaterialsModal from '../modals/SearchMaterialsModal';
 import CreateExamModal from '../modals/CreateExamModal';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, FileText, AlertCircle, Network, BrainCircuit, Cloud, Share2, Sparkles, BookOpen } from 'lucide-react';
+import { Upload, FileText, Network, BrainCircuit, Cloud, Share2, Sparkles, BookOpen } from 'lucide-react';
 import UploadModal from '../modals/UploadModal';
 import CreateExamModal from '../modals/CreateExamModal';
 import CreateStudyDocModal from '../modals/CreateStudyDocModal';
@@ -77,26 +77,6 @@ const StudioSidebar = () => {
         : items.map(renderItem)}
     </div>
   );
-
-  const handleSelectWorkspace = async () => {
-    const desktop = window.workflowDesktop;
-    if (!desktop?.selectWorkspace) return alert("Chỉ đổi được thư mục lưu trữ trong ứng dụng desktop.");
-    try {
-      const res = await desktop.selectWorkspace();
-      if (!res) return;
-      const what = res.existing
-        ? 'Thư mục này đã có dữ liệu Workflow — ứng dụng sẽ dùng dữ liệu đó.'
-        : res.moved
-          ? 'Đã sao chép tài liệu và cơ sở dữ liệu sang thư mục mới (bản cũ vẫn được giữ nguyên).'
-          : 'Thư mục mới sẽ bắt đầu với dữ liệu trống.';
-      if (window.confirm(`Thư mục lưu trữ: ${res.path}\n\n${what}\n\nKhởi động lại ứng dụng ngay để áp dụng?`)) {
-        await desktop.relaunch();
-      }
-    } catch (err) {
-      console.error(err);
-      alert(`Không đổi được thư mục lưu trữ.\n${err.message || ''}`);
-    }
-  };
 
   return (
     <>

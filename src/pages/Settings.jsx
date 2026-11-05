@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Save, CheckCircle2, ShieldAlert, Cpu, Server, Settings as SettingsIcon, Download, TerminalSquare, RefreshCw, XCircle, Sparkles } from 'lucide-react';
+import { Key, Save, CheckCircle2, ShieldAlert, Server, Settings as SettingsIcon, Download, TerminalSquare, RefreshCw, XCircle, Sparkles, HardDrive } from 'lucide-react';
 
 // Three interchangeable engines power EVERY AI feature (chat, quiz, flashcards, notes, concept
 // map, roadmap...). The choice is encoded into localStorage['workflow_api_key'], which every
@@ -56,6 +56,34 @@ const Settings = () => {
     localStorage.setItem('workflow_api_key', signal);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
+  };
+
+  // Storage folder (desktop app): where the database and uploaded files live.
+  const [dataDir, setDataDir] = useState('');
+  const isDesktop = Boolean(window.workflowDesktop?.selectWorkspace);
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/api/system/info')
+      .then(res => (res.ok ? res.json() : null))
+      .then(d => d && setDataDir(d.data_dir))
+      .catch(() => {});
+  }, []);
+
+  const handleSelectWorkspace = async () => {
+    try {
+      const res = await window.workflowDesktop.selectWorkspace();
+      if (!res) return;
+      const what = res.existing
+        ? 'Thư mục này đã có dữ liệu Workflow — ứng dụng sẽ dùng dữ liệu đó.'
+        : res.moved
+          ? 'Đã sao chép tài liệu và cơ sở dữ liệu sang thư mục mới (bản cũ vẫn được giữ nguyên).'
+          : 'Thư mục mới sẽ bắt đầu với dữ liệu trống.';
+      if (window.confirm(`Thư mục lưu trữ: ${res.path}\n\n${what}\n\nKhởi động lại ứng dụng ngay để áp dụng?`)) {
+        await window.workflowDesktop.relaunch();
+      }
+    } catch (err) {
+      console.error(err);
+      alert(`Không đổi được thư mục lưu trữ.\n${err.message || ''}`);
+    }
   };
 
   const checkLocal = async () => {
@@ -243,6 +271,25 @@ const Settings = () => {
         }}>
           {isSaved ? <><CheckCircle2 size={20} /> Đã lưu cài đặt</> : <><Save size={20} /> Lưu cài đặt</>}
         </button>
+      </div>
+
+      <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '16px', padding: '32px', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-navy)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+          <HardDrive size={20} /> Thư mục lưu trữ dữ liệu
+        </h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: 0 }}>
+          Cơ sở dữ liệu và các file tài liệu bạn tải lên được lưu tại đây. Có thể chọn một thư mục đồng bộ (Google Drive, iCloud, OneDrive…) để sao lưu.
+        </p>
+        <code style={{ backgroundColor: '#0F172A', color: '#E2E8F0', padding: '10px 14px', borderRadius: '10px', fontSize: '0.85rem', wordBreak: 'break-all' }}>
+          {dataDir || 'Không kết nối được backend.'}
+        </code>
+        {isDesktop ? (
+          <button onClick={handleSelectWorkspace} style={{ alignSelf: 'flex-start', padding: '10px 18px', borderRadius: '10px', border: '1px solid #8A334B', backgroundColor: 'white', color: '#8A334B', fontWeight: 700, cursor: 'pointer' }}>
+            Đổi thư mục lưu trữ…
+          </button>
+        ) : (
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Chỉ đổi được thư mục trong ứng dụng desktop.</span>
+        )}
       </div>
     </div>
   );

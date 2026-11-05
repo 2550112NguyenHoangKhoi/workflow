@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithGoogle, isAuthConfigured, getStoredUser } from '../utils/googleAuth';
+import {  getStoredUser } from '../utils/googleAuth';
 import LoginModal from '../components/modals/LoginModal';
 
 const LandingPage = ({ onLoginSuccess }) => {

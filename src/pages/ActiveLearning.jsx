@@ -1,17 +1,16 @@
 import React, { useState } from 'react';
-import { Volume2 } from 'lucide-react';
 import { getEngineKey } from '../utils/engine';
 
 function getEmail() {
   try { return JSON.parse(localStorage.getItem('workflow_user') || '{}').email; }
-  catch (e) { return undefined; }
+  catch { return undefined; }
 }
 
 function playAudio(text) {
   if (!text) return;
   const url = 'https://translate.google.com/translate_tts?ie=UTF-8&q=' +
     encodeURIComponent(text) + '&tl=vi&client=tw-ob';
-  try { new Audio(url).play(); } catch (e) {}
+  try { new Audio(url).play(); } catch {}
 }
 
 const LEVELS = [

@@ -44,7 +44,7 @@ export default function TeamChatWidget({ projectId }) {
         }
         setMembers(active);
       }
-    } catch (err) {}
+    } catch {}
   }, [projectId, membersUrl]);
 
   const fetchMessages = useCallback(async () => {

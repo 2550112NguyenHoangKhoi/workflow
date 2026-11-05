@@ -28,7 +28,7 @@ const SearchMaterialsModal = ({ isOpen, onClose }) => {
           return `https://www.youtube.com/embed/${videoId}`;
         }
       }
-    } catch (e) {}
+    } catch {}
     return url;
   };
 

@@ -707,6 +707,13 @@ async def recommend_local_model():
         "alternatives": alts
     }
 
+@app.get("/api/system/info")
+def system_info():
+    """Where this install keeps its data (shown in Settings → storage folder)."""
+    from db.database import DATA_DIR
+    return {"data_dir": DATA_DIR}
+
+
 @app.get("/api/usage")
 async def get_usage():
     """AI-token usage for the Sidebar / account-dropdown widgets (estimated, local-only)."""
