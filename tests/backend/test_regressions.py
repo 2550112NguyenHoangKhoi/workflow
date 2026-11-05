@@ -163,3 +163,39 @@ def test_api_token_required_when_configured(client, monkeypatch):
     assert client.get("/api/documents", headers={"X-Workflow-Token": "s3cret"}).status_code == 200
     r = client.options("/api/documents", headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "GET"})
     assert r.headers.get("access-control-allow-origin") is None
+
+
+# ── Offline NLP quality ──────────────────────────────────────────────────────
+
+def test_quiz_distractors_come_from_the_document():
+    from nlp.quizzes import extract_quiz
+    text = ("Isaac Newton published the Principia in 1687 in London. Charles Darwin published On the "
+            "Origin of Species in 1859 in England. Albert Einstein developed the theory of relativity in "
+            "1905 in Switzerland. Marie Curie won the Nobel Prize in Physics in 1903 in Stockholm.")
+    for q in extract_quiz(text, 4)["questions"]:
+        for o in q["options"]:
+            assert o["text"] not in ("Microsoft", "The United Nations", "The united nations")
+
+
+def test_exam_cites_the_right_page_and_mixes_types():
+    from nlp.exam import extract_exam
+    text = ("[Trang 1]\nPhotosynthesis is the process by which plants convert light energy into chemical energy in leaves.\n\n"
+            "[Trang 2]\nChlorophyll is the green pigment that absorbs light in the chloroplasts of plant cells.\n\n"
+            "[Trang 3]\nThe Calvin cycle uses ATP and NADPH to fix carbon dioxide into glucose molecules.")
+    qs = extract_exam(text, 6, ["mcq", "true_false"])["questions"]
+    assert len(qs) == 6
+    assert {q["source_ref"] for q in qs} == {"Trang 1", "Trang 2", "Trang 3"}
+    pairs = [(q["type"], q["source_ref"]) for q in qs]
+    assert len(pairs) == len(set(pairs))
+
+
+def test_vietnamese_compounds_are_not_split():
+    from nlp.vietnamese import vi_nouns
+    assert "năng lượng hóa học" in vi_nouns("Quang hợp chuyển hóa năng lượng ánh sáng thành năng lượng hóa học.")
+
+
+def test_offline_ielts_band_rejects_nonsense():
+    from nlp.writing import grade_ielts
+    prompt = "Some people believe that university education should be free for all students. Do you agree?"
+    assert grade_ielts(prompt, "banana " * 260, "task2")["band"] <= 3.0
+    assert grade_ielts(prompt, "University should be free. I agree.", "task2")["band"] <= 3.5

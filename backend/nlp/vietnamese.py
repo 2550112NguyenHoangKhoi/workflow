@@ -91,7 +91,24 @@ def vi_pos(text: str):
     """
     from pyvi import ViTokenizer, ViPosTagger
     words, tags = ViPosTagger.postagging(ViTokenizer.tokenize(text))
-    return [(w.replace("_", " ").strip(), t) for w, t in zip(words, tags)]
+    return _merge_split_compounds([(w.replace("_", " ").strip(), t) for w, t in zip(words, tags)])
+
+
+# pyvi often splits a trailing compound off a noun phrase: "năng lượng hóa học" comes out as
+# "năng lượng hóa" + "học", so cloze questions blanked half a word. These syllables almost only
+# occur as the second half of academic compounds (hóa học, động lực, vật lý, hợp chất, phân tử…).
+_COMPOUND_TAILS = {"học", "lực", "lý", "chất", "tử", "trường", "tính", "điện", "nhiệt", "lượng", "giới", "thể"}
+
+
+def _merge_split_compounds(pairs):
+    out = []
+    for word, tag in pairs:
+        if (out and out[-1][1] in _NOUN_TAGS and " " not in word
+                and word.lower() in _COMPOUND_TAILS):
+            out[-1] = (f"{out[-1][0]} {word}", out[-1][1])
+        else:
+            out.append((word, tag))
+    return out
 
 
 def vi_nouns(text: str):
