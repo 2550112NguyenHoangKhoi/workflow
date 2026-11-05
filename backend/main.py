@@ -1445,15 +1445,6 @@ async def generate_concept_map_endpoint(request: TopicRequest):
     from nlp.concept_map import generate_concept_map
     return generate_concept_map(request.topic_or_text)
 
-if __name__ == "__main__":
-    import uvicorn
-    import sys
-    
-    is_frozen = getattr(sys, 'frozen', False)
-    if is_frozen:
-        uvicorn.run(app, host="127.0.0.1", port=8000, workers=1)
-    else:
-        uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
 
 @app.post("/api/suggestions")
 async def generate_suggestions(request: TopicRequest, x_api_key: str | None = Header(default=None)):
@@ -3267,3 +3258,14 @@ def post_team_message(project_id: int, body: TeamMessageIn, db=Depends(get_db)):
     db.commit()
     db.refresh(msg)
     return _msg_dict(msg)
+
+
+# Must stay at the very END of the module: in the frozen (PyInstaller) build uvicorn.run()
+# blocks, so any route defined below this point would never be registered.
+if __name__ == "__main__":
+    import uvicorn
+
+    if getattr(sys, "frozen", False):
+        uvicorn.run(app, host="127.0.0.1", port=int(os.getenv("WORKFLOW_PORT", "8000")), workers=1)
+    else:
+        uvicorn.run("main:app", host="127.0.0.1", port=int(os.getenv("WORKFLOW_PORT", "8000")), reload=True)
