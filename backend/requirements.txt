@@ -1,14 +1,35 @@
+# Web server
 fastapi
 uvicorn
 pydantic
 python-dotenv
+python-multipart
+
+# AI (Gemini via the Antigravity agent SDK) + web search
+google-antigravity
+ddgs
+
+# Document ingestion
+pdfplumber
+python-docx
+trafilatura
+youtube-transcript-api>=1.0
+
+# Dictionary / translation helpers
+requests
+certifi
+deep-translator
+
+# Offline NLP engine
 spacy
 pytextrank
-pdfplumber
 nltk
-python-multipart
-pyinstaller
 scikit-learn
 networkx
-sqlalchemy
 pyvi
+
+# Storage
+sqlalchemy
+
+# Packaging
+pyinstaller

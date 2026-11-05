@@ -1,0 +1,7 @@
+# Optional heavy extras. The app works without them; uploads of these kinds are
+# accepted but come back with no extracted text (the API reports a warning).
+#   - Image OCR also needs the Tesseract binary installed on the system.
+#   - Audio/video transcription downloads a Whisper model on first use.
+pytesseract
+Pillow
+faster-whisper
