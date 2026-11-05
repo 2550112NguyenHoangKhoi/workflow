@@ -560,29 +560,53 @@ async def get_document_artifacts(document_id: int, db: Session = Depends(get_db)
     return [{"id": a.id, "type": a.type, "title": a.title, "content": a.content, "created_at": a.created_at} for a in artifacts]
 
 @app.get("/api/documents/{document_id}/notes")
-async def get_document_notes_api(document_id: int, db: Session = Depends(get_db)):
-    # Check if artifact exists
-    artifact = db.query(models.Artifact).filter(models.Artifact.document_id == document_id, models.Artifact.type == 'smart_notes').first()
-    if artifact:
-        import json
-        return json.loads(artifact.content)
-    
-    # Generate notes if not exists
+async def get_document_notes_api(document_id: int, api_key: str | None = None, regenerate: bool = False,
+                                 x_api_key: str | None = Header(default=None), db: Session = Depends(get_db)):
+    """Smart notes for a document, cached as a 'smart_notes' artifact. Uses the selected AI
+    engine (falls back to the offline TextRank extractor); `regenerate=true` rebuilds them."""
+    doc = db.query(models.Document).filter(models.Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu.")
+    cached = db.query(models.Artifact).filter(models.Artifact.document_id == document_id,
+                                              models.Artifact.type == 'smart_notes').all()
+    if cached and not regenerate:
+        try:
+            return json.loads(cached[0].content)
+        except Exception:
+            pass
+
     text = get_document_text(db, document_id)
-    from nlp.notes import extract_notes
-    notes_dict = extract_notes(text)
-    
-    # Save it
-    import json
-    new_artifact = models.Artifact(
+    if not text.strip():
+        raise HTTPException(status_code=422, detail="Tài liệu chưa có nội dung văn bản để tạo ghi chú.")
+
+    notes_dict = None
+    current_key = get_api_key(api_key or x_api_key)
+    if current_key:
+        try:
+            config = LocalAgentConfig(api_key=current_key, model="gemini-3.1-flash-lite",
+                                      response_schema=NoteSchema, capabilities=FAST_CAPS)
+            prompt = ("Generate high-quality, structured study notes (title, summary, and sections with "
+                      "bullet_points) based on the following text, in the SAME language as the text.\n"
+                      f"Text: {text[:30000]}")
+            data = await agent_run(config, prompt, timeout=40)
+            if data and data.get("summary") and data.get("sections"):
+                notes_dict = data
+        except Exception as e:
+            print(f"[notes] AI failed, falling back to offline: {e}")
+    if notes_dict is None:
+        from nlp.notes import extract_notes
+        notes_dict = extract_notes(text)
+
+    for old in cached:
+        db.delete(old)
+    db.add(models.Artifact(
         document_id=document_id,
+        project_id=doc.project_id,
         type='smart_notes',
         title=notes_dict.get('title', 'Smart Notes'),
-        content=json.dumps(notes_dict, ensure_ascii=False)
-    )
-    db.add(new_artifact)
+        content=json.dumps(notes_dict, ensure_ascii=False),
+    ))
     db.commit()
-    
     return notes_dict
 
 # --- AI Engine ---
