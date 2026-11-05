@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
-import { Check, MoreVertical, Search, Upload, Calendar, MessageCircle, AlertCircle, FileText, Network, BrainCircuit, Share2, Users } from 'lucide-react';
+import { Check, MoreVertical, Search, Upload, Calendar, MessageCircle, AlertCircle, FileText, Network, BrainCircuit } from 'lucide-react';
 import UploadSourcesModal from '../modals/UploadSourcesModal';
 import SearchMaterialsModal from '../modals/SearchMaterialsModal';
 import CreateExamModal from '../modals/CreateExamModal';
@@ -176,7 +176,6 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
         <div style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>UPLOADED</h3>
-            <button style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', padding: '0 4px' }} onClick={() => {}}>⋮</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {documents.length === 0 ? (
@@ -201,27 +200,9 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => alert(`Link chia sẻ tài liệu công khai: https://workflow.com/share/${doc.id}`)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--brand-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Share2 size={14} />
-                  </button>
                 </div>
               ))
             )}
-          </div>
-        </div>
-
-        {/* Cộng đồng & Chia sẻ */}
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>CỘNG ĐỒNG & CHIA SẺ</h3>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
-            <button onClick={() => alert('Tính năng xem Đề thi được cộng đồng chia sẻ sắp ra mắt!')} style={{ backgroundColor: '#FDF8F5', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', color: '#1B2A4E', fontWeight: 600, fontSize: '0.85rem' }}>
-              <Users size={16} color="var(--brand-primary)" /> Đề thi được chia sẻ
-            </button>
-            <button onClick={() => alert('Tính năng xem Tài liệu phòng thi sắp ra mắt!')} style={{ backgroundColor: '#FDF8F5', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', color: '#1B2A4E', fontWeight: 600, fontSize: '0.85rem' }}>
-              <FileText size={16} color="var(--brand-primary)" /> Tài liệu phòng thi
-            </button>
           </div>
         </div>
 
@@ -243,12 +224,6 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
         <div style={{ marginTop: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>GIÁO ÁN</h3>
-            <button 
-              style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', padding: '0 4px' }}
-              onClick={() => {}}
-            >
-              ⋮
-            </button>
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
@@ -419,7 +394,6 @@ const ProjectStudioSidebar = ({ selectedPersona, setSelectedPersona }) => {
         <div style={{ marginTop: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1B2A4E', letterSpacing: '0.05em' }}>RECENT ARTIFACTS</h3>
-            <button style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', padding: '0 4px' }} onClick={() => {}}>⋮</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {artifacts.length === 0 ? (
